@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply text-surface-900 dark:text-surface-100 min-h-screen;
+    background-color: #FAF9F5;
+  }
+  .dark body { background-color: #262624; }
+  h1, h2 { font-family: 'Source Serif 4', Georgia, serif; font-weight: 500 !important; letter-spacing: -0.01em; }
+  * {
+    @apply border-surface-200 dark:border-surface-700;
+  }
+}
+
+@layer components {
+  /* Carte : fond blanc, bordure fine chaude (style Claude) */
+  .glass {
+    @apply bg-white dark:bg-surface-800 border border-surface-300/80 dark:border-surface-700 shadow-soft;
+  }
+  /* Pastille / badge flottant */
+  .float-chip {
+    @apply bg-white dark:bg-surface-800 rounded-xl shadow-card border border-surface-300/80 dark:border-surface-700;
+  }
+  .gradient-primary {
+    background-color: #C15F3C;
+  }
+  .gradient-primary:hover { background-color: #A84E2F; }
+  .gradient-hero { background-color: #F0EEE6; }
+  .dark .gradient-hero { background-color: #30302E; }
+
+  .skeleton {
+    @apply bg-surface-200 dark:bg-surface-700 rounded-2xl;
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(135, 134, 127, 0.4) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(135, 134, 127, 0.4);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(135, 134, 127, 0.6);
+  }
+}
+
+/* Focus ring */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-surface-900;
+}
+
+/* Smooth transitions */
+button, a, input, textarea, select {
+  transition: all 0.15s ease;
+}
+
+/* Chat textarea auto-grow */
+.chat-textarea {
+  resize: none;
+  overflow-y: hidden;
+}
+
+
+/* ---------- Forme douce : tableaux, sélection, focus ---------- */
+@layer base {
+  table { border-collapse: separate; border-spacing: 0; }
+  thead tr th:first-child { border-top-left-radius: 0.5rem; border-bottom-left-radius: 0.5rem; }
+  thead tr th:last-child { border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+  tbody tr { transition: background-color .15s ease; }
+  tbody tr:hover td:first-child { border-top-left-radius: 0.5rem; border-bottom-left-radius: 0.5rem; }
+  tbody tr:hover td:last-child { border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+  ::selection { background: rgba(217, 119, 87, 0.25); }
+  input, select, textarea { outline: none; }
+  select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2387867F' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem !important; }
+  input[type='checkbox'], input[type='radio'] { accent-color: #C15F3C; }
+}
+
+/* Chrome peint les champs auto-remplis en bleu clair : on garde la palette crème */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  -webkit-text-fill-color: #141413 !important;
+  caret-color: #141413;
+}
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #262624 inset !important;
+  -webkit-text-fill-color: #FAF9F5 !important;
+  caret-color: #FAF9F5;
+}
