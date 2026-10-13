@@ -61,7 +61,7 @@ flowchart LR
 | ML | XGBoost, SHAP, scikit-learn |
 | RAG / Agent | Embeddings + pgvector, agent ReAct, LLM |
 | Workflow | n8n (Slack / email, Mailhog en test) |
-| Interface | Streamlit |
+| Interface | react |
 | Supervision | `/health`, `/metrics`, logs JSON |
 | Déploiement | Docker Compose |
 | Qualité | pytest, ruff, GitHub Actions |
