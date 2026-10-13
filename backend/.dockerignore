@@ -1,0 +1,14 @@
+# Fichiers à ne pas copier dans l'image (plus rapide, plus sûr)
+.env
+.env.*
+.git
+.github
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+notebooks/
+tests/
+*.md

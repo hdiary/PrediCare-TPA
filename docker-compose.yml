@@ -1,0 +1,131 @@
+# =============================================================
+# PrediCare TPA - Démarrage de toute la plateforme :
+#   cp .env.example .env   (puis remplir les valeurs)
+#   docker compose up --build
+#
+# Les variables ${...} sont lues dans le fichier .env placé à côté
+# de ce fichier. Épinglez les versions d'images avant la livraison.
+# =============================================================
+
+services:
+  # ---------- Base de données : PostgreSQL + pgvector ----------
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_BI_RO_PASSWORD: ${DB_BI_RO_PASSWORD}
+      DB_ML_RO_PASSWORD: ${DB_ML_RO_PASSWORD}
+      DB_AGENT_RO_PASSWORD: ${DB_AGENT_RO_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data          # données persistantes
+      # Scripts exécutés UNE SEULE FOIS, à la création du volume (ordre alphabétique)
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Chargement initial des données (s'exécute une fois) ----------
+  loader:
+    build: ./backend
+    command: ["python", "-m", "ingestion.run"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PSEUDO_HMAC_KEY: ${PSEUDO_HMAC_KEY}
+      IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY}
+    volumes:
+      - ./db/seed:/app/seed:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # ---------- Registre des versions du modèle ----------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest          # à épingler sur une version précise
+    restart: unless-stopped
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - "5000:5000"
+
+  # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
+  api:
+    build: ./backend
+    restart: unless-stopped
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      AGENT_DATABASE_URL: postgresql://agent_ro:${DB_AGENT_RO_PASSWORD}@db:5432/${POSTGRES_DB}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/fraud-alert
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ALERT_THRESHOLD: ${ALERT_THRESHOLD}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+      mlflow:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------- Workflow d'alertes (Slack / Email) ----------
+  n8n:
+    image: n8nio/n8n:latest                      # à épingler sur une version précise
+    restart: unless-stopped
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro            # workflows .json à importer
+    ports:
+      - "5678:5678"
+
+  # ---------- Frontend (Next.js généré avec v0/Bolt) ----------
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Valeur intégrée au build : c'est le navigateur qui appelle l'API,
+        # donc http://localhost:8000 (et non http://api:8000)
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+  # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
+  # superset:
+  #   image: apache/superset:<version>
+  #   environment:
+  #     SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+  #   ports: ["8088:8088"]
+
+volumes:
+  pgdata:
+  mlflow_data:
+  n8n_data:
