@@ -84,7 +84,7 @@ export function AlertsListPage() {
             <button
               key={f.value}
               onClick={() => { setFilter(f.value); setPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+              className={`px-[18px] py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
                 filter === f.value
                   ? 'bg-primary-700 text-white'
                   : 'bg-white dark:bg-surface-800 text-surface-600 dark:text-surface-300 border border-surface-300 dark:border-surface-700 hover:bg-surface-100 dark:hover:bg-surface-700'
@@ -98,7 +98,7 @@ export function AlertsListPage() {
 
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">
+          <div className="p-8 space-y-3">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : error ? (
@@ -114,19 +114,19 @@ export function AlertsListPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('score')}>
+                  <th className="px-6 py-3.5 cursor-pointer select-none" onClick={() => toggleSort('score')}>
                     <span className="flex items-center gap-1">Score <SortIcon field="score" /></span>
                   </th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('amount')}>
+                  <th className="px-6 py-3.5">Type</th>
+                  <th className="px-6 py-3.5 cursor-pointer select-none" onClick={() => toggleSort('amount')}>
                     <span className="flex items-center gap-1">Montant <SortIcon field="amount" /></span>
                   </th>
-                  <th className="px-4 py-3">Prestataire</th>
-                  <th className="px-4 py-3">Assuré</th>
-                  <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('created_at')}>
+                  <th className="px-6 py-3.5">Prestataire</th>
+                  <th className="px-6 py-3.5">Assuré</th>
+                  <th className="px-6 py-3.5 cursor-pointer select-none" onClick={() => toggleSort('created_at')}>
                     <span className="flex items-center gap-1">Date <SortIcon field="created_at" /></span>
                   </th>
-                  <th className="px-4 py-3">Statut</th>
+                  <th className="px-6 py-3.5">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
@@ -136,17 +136,17 @@ export function AlertsListPage() {
                     onClick={() => window.location.assign(`/gestionnaire/alertes/${alert.id}`)}
                     className="hover:bg-surface-50 dark:hover:bg-surface-700/50 cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold tabular-nums border ${riskColor(alert.score)}`}>
                         {alert.score.toFixed(2)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-surface-600 dark:text-surface-300">{ALERT_TYPE_LABELS[alert.type]}</td>
-                    <td className="px-4 py-3 text-sm text-surface-700 dark:text-surface-200 tabular-nums font-medium">{formatEUR(alert.amount)}</td>
-                    <td className="px-4 py-3 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.provider_pseudo}</td>
-                    <td className="px-4 py-3 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.insured_pseudo}</td>
-                    <td className="px-4 py-3 text-sm text-surface-500 tabular-nums">{formatDate(alert.created_at)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300">{ALERT_TYPE_LABELS[alert.type]}</td>
+                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 tabular-nums font-medium">{formatEUR(alert.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.provider_pseudo}</td>
+                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.insured_pseudo}</td>
+                    <td className="px-6 py-4 text-sm text-surface-500 tabular-nums">{formatDate(alert.created_at)}</td>
+                    <td className="px-6 py-4">
                       <Badge className={ALERT_STATUS_COLORS[alert.status]}>{ALERT_STATUS_LABELS[alert.status]}</Badge>
                     </td>
                   </tr>
@@ -157,7 +157,7 @@ export function AlertsListPage() {
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-3 ">
+          <div className="flex items-center justify-between px-6 py-4 ">
             <p className="text-xs text-surface-400">
               {filtered.length} alerte{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}
             </p>

@@ -191,7 +191,7 @@ export function DepositInvoicePage() {
         </button>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-8">
         {mode === 'upload' ? (
           <div>
             <div
@@ -314,7 +314,7 @@ export function DepositInvoicePage() {
               </div>
 
               <div className="flex justify-end">
-                <div className="rounded-2xl bg-surface-50 dark:bg-surface-700 px-4 py-3 flex items-center gap-2">
+                <div className="rounded-xl bg-surface-50 dark:bg-surface-700 px-[18px] py-4 flex items-center gap-2">
                   <Euro className="w-4 h-4 text-surface-400" />
                   <span className="text-sm text-surface-500">Total :</span>
                   <span className="text-lg font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(total)}</span>

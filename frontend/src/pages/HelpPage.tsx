@@ -113,14 +113,14 @@ export function HelpPage() {
       </div>
 
       {sections.map((section) => (
-        <Card key={section.title} className="p-6">
+        <Card key={section.title} className="p-8">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center text-primary-600">
+            <div className="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center text-primary-700 dark:text-primary-400">
               {section.icon}
             </div>
             <h3 className="font-semibold text-surface-800 dark:text-surface-100">{section.title}</h3>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-5">
             {section.tips.map((tip) => (
               <div key={tip.title} className="flex gap-3">
                 <div className="w-6 h-6 rounded-full bg-kraft-100 dark:bg-kraft-800 flex items-center justify-center flex-shrink-0">
@@ -137,7 +137,7 @@ export function HelpPage() {
       ))}
 
       <div className="flex justify-center">
-        <Link to={home} className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+        <Link to={home} className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-medium">
           ← Retour à mon espace
         </Link>
       </div>

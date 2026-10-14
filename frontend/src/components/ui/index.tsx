@@ -41,16 +41,16 @@ export function Button({
     danger: 'bg-danger-600 hover:bg-danger-700 text-white shadow-soft',
   };
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-6 py-3 text-base',
+    sm: 'h-9 px-4 text-sm',
+    md: 'h-11 px-5 text-sm',
+    lg: 'h-12 px-6 text-base',
   };
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
     >
       {children}
     </button>
@@ -81,7 +81,7 @@ export function Input({
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+        <label htmlFor={id} className="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-2">
           {label} {required && <span className="text-danger-500">*</span>}
         </label>
       )}
@@ -94,7 +94,7 @@ export function Input({
           onChange={onChange}
           placeholder={placeholder}
           required={required}
-          className={`w-full rounded-xl border bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 dark:placeholder-surface-500 px-3.5 py-2.5 text-sm ${icon ? 'pl-10' : ''} ${error ? 'border-danger-400' : 'border-surface-300 dark:border-surface-600'} focus:border-primary-500 focus:ring-2 focus:ring-primary-100`}
+          className={`w-full rounded-xl border bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 dark:placeholder-surface-500 h-11 px-3.5 text-sm ${icon ? 'pl-10' : ''} ${error ? 'border-danger-400' : 'border-surface-300 dark:border-surface-600'} focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20`}
         />
       </div>
       {error && <p className="mt-1 text-xs text-danger-500">{error}</p>}
@@ -151,7 +151,7 @@ export function Drawer({ open, onClose, title, children, width = 'md' }: { open:
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className={`relative w-full ${widths[width]} bg-white dark:bg-surface-800 shadow-lg border-l border-surface-300/80 dark:border-surface-700 overflow-y-auto animate-slide-in-right`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-5 border-b border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800">
           <h2 className="text-lg font-medium text-surface-900 dark:text-surface-100">{title}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-200/70 dark:hover:bg-surface-700 text-surface-500">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -159,7 +159,7 @@ export function Drawer({ open, onClose, title, children, width = 'md' }: { open:
             </svg>
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-8">{children}</div>
       </div>
     </div>
   );
@@ -171,12 +171,12 @@ export function Modal({ open, onClose, title, children, footer }: { open: boolea
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white dark:bg-surface-800 rounded-2xl border border-surface-300/80 dark:border-surface-700 shadow-lg animate-slide-up">
-        <div className="px-6 py-4 border-b border-surface-300/80 dark:border-surface-700">
+        <div className="px-8 py-5 border-b border-surface-300/80 dark:border-surface-700">
           <h2 className="text-lg font-medium text-surface-900 dark:text-surface-100">{title}</h2>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-8">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-surface-300/80 dark:border-surface-700 flex justify-end gap-3">
+          <div className="px-8 py-5 border-t border-surface-300/80 dark:border-surface-700 flex justify-end gap-3">
             {footer}
           </div>
         )}

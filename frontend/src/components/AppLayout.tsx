@@ -47,7 +47,7 @@ export function AppLayout({ allowedRoles, children }: { allowedRoles: Role[]; ch
         <main className="flex-1 p-4 md:p-6 lg:p-8 pb-20 md:pb-6 max-w-[1400px] w-full mx-auto">
           {children}
         </main>
-        <footer className="px-6 py-3 border-t border-surface-300/80 dark:border-surface-700 text-xs text-surface-400 flex items-center justify-between flex-wrap gap-2">
+        <footer className="px-4 md:px-8 py-4 border-t border-surface-300/80 dark:border-surface-700 text-xs text-surface-400 flex items-center justify-between flex-wrap gap-2">
           <span>Données synthétiques - Démonstration</span>
           <div className="flex gap-4">
             <span className="hover:text-surface-600 cursor-pointer">Confidentialité</span>

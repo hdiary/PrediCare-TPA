@@ -53,7 +53,7 @@ export function AlertDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-5">
         <Skeleton className="h-10 w-32" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Skeleton className="h-96" />
@@ -66,7 +66,7 @@ export function AlertDetailPage() {
   if (error || !detail) {
     return (
       <div>
-        <Link to="/gestionnaire/alertes" className="inline-flex items-center gap-2 text-sm text-primary-600 mb-4">
+        <Link to="/gestionnaire/alertes" className="inline-flex items-center gap-2 text-sm text-primary-700 dark:text-primary-400 mb-4">
           <ArrowLeft className="w-4 h-4" /> Retour aux alertes
         </Link>
         <ErrorState message="Impossible de charger le détail de l'alerte." />
@@ -80,7 +80,7 @@ export function AlertDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <Link to="/gestionnaire/alertes" className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-700 font-medium">
+        <Link to="/gestionnaire/alertes" className="inline-flex items-center gap-2 text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-medium">
           <ArrowLeft className="w-4 h-4" /> Retour aux alertes
         </Link>
         <Badge className={ALERT_STATUS_COLORS[detail.status]}>{ALERT_STATUS_LABELS[detail.status]}</Badge>
@@ -89,10 +89,10 @@ export function AlertDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Invoice summary */}
         <div className="space-y-6">
-          <Card className="p-6">
+          <Card className="p-8">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-primary-600" />
+                <FileText className="w-5 h-5 text-primary-700 dark:text-primary-400" />
               </div>
               <div>
                 <h3 className="font-semibold text-surface-800 dark:text-surface-100">Facture {detail.invoice_id}</h3>
@@ -147,7 +147,7 @@ export function AlertDetailPage() {
           </Card>
 
           {/* Provider history */}
-          <Card className="p-6">
+          <Card className="p-8">
             <div className="flex items-center gap-2 mb-4">
               <History className="w-4 h-4 text-surface-400" />
               <h3 className="font-semibold text-surface-800 dark:text-surface-100">Historique du prestataire</h3>
@@ -174,7 +174,7 @@ export function AlertDetailPage() {
 
         {/* Right: Explanation + decision */}
         <div className="space-y-6">
-          <Card className="p-6">
+          <Card className="p-8">
             <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-5">Explication de l'alerte</h3>
 
             {/* Risk gauge */}
@@ -234,7 +234,7 @@ export function AlertDetailPage() {
 
           {/* Prescription flags */}
           {detail.prescription_flags.length > 0 && (
-            <Card className="p-6">
+            <Card className="p-8">
               <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-4">Contrôles de prescription</h3>
               <div className="space-y-2">
                 {detail.prescription_flags.map((flag, i) => (
@@ -249,7 +249,7 @@ export function AlertDetailPage() {
 
           {/* Decision panel */}
           {detail.status === 'pending' && (
-            <Card className="p-6 sticky top-20">
+            <Card className="p-8 sticky top-20">
               <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-2">Décision</h3>
               <div className="flex items-start gap-2 mb-4 p-3 rounded-2xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
                 <Info className="w-4 h-4 text-primary-500 flex-shrink-0 mt-0.5" />
@@ -263,7 +263,7 @@ export function AlertDetailPage() {
                 onChange={(e) => setComment(e.target.value)}
                 placeholder="Commentaire (requis)..."
                 rows={3}
-                className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 px-3.5 py-2.5 text-sm mb-4 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/40"
+                className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 px-3.5 py-2.5 text-sm mb-4 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               />
 
               <div className="flex gap-3">
@@ -288,7 +288,7 @@ export function AlertDetailPage() {
           )}
 
           {detail.status !== 'pending' && (
-            <Card className="p-6">
+            <Card className="p-8">
               <div className="flex items-center gap-3">
                 <Clock className="w-5 h-5 text-surface-400" />
                 <div>
