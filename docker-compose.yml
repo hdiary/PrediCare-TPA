@@ -3,55 +3,93 @@
 #   cp .env.example .env   (puis remplir les valeurs)
 #   docker compose up --build
 #
+# Base seule + chargement (travail de P1) :
+#   docker compose up -d db loader
+#
 # Les variables ${...} sont lues dans le fichier .env placé à côté
 # de ce fichier. Épinglez les versions d'images avant la livraison.
+#
+# Avant le premier démarrage (sur la machine de P1), produire les Parquet :
+#   cd backend/ingestion
+#   python clean.py && python encrypt_identities.py --delete-source
 # =============================================================
 
 services:
   # ---------- Base de données : PostgreSQL + pgvector ----------
+  # Le schéma, les rôles et les vues sont créés par Alembic (service loader),
+  # PAS par docker-entrypoint-initdb.d.
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_BI_RO_PASSWORD: ${DB_BI_RO_PASSWORD}
-      DB_ML_RO_PASSWORD: ${DB_ML_RO_PASSWORD}
-      DB_AGENT_RO_PASSWORD: ${DB_AGENT_RO_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-predicare}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
     volumes:
-      - pgdata:/var/lib/postgresql/data          # données persistantes
-      # Scripts exécutés UNE SEULE FOIS, à la création du volume (ordre alphabétique)
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data # données persistantes
+    # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
+    # ports:
+    #   - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
       timeout: 5s
       retries: 10
 
-  # ---------- Chargement initial des données (s'exécute une fois) ----------
-  loader:
-    build: ./backend
-    command: ["python", "-m", "ingestion.run"]
+  # ---------- Migrations Alembic + chargement des données (s'exécute une fois) ----------
+  # Idempotent : au redémarrage il détecte que la base est initialisée.
+  # Forcer un rechargement : docker compose run --rm loader python load.py --force
+  prepare:
+    build:
+      context: ./backend/ingestion
+      dockerfile: db_init/Dockerfile
+    working_dir: /app
+    command: >
+      sh -c " if [ -f data/clean/.done ]; then echo 'Déjà préparé'; exit 0; fi && python clean.py && python encrypt_identities.py --delete-source && touch data/clean/.done"
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      PSEUDO_HMAC_KEY: ${PSEUDO_HMAC_KEY}
-      IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY}
+      PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
+      IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
+      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+
     volumes:
-      - ./db/seed:/app/seed:ro
+      - ./backend/ingestion/dataset:/app/dataset:ro # CSV bruts (hors Git)
+      - ./backend/ingestion/labels:/app/labels:ro # CSV bruts (hors Git)
+      - prepared_data:/app/data # sortie partagée
+    restart: "no"
+
+  loader:
+    build:
+      context: ./backend/ingestion
+      # DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      dockerfile: db_init/Dockerfile
+    environment:
+      # Propriétaire de la base : nécessaire pour migrations, extensions et rôles
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
+      IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
+      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+      DB_APP_RW_PASSWORD: ${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}
+      DB_IDENTITY_READER_PASSWORD: ${DB_IDENTITY_READER_PASSWORD:-dev_identity_pwd}
+      DB_AGENT_RO_PASSWORD: ${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}
+      DB_BI_RO_PASSWORD: ${DB_BI_RO_PASSWORD:-dev_bi_ro_pwd}
+      DB_ML_RO_PASSWORD: ${DB_ML_RO_PASSWORD:-dev_ml_ro_pwd}
+    volumes:
+      # Parquet produits par clean.py + encrypt_identities.py (hors Git)
+      - prepared_data:/app/data:ro
     depends_on:
       db:
         condition: service_healthy
+      prepare:
+        condition: service_completed_successfully
     restart: "no"
 
   # ---------- Registre des versions du modèle ----------
   mlflow:
-    image: ghcr.io/mlflow/mlflow:latest          # à épingler sur une version précise
+    profiles: [ "full" ] # a decommenter pour activer mlflow dans le container
+    image: ghcr.io/mlflow/mlflow:latest # à épingler sur une version précise
     restart: unless-stopped
     command: >
-      mlflow server --host 0.0.0.0 --port 5000
-      --backend-store-uri sqlite:////mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
     volumes:
       - mlflow_data:/mlflow
     ports:
@@ -59,21 +97,20 @@ services:
 
   # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
+    profiles: [ "full" ] # a decommenter pour activer l'API dans le container
     build: ./backend
     restart: unless-stopped
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    command: [ "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      AGENT_DATABASE_URL: postgresql://agent_ro:${DB_AGENT_RO_PASSWORD}@db:5432/${POSTGRES_DB}
-      MLFLOW_TRACKING_URI: http://mlflow:5000
-      N8N_WEBHOOK_URL: http://n8n:5678/webhook/fraud-alert
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES}
-      CORS_ORIGINS: ${CORS_ORIGINS}
-      ALERT_THRESHOLD: ${ALERT_THRESHOLD}
-      LLM_API_KEY: ${LLM_API_KEY}
-      LLM_MODEL: ${LLM_MODEL}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      AGENT_DATABASE_URL: postgresql://agent_ro:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
     depends_on:
       db:
         condition: service_healthy
@@ -84,41 +121,43 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
       interval: 15s
       timeout: 5s
       retries: 5
 
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
-    image: n8nio/n8n:latest                      # à épingler sur une version précise
+    profiles: [ "full" ] # a decommenter pour activer n8n dans le container
+    image: n8nio/n8n:latest # à épingler sur une version précise
     restart: unless-stopped
     environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
-      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-37019a45a5fd1b69caa80af583acd83d}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./n8n/workflows:/workflows:ro            # workflows .json à importer
+      - ./n8n/workflows:/workflows:ro # workflows .json à importer
     ports:
       - "5678:5678"
 
   # ---------- Frontend (Next.js généré avec v0/Bolt) ----------
   web:
+    profiles: [ "full" ] # a decommenter pour activer le frontend dans le container
     build:
       context: ./frontend
       args:
         # Valeur intégrée au build : c'est le navigateur qui appelle l'API,
         # donc http://localhost:8000 (et non http://api:8000)
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
-        NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "3000:3000"
-
+      - "5173:5173"
   # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
+  # Se connecter avec le rôle bi_ro (lecture seule sur les vues), jamais avec POSTGRES_USER.
   # superset:
   #   image: apache/superset:<version>
   #   environment:
@@ -129,3 +168,4 @@ volumes:
   pgdata:
   mlflow_data:
   n8n_data:
+  prepared_data:
