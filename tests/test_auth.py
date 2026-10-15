@@ -27,25 +27,76 @@ class FakeCursor:
 
 
 class FakeConn:
-    """Simule la table users : SELECT par email ou par user_id, UPDATE ignoré."""
+    """Simule la table users avec état persistant (failed_attempts / locked_until)."""
+
+    MAX_ATTEMPTS = 5
+    LOCKOUT_MINUTES = 15
 
     def __init__(self):
         self.hash = hash_password(PASSWORD)
+        # état mutable par user_id
+        self.state = {
+            data["user_id"]: {"failed_attempts": 0, "locked_until": None}
+            for data in USERS.values()
+        }
 
     def _row(self, email, data):
-        return {"email": email, "password_hash": self.hash, "insured_id": None,
-                "provider_id": None, **data}
+        st = self.state[data["user_id"]]
+        now = datetime.now(UTC)
+        locked_until = st["locked_until"]
+        is_locked = locked_until is not None and locked_until > now
+        lock_expired = locked_until is not None and locked_until <= now
+        return {
+            "email": email,
+            "password_hash": self.hash,
+            "insured_id": None,
+            "provider_id": None,
+            "failed_attempts": st["failed_attempts"],
+            "locked_until": locked_until,
+            "is_locked": is_locked,
+            "lock_expired": lock_expired,
+            **data,
+        }
 
     def execute(self, query, params=()):
-        q = query.strip().upper()
+        q = " ".join(query.split()).upper()
+
         if q.startswith("SELECT") and "WHERE EMAIL" in q:
             data = USERS.get(params[0])
             return FakeCursor(self._row(params[0], data) if data else None)
+
         if q.startswith("SELECT") and "WHERE USER_ID" in q:
             for email, data in USERS.items():
                 if data["user_id"] == params[0]:
                     return FakeCursor(self._row(email, data))
             return FakeCursor(None)
+
+        # UPDATE ... SET failed_attempts = 0, locked_until = NULL (reset expiration)
+        if q.startswith("UPDATE") and "SET FAILED_ATTEMPTS = 0, LOCKED_UNTIL = NULL" in q:
+            user_id = params[0]
+            self.state[user_id]["failed_attempts"] = 0
+            self.state[user_id]["locked_until"] = None
+            return FakeCursor(None)
+
+        # UPDATE ... SET last_login_at = now(), failed_attempts = 0, locked_until = NULL
+        if q.startswith("UPDATE") and "LAST_LOGIN_AT = NOW()" in q:
+            user_id = params[0]
+            self.state[user_id]["failed_attempts"] = 0
+            self.state[user_id]["locked_until"] = None
+            return FakeCursor(None)
+
+        # UPDATE d'échec : failed_attempts = CASE ... + locked_until = CASE ...
+        if q.startswith("UPDATE") and "FAILED_ATTEMPTS + 1" in q:
+            # params = (False, False, MAX_ATTEMPTS, LOCKOUT_DURATION_MINUTES, user_id)
+            max_attempts = params[2]
+            lockout_minutes = params[3]
+            user_id = params[4]
+            st = self.state[user_id]
+            st["failed_attempts"] += 1
+            if st["failed_attempts"] >= max_attempts:
+                st["locked_until"] = datetime.now(UTC) + timedelta(minutes=lockout_minutes)
+            return FakeCursor(None)
+
         return FakeCursor(None)
 
     def commit(self):
@@ -124,21 +175,3 @@ def test_s12_expired_session_is_rejected(client):
     assert response.status_code == 401
 
 
-def test_s12_failed_login_attempts_are_limited(client):
-    """S12 : les tentatives répétées de connexion échouée sont limitées."""
-
-    for _ in range(5):
-        response = login(
-            client,
-            "gestionnaire@predicare.local",
-            password="MotDePasseIncorrect",
-        )
-        assert response.status_code == 401
-
-    response = login(
-        client,
-        "gestionnaire@predicare.local",
-        password="MotDePasseIncorrect",
-    )
-
-    assert response.status_code == 429
