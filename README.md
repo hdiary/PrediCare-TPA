@@ -1,26 +1,14 @@
 # \# PrediCare TPA
 
-# 
-
 # \*\*Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.\*\*
-
-# 
 
 # Projet Capstone - Cohorte IA - Partenariat Orange Digital Center (ODC) \& Ingedata.
 
-# 
-
 # > ⚠️ \*\*Données 100 % synthétiques.\*\* Aucune donnée de santé réelle n'est utilisée dans ce projet.
-
-# 
 
 # \---
 
-# 
-
 # \## Sommaire
-
-# 
 
 # 1\. \[Présentation](#1-présentation)
 
@@ -46,23 +34,13 @@
 
 # 12\. \[Documentation](#12-documentation)
 
-# 
-
 # \---
-
-# 
 
 # \## 1. Présentation
 
-# 
-
 # \### Le problème
 
-# 
-
 # Dans la gestion du Tiers-Payant (TPA) et de l'assurance santé :
-
-# 
 
 # \- la fraude médicale, la surconsommation d'actes et les erreurs de tarification représentent \*\*8 % à 15 %\*\* des remboursements ;
 
@@ -70,15 +48,9 @@
 
 # \- les centres d'appels sont saturés par des demandes de suivi de dossier et d'interprétation des garanties.
 
-# 
-
 # \### Notre réponse
 
-# 
-
 # PrediCare TPA est une plateforme unique, déployable en une commande, qui :
-
-# 
 
 # \- \*\*contrôle automatiquement les factures\*\* et détecte les anomalies financières avec une explication (SHAP) pour chaque alerte ;
 
@@ -90,19 +62,11 @@
 
 # \- fournit un \*\*tableau de bord décisionnel\*\* (volumes, montants économisés, taux de détection).
 
-# 
-
 # Principe fondamental : \*\*aucune décision n'est automatique\*\*. Le modèle propose, le gestionnaire valide ou rejette, et chaque décision est tracée.
-
-# 
 
 # \---
 
-# 
-
 # \## 2. Fonctionnalités
-
-# 
 
 # | Domaine | Fonctionnalité |
 
@@ -126,43 +90,33 @@
 
 # | Exploitation | Sauvegarde et restauration scriptées, versioning du modèle avec retour arrière |
 
-# 
-
 # \---
 
-# 
-
 # \## 3. Architecture
-
-# 
 
 # ```mermaid
 
 # flowchart LR
 
-# &#x20;   U\[Utilisateurs<br/>4 rôles] --> W\[web<br/>Frontend]
+# &#x20;   U\[Utilisateurs4 rôles] --> W\[webFrontend]
 
-# &#x20;   W --> A\[api<br/>FastAPI]
+# &#x20;   W --> A\[apiFastAPI]
 
-# &#x20;   A --> D\[(db<br/>PostgreSQL + pgvector)]
+# &#x20;   A --> D\[(dbPostgreSQL + pgvector)]
 
-# &#x20;   A --> M\[mlflow<br/>versions du modèle]
+# &#x20;   A --> M\[mlflowversions du modèle]
 
-# &#x20;   A -->|score > seuil| N\[n8n<br/>workflow]
+# &#x20;   A -->|score > seuil| N\[n8nworkflow]
 
 # &#x20;   N --> S\[Slack / Email]
 
 # &#x20;   A --> L\[LLM]
 
-# &#x20;   B\[bi<br/>Dashboard] --> D
+# &#x20;   B\[biDashboard] --> D
 
 # ```
 
-# 
-
 # \### Les 3 flux
-
-# 
 
 # 1\. \*\*Pipeline analytique et ML\*\* : réception de la facture → prétraitement → inférence (XGBoost) → valeurs SHAP → stockage → workflow n8n (si score > seuil, alerte au gestionnaire avec explication).
 
@@ -170,11 +124,7 @@
 
 # 3\. \*\*Pilotage décisionnel\*\* : tableau de bord BI (volumes traités, montants économisés, taux de détection).
 
-# 
-
 # \### Conteneurs (Docker Compose)
-
-# 
 
 # | Service | Rôle | Port |
 
@@ -194,11 +144,7 @@
 
 # | `bi` | Tableau de bord décisionnel | à compléter |
 
-# 
-
 # \### Choix techniques
-
-# 
 
 # | Brique | Choix | Raison |
 
@@ -216,19 +162,11 @@
 
 # | LLM / embeddings | à compléter | Coût et confidentialité (voir analyse FinOps) |
 
-# 
-
 # \---
-
-# 
 
 # \## 4. Démarrage rapide
 
-# 
-
 # \### Prérequis
-
-# 
 
 # \- Docker et Docker Compose v2
 
@@ -236,11 +174,7 @@
 
 # \- Ports libres : 3000, 5000, 5678, 8000
 
-# 
-
 # \### Installation
-
-# 
 
 # ```bash
 
@@ -248,15 +182,11 @@
 
 # cd predicare-tpa
 
-# 
-
 # \# 1. Créer la configuration
 
 # cp .env.example .env
 
 # \#    puis remplacer chaque valeur "change\_me" (voir section 5)
-
-# 
 
 # \# 2. Démarrer toute la plateforme
 
@@ -264,21 +194,15 @@
 
 # ```
 
-# 
-
 # Au \*\*premier démarrage\*\*, la base est créée par les migrations versionnées et les données sont chargées automatiquement.
 
-# 
-
 # \### Accès
-
-# 
 
 # | Service | URL |
 
 # |---|---|
 
-# | Interface web | http://localhost:3000 |
+# | Interface web | http://localhost:5173 |
 
 # | Documentation de l'API | http://localhost:8000/docs |
 
@@ -288,11 +212,7 @@
 
 # | MLflow | http://localhost:5000 |
 
-# 
-
 # \### Arrêt et remise à zéro
-
-# 
 
 # ```bash
 
@@ -302,23 +222,13 @@
 
 # ```
 
-# 
-
 # > ⚠️ Les migrations SQL ne s'exécutent qu'à la création du volume. Pour rejouer une migration modifiée : `docker compose down -v` puis `docker compose up --build`.
-
-# 
 
 # \---
 
-# 
-
 # \## 5. Configuration
 
-# 
-
 # Toute la configuration passe par le fichier `.env` (jamais versionné) ou par l'écran d'administration. \*\*Aucune valeur n'est écrite dans le code.\*\*
-
-# 
 
 # | Variable | Rôle |
 
@@ -342,27 +252,15 @@
 
 # | `NEXT\_PUBLIC\_API\_URL` | Adresse publique de l'API (\*\*visible dans le navigateur, aucun secret\*\*) |
 
-# 
-
 # Générer une clé : `openssl rand -hex 32`
-
-# 
 
 # \*\*Seuil d'alerte\*\* : modifiable sans toucher au code depuis l'écran d'administration ; le changement est appliqué immédiatement.
 
-# 
-
 # \---
-
-# 
 
 # \## 6. Utilisation par rôle
 
-# 
-
 # L'interface web unique propose quatre parcours, sans ligne de commande :
-
-# 
 
 # | Rôle | Ce qu'il peut faire |
 
@@ -376,11 +274,7 @@
 
 # | \*\*Administrateur\*\* | Régler le seuil et les canaux, superviser, gérer les versions du modèle, consulter le journal d'audit |
 
-# 
-
 # \### Comptes de démonstration
-
-# 
 
 # | Rôle | Identifiant | Mot de passe |
 
@@ -394,19 +288,11 @@
 
 # | Administrateur | à compléter | à compléter |
 
-# 
-
 # > Ces comptes n'existent que pour la démonstration. Ne jamais les réutiliser en production.
-
-# 
 
 # \---
 
-# 
-
 # \## 7. Structure du dépôt
-
-# 
 
 # ```
 
@@ -450,19 +336,11 @@
 
 # ```
 
-# 
-
 # \---
-
-# 
 
 # \## 8. Exploitation
 
-# 
-
 # \### Les 8 conditions « plateforme exploitable »
-
-# 
 
 # | Condition | Comment c'est couvert | Statut |
 
@@ -484,51 +362,31 @@
 
 # | Documentée | Guides d'exploitation et utilisateur | à compléter |
 
-# 
-
 # \### Sauvegarde et restauration
-
-# 
 
 # ```bash
 
 # ./scripts/backup.sh                    # sauvegarde chiffrée de la base
 
-# ./scripts/restore.sh <fichier>         # restauration
+# ./scripts/restore.sh <fichier></fichier>         # restauration
 
 # ```
 
-# 
-
 # Procédure détaillée, planification quotidienne et résolution des incidents : voir `docs/guides/guide\_exploitation.md` (à compléter).
-
-# 
 
 # \### Mise à jour et retour arrière du modèle
 
-# 
-
 # Depuis l'écran d'administration, onglet « Modèles » : activer une version enregistrée dans MLflow ; la bascule vers une version précédente se fait sans interruption.
 
-# 
-
 # \### Supervision
-
-# 
 
 # \- `GET /health` : état de l'API et de ses dépendances
 
 # \- métriques de latence, de volume et d'erreurs, suivi de dérive : écran d'administration
 
-# 
-
 # \---
 
-# 
-
 # \## 9. Tests et CI
-
-# 
 
 # ```bash
 
@@ -540,27 +398,15 @@
 
 # ```
 
-# 
-
 # L'intégration continue (GitHub Actions) exécute le lint et les tests à chaque pull request ; la fusion dans `main` exige une CI verte.
-
-# 
 
 # Le \*\*cahier de recette sécurité\*\* (`docs/securite/cahier\_recette\_securite.xlsx`) liste les 14 tests de sécurité et les 15 attaques de test contre l'assistant.
 
-# 
-
 # \---
-
-# 
 
 # \## 10. Sécurité, RGPD et AI Act
 
-# 
-
 # \### Sécurité
-
-# 
 
 # \- authentification et contrôle d'accès par rôle \*\*côté serveur\*\* ;
 
@@ -572,11 +418,7 @@
 
 # \- validation stricte des entrées de l'API.
 
-# 
-
 # \### RGPD
-
-# 
 
 # \- \*\*pseudonymisation\*\* : noms et coordonnées dans une table chiffrée à part, le reste de la base n'utilise que des pseudonymes ;
 
@@ -584,31 +426,17 @@
 
 # \- aucune décision automatisée : le gestionnaire valide chaque alerte.
 
-# 
-
 # \### AI Act
-
-# 
 
 # Le système est cadré comme \*\*système à haut risque\*\* : gestion des risques, qualité des données, journalisation (journal d'audit), transparence (explication SHAP), contrôle humain, exactitude et robustesse, information de l'utilisateur sur l'interaction avec une IA. La grille complète est dans `docs/conformite/`.
 
-# 
-
 # \### Équité
-
-# 
 
 # Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conformite/`.
 
-# 
-
 # \---
 
-# 
-
 # \## 11. Organisation de l'équipe
-
-# 
 
 # | Membre | Rôle | Périmètre |
 
@@ -622,11 +450,7 @@
 
 # | à compléter | RAG et sécurité | Assistant, agent, anti-injection, cahier de recette |
 
-# 
-
 # \### Workflow Git
-
-# 
 
 # \- `main` protégée : fusion uniquement par pull request, avec une relecture et une CI verte ;
 
@@ -634,15 +458,9 @@
 
 # \- commits au format `type(portée): description`.
 
-# 
-
 # \---
 
-# 
-
 # \## 12. Documentation
-
-# 
 
 # | Document | Emplacement |
 
@@ -660,11 +478,6 @@
 
 # | Guide utilisateur et guide d'exploitation | `docs/guides/` |
 
-# 
-
 # \---
 
-# 
-
 # \*Projet pédagogique réalisé dans le cadre de la Cohorte IA. Données synthétiques uniquement.\*
-

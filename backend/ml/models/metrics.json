@@ -1,0 +1,84 @@
+{
+  "hgb": {
+    "cv": {
+      "pr_auc": 0.9986,
+      "roc_auc": 0.9998,
+      "seuil": 0.9702,
+      "recall": 0.95,
+      "precision": 0.9988,
+      "alertes": 5617,
+      "tp": 5610,
+      "fp": 7,
+      "fn": 295
+    },
+    "test": {
+      "pr_auc": 0.9985,
+      "roc_auc": 0.9998,
+      "seuil": 0.9702,
+      "recall": 0.9605,
+      "precision": 1.0,
+      "alertes": 1385,
+      "tp": 1385,
+      "fp": 0,
+      "fn": 57
+    },
+    "recall_par_type": {
+      "ACTE_FICTIF": {
+        "n": 99,
+        "recall": 0.828
+      },
+      "DOUBLON": {
+        "n": 177,
+        "recall": 0.91
+      },
+      "FRACTIONNEMENT": {
+        "n": 77,
+        "recall": 0.935
+      },
+      "HORS_COUVERTURE": {
+        "n": 35,
+        "recall": 0.971
+      },
+      "INCOHERENCE_PROFIL": {
+        "n": 71,
+        "recall": 1.0
+      },
+      "LIGNES_NON_PRESCRITES": {
+        "n": 146,
+        "recall": 1.0
+      },
+      "ORDONNANCE_EXPIREE": {
+        "n": 103,
+        "recall": 1.0
+      },
+      "PRESTATAIRE_RADIE": {
+        "n": 22,
+        "recall": 1.0
+      },
+      "QUANTITE_EXCESSIVE": {
+        "n": 111,
+        "recall": 0.991
+      },
+      "SOINS_JOUR_FERME": {
+        "n": 44,
+        "recall": 1.0
+      },
+      "SUBSTITUTION_PRODUIT": {
+        "n": 66,
+        "recall": 1.0
+      },
+      "SURCONSOMMATION": {
+        "n": 107,
+        "recall": 0.963
+      },
+      "SURFACTURATION": {
+        "n": 240,
+        "recall": 0.996
+      },
+      "UPCODING": {
+        "n": 144,
+        "recall": 0.917
+      }
+    }
+  }
+}
