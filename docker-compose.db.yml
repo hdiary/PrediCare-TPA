@@ -1,0 +1,49 @@
+# Database part of the stack (P1). P3 merges these services into the main
+# docker-compose.yml:  docker compose -f docker-compose.yml -f docker-compose.db.yml up
+#
+# First `docker compose up` on an empty volume: migrations + clean + encrypt +
+# load run automatically in `db-init`. Next starts: db-init sees the data is
+# already there and exits at once. `docker compose down -v` wipes everything.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data      # named volume: survives restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  db-init:
+    build:
+      context: .
+      dockerfile: db_init/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      IDENTITY_KEY: ${IDENTITY_KEY}
+      PSEUDO_KEY: ${PSEUDO_KEY}
+      DATASET_DIR: /data/dataset
+      # LABELS_DIR: /data/labels             # uncomment once labels/ is provided
+    volumes:
+      - ./dataset:/data/dataset:ro
+      # - ./labels:/data/labels:ro
+    restart: "no"                            # runs once, then exits 0
+
+  # Example for P3: the API starts only after db-init finished successfully.
+  # api:
+  #   depends_on:
+  #     db-init:
+  #       condition: service_completed_successfully
+
+volumes:
+  pgdata:
