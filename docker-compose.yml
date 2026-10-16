@@ -25,50 +25,54 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-predicare}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
+
     volumes:
-      - pgdata:/var/lib/postgresql/data # données persistantes
-    # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
+      interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 20s
 
-  # ---------- Migrations Alembic + chargement des données (s'exécute une fois) ----------
-  # Idempotent : au redémarrage il détecte que la base est initialisée.
-  # Forcer un rechargement : docker compose run --rm loader python load.py --force
-  # prepare:
-  #   build:
-  #     context: ./backend/ingestion
-  #     dockerfile: db_init/Dockerfile
-  #   working_dir: /app
-  #   command:
-  #     - sh
-  #     - -c
-  #     - |
-  #       set -e
-  #       if [ -f data/clean/.done ]; then
-  #         echo "Déjà préparé"
-  #         exit 0
-  #       fi
-  #       python clean.py
-  #       python encrypt_identities.py --delete-source
-  #       mkdir -p data/clean
-  #       touch data/clean/.done
-    
-  #   environment:
-  #     PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
-  #     IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
-  #     IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
-
-  #   volumes:
-  #     - ./backend/ingestion/dataset:/app/dataset:ro # CSV bruts (hors Git)
-  #     - ./backend/ingestion/labels:/app/labels:ro # CSV bruts (hors Git)
-  #     - prepared_data:/app/data # sortie partagée
-  #   restart: "no"
-
+  metabase:
+    image: metabase/metabase:v0.64-lts
+    ports: [ "3000:3000" ]
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase_app
+      MB_DB_PORT: 5432
+      MB_DB_USER: ${POSTGRES_USER}
+      MB_DB_PASS: ${POSTGRES_PASSWORD}
+      MB_DB_HOST: db # ← corrigé (service db, pas postgres)
+    depends_on:
+      db:
+        # ← corrigé
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
+      interval: 15s
+      retries: 10
+  metabase-init:
+    image: alpine:3.20
+    depends_on:
+      metabase:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    environment:
+      MB_ADMIN_EMAIL: ${MB_ADMIN_EMAIL:-admin@predicare.local}
+      MB_ADMIN_PASSWORD: ${MB_ADMIN_PASSWORD:-ChangeMe123!}
+      POSTGRES_DB: ${POSTGRES_DB:-predicare}
+      METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
+    volumes:
+      - ./db/metabase/setup.sh:/setup.sh:ro
+    command: sh -c "apk add --no-cache curl jq && sh /setup.sh"
+    restart: "no"
   loader:
     build:
       context: ./backend/ingestion
@@ -131,10 +135,11 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
-      interval: 15s
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
 
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
@@ -177,5 +182,4 @@ services:
 volumes:
   pgdata:
   mlflow_data:
-  n8n_data:
-  # prepared_data:
+  n8n_data: # prepared_data:
