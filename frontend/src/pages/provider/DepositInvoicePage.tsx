@@ -1,13 +1,13 @@
 import { useState, useRef } from 'react';
 import {
   UploadCloud, FileText, Plus, Trash2, CheckCircle2,
-  AlertTriangle, ArrowLeft, File, Calendar, Euro,
+  AlertTriangle, ArrowLeft, File, Calendar, Euro, ClipboardList,
 } from 'lucide-react';
 import { Card, Button, Input, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatEUR } from '@/lib/format';
 import { useToast } from '@/components/ui/Toast';
-import type { InvoiceSubmissionResult } from '@/lib/types';
+import type { InvoiceSubmissionResult, InvoicePrescription } from '@/lib/types';
 
 interface InvoiceLineForm {
   id: string;
@@ -30,6 +30,13 @@ export function DepositInvoicePage() {
   const [insuredPseudo, setInsuredPseudo] = useState('');
   const [careDate, setCareDate] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [hasPrescription, setHasPrescription] = useState(false);
+  const [rxId, setRxId] = useState('');
+  const [rxDate, setRxDate] = useState('');
+  const [rxPrescriber, setRxPrescriber] = useState('');
+  const [rxDiagnosis, setRxDiagnosis] = useState('');
+  const [rxScan, setRxScan] = useState<File | null>(null);
+  const rxScanInputRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
   const total = lines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0);
@@ -47,6 +54,26 @@ export function DepositInvoicePage() {
     setFile(f);
   };
 
+  const handleRxScan = (f: File) => {
+    if (f.size > 10 * 1024 * 1024) {
+      showToast('Le scan ne doit pas dépasser 10 Mo', 'error');
+      return;
+    }
+    if (!f.name.match(/\.(pdf|jpe?g|png)$/i)) {
+      showToast("Format accepté pour l'ordonnance : PDF, JPG ou PNG", 'error');
+      return;
+    }
+    setRxScan(f);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rxWarning =
+    rxDate && rxDate > today
+      ? "La date de prescription est dans le futur."
+      : rxDate && mode === 'manual' && careDate && rxDate > careDate
+        ? "La date de prescription est postérieure à la date des soins."
+        : null;
+
   const addLine = () => setLines([...lines, { id: crypto.randomUUID(), code: '', label: '', quantity: 1, unit_price: 0 }]);
   const removeLine = (id: string) => setLines(lines.filter((l) => l.id !== id));
   const updateLine = (id: string, field: keyof InvoiceLineForm, value: string | number) =>
@@ -63,14 +90,37 @@ export function DepositInvoicePage() {
       return;
     }
 
+    if (hasPrescription && (!rxId.trim() || !rxDate || !rxPrescriber.trim())) {
+      showToast("Renseignez le n° d'ordonnance, sa date et le prescripteur", 'error');
+      return;
+    }
+    const prescription: InvoicePrescription | undefined = hasPrescription
+      ? {
+          prescription_id: rxId.trim(),
+          prescription_date: rxDate,
+          prescriber_pseudo: rxPrescriber.trim(),
+          ...(rxDiagnosis.trim() ? { diagnosis: rxDiagnosis.trim() } : {}),
+        }
+      : undefined;
+
     setSubmitting(true);
     try {
+      let res: InvoiceSubmissionResult;
       if (mode === 'upload' && file) {
         const formData = new FormData();
         formData.append('file', file);
-        await api.submitInvoice(formData);
+        if (prescription) formData.append('prescription', JSON.stringify(prescription));
+        res = await api.submitInvoice(formData);
       } else {
-        await api.submitInvoice({ insured_pseudo: insuredPseudo, care_date: careDate, lines });
+        res = await api.submitInvoice({
+          insured_pseudo: insuredPseudo,
+          care_date: careDate,
+          lines,
+          ...(prescription ? { prescription } : {}),
+        });
+      }
+      if (prescription && rxScan) {
+        await api.uploadPrescriptionScan(res.invoice_id, rxScan);
       }
       setResult({
         invoice_id: 'FAC-2024-1049',
@@ -101,6 +151,12 @@ export function DepositInvoicePage() {
     setLines([{ id: crypto.randomUUID(), code: '', label: '', quantity: 1, unit_price: 0 }]);
     setInsuredPseudo('');
     setCareDate('');
+    setHasPrescription(false);
+    setRxId('');
+    setRxDate('');
+    setRxPrescriber('');
+    setRxDiagnosis('');
+    setRxScan(null);
   };
 
   if (step === 'result' && result) {
@@ -320,6 +376,105 @@ export function DepositInvoicePage() {
                   <span className="text-lg font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(total)}</span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-8">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hasPrescription}
+            onChange={(e) => setHasPrescription(e.target.checked)}
+            className="mt-1 w-4 h-4 accent-primary-700"
+          />
+          <div>
+            <p className="text-sm font-medium text-surface-800 dark:text-surface-100 flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-surface-400" /> Cette facture est liée à une ordonnance
+            </p>
+            <p className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
+              Requise pour les médicaments et les actes soumis à prescription.
+            </p>
+          </div>
+        </label>
+
+        {hasPrescription && (
+          <div className="mt-6 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="N° d'ordonnance"
+                value={rxId}
+                onChange={(e) => setRxId(e.target.value)}
+                placeholder="ORD-0041872"
+                required
+              />
+              <Input
+                label="Date de prescription"
+                type="date"
+                value={rxDate}
+                onChange={(e) => setRxDate(e.target.value)}
+                required
+              />
+              <Input
+                label="Prescripteur (pseudonymisé ou n° ONM)"
+                value={rxPrescriber}
+                onChange={(e) => setRxPrescriber(e.target.value)}
+                placeholder="PRS-0078"
+                required
+              />
+              <Input
+                label="Diagnostic (facultatif)"
+                value={rxDiagnosis}
+                onChange={(e) => setRxDiagnosis(e.target.value)}
+                placeholder="Hypertension artérielle"
+              />
+            </div>
+
+            {rxWarning && (
+              <p className="flex items-center gap-2 text-sm text-warning-700 dark:text-warning-200">
+                <AlertTriangle className="w-4 h-4 shrink-0" /> {rxWarning} Vérifiez la saisie : l'ordonnance sera contrôlée.
+              </p>
+            )}
+
+            <div>
+              <p className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">
+                Scan ou photo de l'ordonnance (facultatif)
+              </p>
+              <input
+                ref={rxScanInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleRxScan(e.target.files[0])}
+              />
+              {rxScan ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-surface-300/80 dark:border-surface-600 bg-surface-100 dark:bg-surface-700/50">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <File className="w-5 h-5 text-primary-600 dark:text-primary-300 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-surface-700 dark:text-surface-200 truncate">{rxScan.name}</p>
+                      <p className="text-xs text-surface-400">{(rxScan.size / 1024).toFixed(0)} Ko</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setRxScan(null)}
+                    aria-label="Retirer le scan"
+                    className="p-1.5 rounded-full text-surface-400 hover:text-danger-500 hover:bg-danger-50 dark:hover:bg-danger-900/30"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => rxScanInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-primary-200 dark:border-surface-600 rounded-2xl p-6 text-center hover:border-primary-400 hover:bg-primary-50/70 dark:hover:border-primary-500 transition-all"
+                >
+                  <UploadCloud className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
+                  <p className="text-sm text-surface-600 dark:text-surface-300">Ajouter le scan de l'ordonnance</p>
+                  <p className="text-xs text-surface-400">PDF, JPG ou PNG · 10 Mo max · conservé comme justificatif</p>
+                </button>
+              )}
             </div>
           </div>
         )}

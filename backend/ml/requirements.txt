@@ -4,10 +4,10 @@ pandas
 numpy
 scikit-learn
 joblib
-openpyxl        # lecture de labels_fraude.xlsx
+openpyxl
 lightgbm
 xgboost
 shap
 pytest
-imbalanced-learn   # SMOTE (Module 2)
-mlflow            # suivi des expériences
+imbalanced-learn
+mlflow

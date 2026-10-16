@@ -8,10 +8,10 @@ from __future__ import annotations
 import pandas as pd
 
 import predict
+import shap  # import tardif : dépendance optionnelle
 
 
 def top_facteurs(X: pd.DataFrame, k: int = 5) -> dict[str, list[tuple[str, float]]]:
-    import shap  # import tardif : dépendance optionnelle
     art = predict.load()
     X = predict.validate(X, art)
     sv = shap.TreeExplainer(art["model"]).shap_values(X)

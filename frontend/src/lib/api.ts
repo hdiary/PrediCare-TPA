@@ -176,6 +176,21 @@ export const api = {
     return request(`/alerts?${params}`);
   },
 
+  async uploadPrescriptionScan(invoiceId: string, scan: File): Promise<void> {
+    if (USE_MOCKS) {
+      await delay(500);
+      return;
+    }
+    const formData = new FormData();
+    formData.append("scan", scan);
+    const res = await fetch(`${BASE_URL}/invoices/${encodeURIComponent(invoiceId)}/prescription-scan`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Erreur lors de l'envoi de l'ordonnance");
+  },
+
   async getPrescriptionAlerts(filters?: {
     rule?: string;
     minSeverity?: number;

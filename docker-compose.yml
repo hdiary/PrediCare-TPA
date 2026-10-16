@@ -28,8 +28,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data # données persistantes
     # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
-    ports:
-      - "127.0.0.1:5432:5432"
+    # ports:
+      # - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
       timeout: 5s
@@ -105,7 +105,18 @@ services:
     ports:
       - "5000:5000"
 
-  # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
+
+  ml:
+    profiles: [ "train" ]          # lancé à la demande, pas à chaque "up"
+    build: ./backend/ml
+    restart: "no"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000   # utilisé seulement si mlflow tourne
+    volumes:
+      - ./backend/ingestion/dataset:/data/dataset:ro
+      - ./backend/ingestion/labels:/data/labels:ro
+      - ./backend/ml/models:/app/models
+        # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     profiles: [ "full" ] # a decommenter pour activer l'API dans le container
     build: ./backend

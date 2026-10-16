@@ -174,3 +174,11 @@ export interface PrescriptionAlert {
   prescriber_pseudo: string;
   insured_pseudo: string;
 }
+
+/** Ordonnance rattachée à une facture (champs lus par le modèle et prescription_rules.py). */
+export interface InvoicePrescription {
+  prescription_id: string;
+  prescription_date: string;
+  prescriber_pseudo: string;
+  diagnosis?: string;
+}
