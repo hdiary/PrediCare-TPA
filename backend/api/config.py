@@ -11,13 +11,23 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_expire_minutes: int = 60
     jwt_algorithm: str = "HS256"
+    login_max_attempts: int = 5          # échecs consécutifs avant verrouillage du compte
+    login_lockout_minutes: int = 15      # durée du verrouillage
     cors_origins: str = "http://localhost:3000"
-    alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" sera en base
+    alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
+
+    # Registre de modèles (MLflow)
+    mlflow_tracking_uri: str = "http://mlflow:5000"
+    mlflow_model_name: str = "predicare-fraud"
+    mlflow_model_alias: str = "champion"   # alias de la version active
+    shap_top_k: int = 5
+    model_retry_interval_s: int = 10       # délai mini entre deux tentatives de chargement
 
     # Comptes de démonstration (créés au démarrage si DEMO_PASSWORD est défini)
     demo_password: str | None = None
-    demo_insured_id: str | None = None    # pseudonyme d'un assuré existant
-    demo_provider_id: str | None = None   # identifiant d'un prestataire existant
+
+    # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
+    identity_encryption_key: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

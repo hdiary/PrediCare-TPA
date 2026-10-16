@@ -19,7 +19,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) 
     """Utilisateur connecté, relu en base à chaque requête.
 
     Conséquence : désactiver un compte ou changer un rôle est effectif
-    immédiatement, et insured_id vient de la base, jamais du client.
+    immédiatement, et assure_id vient de la base, jamais du client.
     """
     try:
         payload = decode_token(token)
@@ -28,8 +28,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) 
         raise _UNAUTHORIZED from None
 
     user = conn.execute(
-        "SELECT user_id, email, role, insured_id, provider_id, is_active "
-        "FROM users WHERE user_id = %s",
+        "SELECT utilisateur_id AS user_id, email, role, assure_id, prestataire_id, "
+        "actif AS is_active FROM utilisateurs WHERE utilisateur_id = %s",
         (user_id,),
     ).fetchone()
     if not user or not user["is_active"]:

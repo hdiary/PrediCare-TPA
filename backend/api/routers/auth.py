@@ -1,11 +1,15 @@
-"""Authentification : login (JSON et formulaire OAuth2) et profil."""
-import logging
+"""Authentification : login (JSON et formulaire OAuth2) et profil.
 
-from datetime import datetime, timedelta, timezone
+Protection contre les tentatives répétées (S12) : après LOGIN_MAX_ATTEMPTS échecs
+consécutifs, le compte est verrouillé LOGIN_LOCKOUT_MINUTES (HTTP 429). Un succès remet
+le compteur à zéro. Limite : par compte (pas par adresse IP) ; un email inconnu n'est pas suivi.
+"""
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+from api.config import get_settings
 from api.db import get_db
 from api.deps import get_current_user
 from api.schemas import LoginRequest, TokenResponse, UserOut
@@ -15,81 +19,53 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-
-# Nombre maximum de tentatives autorisées avant blocage
-MAX_ATTEMPTS = 5
-# Durée du blocage en minutes
-LOCKOUT_DURATION_MINUTES = 15
-
 def _authenticate(conn, email: str, password: str) -> dict:
-    # Le calcul "verrouillé ou non" est fait par PostgreSQL (now()) :
-    # plus aucun souci de fuseau horaire entre Python et la base.
+    settings = get_settings()
     row = conn.execute(
-        "SELECT user_id, email, password_hash, role, insured_id, provider_id, is_active, "
-        "       failed_attempts, locked_until, "
-        "       (locked_until IS NOT NULL AND locked_until > now()) AS is_locked, "
-        "       (locked_until IS NOT NULL AND locked_until <= now()) AS lock_expired "
-        "FROM users WHERE email = %s",
+        "SELECT utilisateur_id AS user_id, email, mot_de_passe_hash AS password_hash, role, "
+        "assure_id, prestataire_id, actif AS is_active, tentatives_echouees, "
+        "(verrouille_jusqua IS NOT NULL AND verrouille_jusqua > now()) AS verrouille "
+        "FROM utilisateurs WHERE email = %s",
         (email.strip().lower(),),
     ).fetchone()
 
-    # Compte actuellement verrouillé
-    if row and row["is_locked"]:
-        logger.warning("login_failed_locked_account", extra={"user_id": row["user_id"]})
+    if row and row["verrouille"]:
+        # Mot de passe non vérifié : un compte verrouillé ne sert pas d'oracle
+        logger.warning("login_locked", extra={"user_id": row["user_id"]})
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Ce compte est temporairement bloqué en raison de trop nombreuses tentatives ratées.",
+            detail="Trop de tentatives échouées : compte temporairement verrouillé",
+            headers={"Retry-After": str(settings.login_lockout_minutes * 60)},
         )
-
-    # Le blocage a expiré : on repart de zéro (sinon le 1er échec suivant re-bloquerait aussitôt)
-    if row and row["lock_expired"]:
-        conn.execute(
-            "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE user_id = %s",
-            (row["user_id"],),
-        )
-        conn.commit()
 
     # Toujours vérifier un hash, même si l'utilisateur n'existe pas (anti-énumération)
     valid = verify_password(password, row["password_hash"] if row else DUMMY_HASH)
-
     if not row or not valid or not row["is_active"]:
-        logger.warning("login_failed")
-
-        if row and row["is_active"]:
-            # Incrément atomique côté SQL + verrouillage si le seuil est atteint.
-            # Évite les courses entre requêtes simultanées.
+        if row:
             conn.execute(
-                "UPDATE users "
-                "SET failed_attempts = CASE WHEN %s THEN 1 ELSE failed_attempts + 1 END, "
-                "    locked_until = CASE "
-                "        WHEN (CASE WHEN %s THEN 1 ELSE failed_attempts + 1 END) >= %s "
-                "        THEN now() + make_interval(mins => %s) "
-                "        ELSE locked_until END "
-                "WHERE user_id = %s",
-                (
-                    False,  # remis à 0 plus haut si expiré, donc jamais besoin ici
-                    False,
-                    MAX_ATTEMPTS,
-                    LOCKOUT_DURATION_MINUTES,
-                    row["user_id"],
-                ),
+                "UPDATE utilisateurs SET "
+                "tentatives_echouees = CASE WHEN tentatives_echouees + 1 >= %s "
+                "THEN 0 ELSE tentatives_echouees + 1 END, "
+                "verrouille_jusqua = CASE WHEN tentatives_echouees + 1 >= %s "
+                "THEN now() + make_interval(mins => %s) ELSE verrouille_jusqua END "
+                "WHERE utilisateur_id = %s",
+                (settings.login_max_attempts, settings.login_max_attempts,
+                 settings.login_lockout_minutes, row["user_id"]),
             )
-            conn.commit()
-
+            conn.commit()  # l'échec doit être enregistré même si on lève l'erreur
+        logger.warning("login_failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Identifiants invalides",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Connexion réussie : réinitialisation des compteurs
     conn.execute(
-        "UPDATE users SET last_login_at = now(), failed_attempts = 0, locked_until = NULL "
-        "WHERE user_id = %s",
+        "UPDATE utilisateurs SET derniere_connexion = now(), tentatives_echouees = 0, "
+        "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
         (row["user_id"],),
     )
     conn.commit()
-
     logger.info("login_ok", extra={"user_id": row["user_id"], "role": row["role"]})
     return row
 

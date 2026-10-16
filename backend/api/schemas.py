@@ -1,7 +1,7 @@
 """Schémas Pydantic de l'authentification."""
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Role = Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"]
 
@@ -15,8 +15,8 @@ class UserOut(BaseModel):
     user_id: int
     email: str
     role: Role
-    insured_id: str | None = None
-    provider_id: str | None = None
+    assure_id: str | None = None
+    prestataire_id: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -27,7 +27,10 @@ class TokenResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     status: Literal["ok", "degraded"]
     version: str
     uptime_s: int
     checks: dict[str, str]
+    model_version: str | None = None
