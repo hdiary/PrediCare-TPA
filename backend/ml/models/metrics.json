@@ -1,84 +1,150 @@
 {
-  "hgb": {
-    "cv": {
+  "version": "hgb-20261016-0807-b2ead0",
+  "comparaison": [
+    {
+      "candidat": "baseline_logreg",
+      "pr_auc_valid": 0.9747,
+      "pr_auc_test": 0.9768,
+      "recall_test": 0.9517,
+      "precision_test": 0.863,
+      "recall_test_seuil_0.8": 0.9262,
+      "precision_test_seuil_0.8": 0.9268
+    },
+    {
+      "candidat": "hgb_poids",
+      "pr_auc_valid": 0.9986,
+      "pr_auc_test": 0.9984,
+      "recall_test": 0.9427,
+      "precision_test": 0.9971,
+      "recall_test_seuil_0.8": 0.9772,
+      "precision_test_seuil_0.8": 0.9888
+    }
+  ],
+  "retenu": {
+    "version": "hgb-20261016-0807-b2ead0",
+    "file": "model_hgb-20261016-0807-b2ead0.joblib",
+    "algo": "hgb",
+    "strategie": "poids",
+    "params": {
+      "min_samples_leaf": 30,
+      "max_leaf_nodes": 31,
+      "learning_rate": 0.1,
+      "l2_regularization": 0.0
+    },
+    "trained_at": "2026-10-16T08:07:10+00:00",
+    "seuil": 0.9678,
+    "valid": {
       "pr_auc": 0.9986,
       "roc_auc": 0.9998,
-      "seuil": 0.9702,
-      "recall": 0.95,
-      "precision": 0.9988,
-      "alertes": 5617,
-      "tp": 5610,
-      "fp": 7,
-      "fn": 295
+      "seuil": 0.9678,
+      "recall": 0.9503,
+      "precision": 0.9945,
+      "alertes": 1095,
+      "tp": 1089,
+      "fp": 6,
+      "fn": 57,
+      "au_seuil_cdc": {
+        "seuil": 0.8,
+        "recall": 0.9817,
+        "precision": 0.9808,
+        "alertes": 1147,
+        "tp": 1125,
+        "fp": 22,
+        "fn": 21
+      }
     },
     "test": {
-      "pr_auc": 0.9985,
-      "roc_auc": 0.9998,
-      "seuil": 0.9702,
-      "recall": 0.9605,
-      "precision": 1.0,
-      "alertes": 1385,
-      "tp": 1385,
-      "fp": 0,
-      "fn": 57
+      "pr_auc": 0.9984,
+      "roc_auc": 0.9997,
+      "seuil": 0.9678,
+      "recall": 0.9427,
+      "precision": 0.9971,
+      "alertes": 1370,
+      "tp": 1366,
+      "fp": 4,
+      "fn": 83,
+      "au_seuil_cdc": {
+        "seuil": 0.8,
+        "recall": 0.9772,
+        "precision": 0.9888,
+        "alertes": 1432,
+        "tp": 1416,
+        "fp": 16,
+        "fn": 33
+      }
     },
     "recall_par_type": {
       "ACTE_FICTIF": {
-        "n": 99,
-        "recall": 0.828
+        "n": 86,
+        "recall": 0.826
       },
       "DOUBLON": {
-        "n": 177,
-        "recall": 0.91
+        "n": 176,
+        "recall": 0.938
       },
       "FRACTIONNEMENT": {
-        "n": 77,
-        "recall": 0.935
+        "n": 58,
+        "recall": 0.879
       },
       "HORS_COUVERTURE": {
-        "n": 35,
-        "recall": 0.971
+        "n": 23,
+        "recall": 0.87
       },
       "INCOHERENCE_PROFIL": {
-        "n": 71,
+        "n": 65,
         "recall": 1.0
       },
       "LIGNES_NON_PRESCRITES": {
-        "n": 146,
+        "n": 157,
         "recall": 1.0
       },
       "ORDONNANCE_EXPIREE": {
-        "n": 103,
+        "n": 106,
         "recall": 1.0
       },
       "PRESTATAIRE_RADIE": {
-        "n": 22,
-        "recall": 1.0
+        "n": 96,
+        "recall": 0.719
       },
       "QUANTITE_EXCESSIVE": {
-        "n": 111,
-        "recall": 0.991
+        "n": 102,
+        "recall": 1.0
       },
       "SOINS_JOUR_FERME": {
         "n": 44,
         "recall": 1.0
       },
       "SUBSTITUTION_PRODUIT": {
-        "n": 66,
+        "n": 70,
         "recall": 1.0
       },
       "SURCONSOMMATION": {
-        "n": 107,
-        "recall": 0.963
+        "n": 48,
+        "recall": 0.979
       },
       "SURFACTURATION": {
-        "n": 240,
-        "recall": 0.996
+        "n": 275,
+        "recall": 0.993
       },
       "UPCODING": {
-        "n": 144,
-        "recall": 0.917
+        "n": 143,
+        "recall": 0.881
       }
-    }
+    },
+    "fenetres": {
+      "train": [
+        "2024-10-01",
+        "2026-01-21"
+      ],
+      "valid": [
+        "2026-01-22",
+        "2026-05-03"
+      ],
+      "test": [
+        "2026-05-04",
+        "2026-10-01"
+      ]
+    },
+    "status": "active"
   }
 }

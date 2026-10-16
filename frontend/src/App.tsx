@@ -21,6 +21,7 @@ import { ProviderInvoicesPage } from '@/pages/provider/ProviderInvoicesPage';
 import { ManagerDashboard } from '@/pages/manager/ManagerDashboard';
 import { AlertsListPage } from '@/pages/manager/AlertsListPage';
 import { AlertDetailPage } from '@/pages/manager/AlertDetailPage';
+import { PrescriptionAlertsPage } from '@/pages/manager/PrescriptionAlertsPage';
 
 // Admin pages
 import { AdminSupervision } from '@/pages/admin/AdminSupervision';
@@ -69,6 +70,7 @@ export default function App() {
                 <Route path="/gestionnaire" element={<AppLayout allowedRoles={['manager']}><ManagerDashboard /></AppLayout>} />
                 <Route path="/gestionnaire/alertes" element={<AppLayout allowedRoles={['manager']}><AlertsListPage /></AppLayout>} />
                 <Route path="/gestionnaire/alertes/:id" element={<AppLayout allowedRoles={['manager']}><AlertDetailPage /></AppLayout>} />
+                <Route path="/gestionnaire/ordonnances" element={<AppLayout allowedRoles={['manager']}><PrescriptionAlertsPage /></AppLayout>} />
                 <Route path="/gestionnaire/aide" element={<AppLayout allowedRoles={['manager']}><HelpPage /></AppLayout>} />
 
                 {/* Admin routes */}

@@ -1,5 +1,6 @@
 import type {
   Alert,
+  PrescriptionAlert,
   AlertDetail,
   ChatMessage,
   Conversation,
@@ -213,3 +214,13 @@ export const mockChatResponse = (message: string): { answer: string; sources: { 
     sources: [],
   };
 };
+
+export const mockPrescriptionAlerts: PrescriptionAlert[] = [
+  { id: 'PRA-001', prescription_id: 'ORD-0041872', rule: 'ORDONNANCE_ANTIDATEE', severity: 3, detail: "prescrite le 2025-12-05, avant l'adhésion du 2025-12-13", diagnosis: 'Hypertension artérielle', prescription_date: '2025-12-05', prescriber_pseudo: 'PRS-0078', insured_pseudo: 'ASS-004218' },
+  { id: 'PRA-002', prescription_id: 'ORD-0038110', rule: 'PRESCRIPTEUR_RADIE', severity: 3, detail: 'prescripteur déconventionné à la date de prescription', diagnosis: 'Diabète de type 2', prescription_date: '2026-03-14', prescriber_pseudo: 'PRS-0102', insured_pseudo: 'ASS-004220' },
+  { id: 'PRA-003', prescription_id: 'ORD-0029954', rule: 'ORDONNANCE_FALSIFIEE', severity: 3, detail: 'MED-0042 : quantité 9 (max observé 2)', diagnosis: 'Douleur lombaire', prescription_date: '2026-05-21', prescriber_pseudo: 'PRS-0055', insured_pseudo: 'ASS-004223' },
+  { id: 'PRA-004', prescription_id: 'ORD-0044301', rule: 'DOUBLON_PRESCRIPTION', severity: 2, detail: 'mêmes lignes déjà prescrites il y a 3 j (autre prescripteur)', diagnosis: 'Infection respiratoire', prescription_date: '2026-06-02', prescriber_pseudo: 'PRS-0052', insured_pseudo: 'ASS-004224' },
+  { id: 'PRA-005', prescription_id: 'ORD-0044298', rule: 'DOUBLON_PRESCRIPTION', severity: 2, detail: 'mêmes lignes déjà prescrites il y a 1 j (même prescripteur)', diagnosis: 'Gastrite', prescription_date: '2026-06-02', prescriber_pseudo: 'PRS-0078', insured_pseudo: 'ASS-004225' },
+  { id: 'PRA-006', prescription_id: 'ORD-0036677', rule: 'INADEQUATION_DIAGNOSTIC', severity: 2, detail: "LAB-GE, LAB-ECBU jamais prescrit pour « Rhinite allergique »", diagnosis: 'Rhinite allergique', prescription_date: '2026-04-08', prescriber_pseudo: 'PRS-0102', insured_pseudo: 'ASS-004226' },
+  { id: 'PRA-007', prescription_id: 'ORD-0040215', rule: 'PRESCRIPTEUR_INCOMPATIBLE', severity: 2, detail: 'PEDIATRIE : « Trouble anxieux » hors de son champ habituel', diagnosis: 'Trouble anxieux', prescription_date: '2026-02-17', prescriber_pseudo: 'PRS-0063', insured_pseudo: 'ASS-004227' },
+];

@@ -9,3 +9,5 @@ lightgbm
 xgboost
 shap
 pytest
+imbalanced-learn   # SMOTE (Module 2)
+mlflow            # suivi des expériences

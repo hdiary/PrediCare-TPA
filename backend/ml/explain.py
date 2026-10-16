@@ -13,7 +13,7 @@ import predict
 def top_facteurs(X: pd.DataFrame, k: int = 5) -> dict[str, list[tuple[str, float]]]:
     import shap  # import tardif : dépendance optionnelle
     art = predict.load()
-    X = X[art["features"]]
+    X = predict.validate(X, art)
     sv = shap.TreeExplainer(art["model"]).shap_values(X)
     if isinstance(sv, list):  # anciennes versions : [classe0, classe1]
         sv = sv[1]

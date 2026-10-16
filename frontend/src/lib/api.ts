@@ -4,6 +4,7 @@ import type {
   Invoice,
   Alert,
   AlertDetail,
+  PrescriptionAlert,
   KPIData,
   ServiceStatus,
   SystemMetrics,
@@ -20,6 +21,7 @@ import {
   mockInvoices,
   mockAlerts,
   mockAlertDetail,
+  mockPrescriptionAlerts,
   mockKPIData,
   mockServiceStatus,
   mockSystemMetrics,
@@ -172,6 +174,27 @@ export const api = {
       params.set("status", filters.status);
     if (filters?.minScore) params.set("min_score", String(filters.minScore));
     return request(`/alerts?${params}`);
+  },
+
+  async getPrescriptionAlerts(filters?: {
+    rule?: string;
+    minSeverity?: number;
+  }): Promise<{ items: PrescriptionAlert[]; total: number }> {
+    if (USE_MOCKS) {
+      await delay(400);
+      let items = [...mockPrescriptionAlerts];
+      if (filters?.rule && filters.rule !== "all") {
+        items = items.filter((a) => a.rule === filters.rule);
+      }
+      if (filters?.minSeverity) {
+        items = items.filter((a) => a.severity >= (filters.minSeverity || 0));
+      }
+      return { items, total: items.length };
+    }
+    const params = new URLSearchParams();
+    if (filters?.rule && filters.rule !== "all") params.set("rule", filters.rule);
+    if (filters?.minSeverity) params.set("min_severity", String(filters.minSeverity));
+    return request(`/prescription-alerts?${params}`);
   },
 
   async getAlertDetail(id: string): Promise<AlertDetail> {

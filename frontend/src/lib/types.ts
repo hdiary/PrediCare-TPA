@@ -153,3 +153,24 @@ export interface InvoiceSubmissionResult {
   status: 'accepted' | 'rejected';
   errors: { field: string; message: string }[];
 }
+
+export type PrescriptionRuleCode =
+  | 'ORDONNANCE_ANTIDATEE'
+  | 'PRESCRIPTEUR_RADIE'
+  | 'DOUBLON_PRESCRIPTION'
+  | 'INADEQUATION_DIAGNOSTIC'
+  | 'PRESCRIPTEUR_INCOMPATIBLE'
+  | 'ORDONNANCE_FALSIFIEE';
+
+/** Alerte produite par backend/ml/prescription_rules.py (une ligne par ordonnance et règle). */
+export interface PrescriptionAlert {
+  id: string;
+  prescription_id: string;
+  rule: PrescriptionRuleCode;
+  severity: 1 | 2 | 3;
+  detail: string;
+  diagnosis: string | null;
+  prescription_date: string;
+  prescriber_pseudo: string;
+  insured_pseudo: string;
+}

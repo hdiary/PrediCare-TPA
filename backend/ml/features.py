@@ -198,6 +198,13 @@ def build_features(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     f["jours_depuis_effet"] = (f["date_soin"] - f["date_effet"]).dt.days
     f["jours_avant_fin_contrat"] = (f["date_fin"] - f["date_soin"]).dt.days
 
+    # indicateurs explicites (règles métier rares : aident le modèle à ne pas les noyer)
+    f["hors_periode_assure"] = ((f["jours_depuis_adhesion"] < 0) | (f["jours_avant_radiation"] < 0)
+                                | (f["jours_depuis_effet"] < 0) | (f["jours_avant_fin_contrat"] < 0)).astype(int)
+    f["en_carence"] = (f["gap_carence"] > 0).astype(int)
+    f["prest_hors_convention"] = ((f["jours_apres_fin_convention"] > 0)
+                                  | (f["jours_depuis_convention"] < 0)).astype(int)
+
     # ---------------------------------------------------------------- base
     f["delai_soin_facture"] = (f["date_facture"] - f["date_soin"]).dt.days
     f["delai_facture_reception"] = (f["date_reception"] - f["date_facture"]).dt.days

@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import {
   LayoutDashboard, AlertTriangle, FileText, MessageSquare,
   Settings, Server, GitBranch, ScrollText, Users, LogOut,
-  ChevronLeft, ChevronRight, HelpCircle, Receipt,
+  ChevronLeft, ChevronRight, HelpCircle, Receipt, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Logo } from './Logo';
@@ -30,6 +30,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   manager: [
     { to: '/gestionnaire', label: 'Tableau de bord', icon: <LayoutDashboard className="w-5 h-5" /> },
     { to: '/gestionnaire/alertes', label: 'Alertes', icon: <AlertTriangle className="w-5 h-5" /> },
+    { to: '/gestionnaire/ordonnances', label: 'Ordonnances', icon: <ClipboardList className="w-5 h-5" /> },
     { to: '/gestionnaire/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   admin: [

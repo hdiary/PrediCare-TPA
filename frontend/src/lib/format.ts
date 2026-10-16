@@ -90,3 +90,42 @@ export const ROLE_LABELS: Record<string, string> = {
   manager: 'Gestionnaire',
   admin: 'Administrateur',
 };
+
+export const PRESCRIPTION_RULES: Record<string, { label: string; meaning: string; check: string }> = {
+  ORDONNANCE_ANTIDATEE: {
+    label: 'Ordonnance antidatée',
+    meaning: "L'ordonnance est datée avant l'adhésion du bénéficiaire, ce qui peut servir à couvrir un soin antérieur.",
+    check: "Comparer la date de prescription avec la date d'adhésion et la date du soin facturé.",
+  },
+  PRESCRIPTEUR_RADIE: {
+    label: 'Prescripteur radié ou non vérifiable',
+    meaning: "Le prescripteur était déconventionné à la date de prescription, ou son numéro ONM est absent ou invalide.",
+    check: "Vérifier le statut du prescripteur et son numéro ONM auprès du référentiel des prestataires.",
+  },
+  DOUBLON_PRESCRIPTION: {
+    label: 'Doublon de prescription',
+    meaning: "Les mêmes lignes ont déjà été prescrites au même assuré quelques jours plus tôt.",
+    check: "Consulter l'historique de l'assuré : renouvellement légitime ou nomadisme médical ?",
+  },
+  INADEQUATION_DIAGNOSTIC: {
+    label: 'Inadéquation prescription / diagnostic',
+    meaning: "Un médicament ou un examen est prescrit alors qu'il ne l'est presque jamais pour ce diagnostic.",
+    check: "Évaluer la cohérence médicale ; demander un avis au médecin conseil si le doute persiste.",
+  },
+  PRESCRIPTEUR_INCOMPATIBLE: {
+    label: 'Prescripteur hors de son champ',
+    meaning: "Le diagnostic est très inhabituel pour la spécialité du prescripteur.",
+    check: "Contrôler la spécialité déclarée du prescripteur et l'acte prescrit.",
+  },
+  ORDONNANCE_FALSIFIEE: {
+    label: 'Quantité ou durée surchargée',
+    meaning: "La quantité ou la durée dépasse le maximum observé pour ce produit, ce qui peut indiquer une surcharge après prescription.",
+    check: "Demander l'original de l'ordonnance et comparer les quantités.",
+  },
+};
+
+export const PRESCRIPTION_SEVERITY: Record<number, { label: string; className: string }> = {
+  3: { label: 'Grave', className: 'bg-danger-100 text-danger-700 dark:bg-danger-900 dark:text-danger-200 border-danger-300 dark:border-danger-700' },
+  2: { label: 'Suspect', className: 'bg-warning-100 text-warning-700 dark:bg-warning-900 dark:text-warning-200 border-warning-300 dark:border-warning-700' },
+  1: { label: 'À vérifier', className: 'bg-success-100 text-success-700 dark:bg-success-900 dark:text-success-200 border-success-300 dark:border-success-700' },
+};
