@@ -28,8 +28,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data # données persistantes
     # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
-    # ports:
-    #   - "127.0.0.1:5432:5432"
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
       timeout: 5s
@@ -38,33 +38,45 @@ services:
   # ---------- Migrations Alembic + chargement des données (s'exécute une fois) ----------
   # Idempotent : au redémarrage il détecte que la base est initialisée.
   # Forcer un rechargement : docker compose run --rm loader python load.py --force
-  prepare:
-    build:
-      context: ./backend/ingestion
-      dockerfile: db_init/Dockerfile
-    working_dir: /app
-    command: >
-      sh -c " if [ -f data/clean/.done ]; then echo 'Déjà préparé'; exit 0; fi && python clean.py && python encrypt_identities.py --delete-source && touch data/clean/.done"
-    environment:
-      PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
-      IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
-      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+  # prepare:
+  #   build:
+  #     context: ./backend/ingestion
+  #     dockerfile: db_init/Dockerfile
+  #   working_dir: /app
+  #   command:
+  #     - sh
+  #     - -c
+  #     - |
+  #       set -e
+  #       if [ -f data/clean/.done ]; then
+  #         echo "Déjà préparé"
+  #         exit 0
+  #       fi
+  #       python clean.py
+  #       python encrypt_identities.py --delete-source
+  #       mkdir -p data/clean
+  #       touch data/clean/.done
+    
+  #   environment:
+  #     PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
+  #     IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
+  #     IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
 
-    volumes:
-      - ./backend/ingestion/dataset:/app/dataset:ro # CSV bruts (hors Git)
-      - ./backend/ingestion/labels:/app/labels:ro # CSV bruts (hors Git)
-      - prepared_data:/app/data # sortie partagée
-    restart: "no"
+  #   volumes:
+  #     - ./backend/ingestion/dataset:/app/dataset:ro # CSV bruts (hors Git)
+  #     - ./backend/ingestion/labels:/app/labels:ro # CSV bruts (hors Git)
+  #     - prepared_data:/app/data # sortie partagée
+  #   restart: "no"
 
   loader:
     build:
       context: ./backend/ingestion
-      # DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
       dockerfile: db_init/Dockerfile
     environment:
-      # Propriétaire de la base : nécessaire pour migrations, extensions et rôles
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      DATASET_DIR: /data/dataset
+      LABELS_DIR: /data/labels
       PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
       IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
       IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
@@ -74,13 +86,11 @@ services:
       DB_BI_RO_PASSWORD: ${DB_BI_RO_PASSWORD:-dev_bi_ro_pwd}
       DB_ML_RO_PASSWORD: ${DB_ML_RO_PASSWORD:-dev_ml_ro_pwd}
     volumes:
-      # Parquet produits par clean.py + encrypt_identities.py (hors Git)
-      - prepared_data:/app/data:ro
+      - ./backend/ingestion/dataset:/data/dataset:ro
+      - ./backend/ingestion/labels:/data/labels:ro
     depends_on:
       db:
         condition: service_healthy
-      prepare:
-        condition: service_completed_successfully
     restart: "no"
 
   # ---------- Registre des versions du modèle ----------
@@ -168,4 +178,4 @@ volumes:
   pgdata:
   mlflow_data:
   n8n_data:
-  prepared_data:
+  # prepared_data:
