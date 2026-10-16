@@ -1,0 +1,133 @@
+
+/* Polices de la maquette (DM Sans, Newsreader — licence OFL), servies localement */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/dm-sans-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/newsreader-latin.woff2') format('woff2');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    line-height: normal;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply text-surface-900 dark:text-surface-100 min-h-screen;
+    background-color: #F4F8F7;
+  }
+  .dark body { background-color: #1C2120; }
+  h1, h2 { font-family: 'Newsreader', Georgia, serif; font-weight: 500 !important; letter-spacing: -0.01em; }
+  * {
+    @apply border-surface-200 dark:border-surface-700;
+  }
+}
+
+@layer components {
+  /* Carte : fond blanc, bordure fine chaude (style Claude) */
+  .glass {
+    @apply bg-white dark:bg-surface-800 border border-surface-300/80 dark:border-surface-700 shadow-soft;
+  }
+  /* Pastille / badge flottant */
+  .float-chip {
+    @apply bg-white dark:bg-surface-800 rounded-xl shadow-card border border-surface-300/80 dark:border-surface-700;
+  }
+  .gradient-primary {
+    background-color: #0F766E;
+  }
+  .gradient-primary:hover { background-color: #115E59; }
+  .gradient-hero { background-color: #E4EEEC; }
+  .dark .gradient-hero { background-color: #222726; }
+
+  .skeleton {
+    @apply bg-surface-200 dark:bg-surface-700 rounded-2xl;
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(134, 168, 164, 0.4) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(134, 168, 164, 0.4);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(134, 168, 164, 0.6);
+  }
+}
+
+/* Focus ring */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-surface-900;
+}
+
+/* Smooth transitions */
+button, a, input, textarea, select {
+  transition: all 0.15s ease;
+}
+
+/* Chat textarea auto-grow */
+.chat-textarea {
+  resize: none;
+  overflow-y: hidden;
+}
+
+
+/* ---------- Forme douce : tableaux, sélection, focus ---------- */
+@layer base {
+  table { border-collapse: separate; border-spacing: 0; }
+  thead tr th:first-child { border-top-left-radius: 0.5rem; border-bottom-left-radius: 0.5rem; }
+  thead tr th:last-child { border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+  tbody tr { transition: background-color .15s ease; }
+  tbody tr:hover td:first-child { border-top-left-radius: 0.5rem; border-bottom-left-radius: 0.5rem; }
+  tbody tr:hover td:last-child { border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem; }
+  ::selection { background: rgba(45, 212, 191, 0.25); }
+  input, select, textarea { outline: none; }
+  select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2386A8A4' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem !important; }
+  input[type='checkbox'], input[type='radio'] { accent-color: #0F766E; }
+}
+
+/* Chrome peint les champs auto-remplis en bleu clair : on garde la palette crème */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+  -webkit-text-fill-color: #0A1C1F !important;
+  caret-color: #0A1C1F;
+}
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #0A1C1F inset !important;
+  -webkit-text-fill-color: #E8F1F0 !important;
+  caret-color: #E8F1F0;
+}
