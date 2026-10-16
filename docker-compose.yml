@@ -27,8 +27,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
     volumes:
       - pgdata:/var/lib/postgresql/data # données persistantes
-    # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
-    # ports:
+      # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
+      # ports:
       # - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
@@ -56,7 +56,7 @@ services:
   #       python encrypt_identities.py --delete-source
   #       mkdir -p data/clean
   #       touch data/clean/.done
-    
+
   #   environment:
   #     PSEUDO_KEY: ${PSEUDO_HMAC_KEY:-0cd7db301de115d6ed662bb9320e671eb9a5f0db7d50775ba69f61fbb89c304d}
   #     IDENTITY_KEY: ${IDENTITY_ENCRYPTION_KEY:-4xDlFmcW7ASETxoFqZAZrq27NEcCBI8pdkHCQtdONxY=}
@@ -92,31 +92,37 @@ services:
       db:
         condition: service_healthy
     restart: "no"
-
-  # ---------- Registre des versions du modèle ----------
+    # ---------- Registre des versions du modèle ----------
   mlflow:
-    profiles: [ "full" ] # a decommenter pour activer mlflow dans le container
-    image: ghcr.io/mlflow/mlflow:latest # à épingler sur une version précise
+    profiles: [ "full", "train" ]
+    image: ghcr.io/mlflow/mlflow:v3.17.1
     restart: unless-stopped
     command: >
-      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
     volumes:
       - mlflow_data:/mlflow
     ports:
       - "5000:5000"
-
-
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')" ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
   ml:
-    profiles: [ "train" ]          # lancé à la demande, pas à chaque "up"
+    profiles: [ "train" ] # lancé à la demande, pas à chaque "up"
     build: ./backend/ml
     restart: "no"
     environment:
-      MLFLOW_TRACKING_URI: http://mlflow:5000   # utilisé seulement si mlflow tourne
+      MLFLOW_TRACKING_URI: http://mlflow:5000 # utilisé seulement si mlflow tourne
     volumes:
       - ./backend/ingestion/dataset:/data/dataset:ro
       - ./backend/ingestion/labels:/data/labels:ro
       - ./backend/ml/models:/app/models
-        # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
+    depends_on:
+      mlflow:
+        condition: service_healthy
+  # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     profiles: [ "full" ] # a decommenter pour activer l'API dans le container
     build: ./backend
@@ -188,5 +194,4 @@ services:
 volumes:
   pgdata:
   mlflow_data:
-  n8n_data:
-  # prepared_data:
+  n8n_data: # prepared_data:

@@ -1,5 +1,5 @@
 {
-  "active": "lightgbm-20261016-1230-078e86",
+  "active": "lightgbm-20261016-1406-078e86",
   "versions": [
     {
       "version": "hgb-20261016-0807-b2ead0",
@@ -142,6 +142,264 @@
         "colsample_bytree": 0.8
       },
       "trained_at": "2026-10-16T12:30:01+00:00",
+      "seuil": 0.9999,
+      "valid": {
+        "pr_auc": 0.9988,
+        "roc_auc": 0.9998,
+        "seuil": 0.9999,
+        "recall": 0.9503,
+        "precision": 0.9973,
+        "alertes": 1092,
+        "tp": 1089,
+        "fp": 3,
+        "fn": 57,
+        "au_seuil_cdc": {
+          "seuil": 0.8,
+          "recall": 0.986,
+          "precision": 0.9852,
+          "alertes": 1147,
+          "tp": 1130,
+          "fp": 17,
+          "fn": 16
+        }
+      },
+      "test": {
+        "pr_auc": 0.9988,
+        "roc_auc": 0.9997,
+        "seuil": 0.9999,
+        "recall": 0.9469,
+        "precision": 0.9993,
+        "alertes": 1373,
+        "tp": 1372,
+        "fp": 1,
+        "fn": 77,
+        "au_seuil_cdc": {
+          "seuil": 0.8,
+          "recall": 0.9848,
+          "precision": 0.9937,
+          "alertes": 1436,
+          "tp": 1427,
+          "fp": 9,
+          "fn": 22
+        }
+      },
+      "recall_par_type": {
+        "ACTE_FICTIF": {
+          "n": 86,
+          "recall": 0.837
+        },
+        "DOUBLON": {
+          "n": 176,
+          "recall": 0.943
+        },
+        "FRACTIONNEMENT": {
+          "n": 58,
+          "recall": 0.828
+        },
+        "HORS_COUVERTURE": {
+          "n": 23,
+          "recall": 0.913
+        },
+        "INCOHERENCE_PROFIL": {
+          "n": 65,
+          "recall": 1.0
+        },
+        "LIGNES_NON_PRESCRITES": {
+          "n": 157,
+          "recall": 1.0
+        },
+        "ORDONNANCE_EXPIREE": {
+          "n": 106,
+          "recall": 1.0
+        },
+        "PRESTATAIRE_RADIE": {
+          "n": 96,
+          "recall": 0.771
+        },
+        "QUANTITE_EXCESSIVE": {
+          "n": 102,
+          "recall": 0.99
+        },
+        "SOINS_JOUR_FERME": {
+          "n": 44,
+          "recall": 1.0
+        },
+        "SUBSTITUTION_PRODUIT": {
+          "n": 70,
+          "recall": 1.0
+        },
+        "SURCONSOMMATION": {
+          "n": 48,
+          "recall": 0.979
+        },
+        "SURFACTURATION": {
+          "n": 275,
+          "recall": 0.985
+        },
+        "UPCODING": {
+          "n": 143,
+          "recall": 0.909
+        }
+      },
+      "fenetres": {
+        "train": [
+          "2024-10-01",
+          "2026-01-21"
+        ],
+        "valid": [
+          "2026-01-22",
+          "2026-05-03"
+        ],
+        "test": [
+          "2026-05-04",
+          "2026-10-01"
+        ]
+      },
+      "status": "archived"
+    },
+    {
+      "version": "lightgbm-20261016-1346-078e86",
+      "file": "model_lightgbm-20261016-1346-078e86.joblib",
+      "algo": "lightgbm",
+      "strategie": "poids",
+      "params": {
+        "subsample": 1.0,
+        "reg_lambda": 0.0,
+        "num_leaves": 63,
+        "min_child_samples": 10,
+        "learning_rate": 0.05,
+        "colsample_bytree": 0.8
+      },
+      "trained_at": "2026-10-16T13:46:28+00:00",
+      "seuil": 0.9999,
+      "valid": {
+        "pr_auc": 0.9988,
+        "roc_auc": 0.9998,
+        "seuil": 0.9999,
+        "recall": 0.9503,
+        "precision": 0.9973,
+        "alertes": 1092,
+        "tp": 1089,
+        "fp": 3,
+        "fn": 57,
+        "au_seuil_cdc": {
+          "seuil": 0.8,
+          "recall": 0.986,
+          "precision": 0.9852,
+          "alertes": 1147,
+          "tp": 1130,
+          "fp": 17,
+          "fn": 16
+        }
+      },
+      "test": {
+        "pr_auc": 0.9988,
+        "roc_auc": 0.9997,
+        "seuil": 0.9999,
+        "recall": 0.9469,
+        "precision": 0.9993,
+        "alertes": 1373,
+        "tp": 1372,
+        "fp": 1,
+        "fn": 77,
+        "au_seuil_cdc": {
+          "seuil": 0.8,
+          "recall": 0.9848,
+          "precision": 0.9937,
+          "alertes": 1436,
+          "tp": 1427,
+          "fp": 9,
+          "fn": 22
+        }
+      },
+      "recall_par_type": {
+        "ACTE_FICTIF": {
+          "n": 86,
+          "recall": 0.837
+        },
+        "DOUBLON": {
+          "n": 176,
+          "recall": 0.943
+        },
+        "FRACTIONNEMENT": {
+          "n": 58,
+          "recall": 0.828
+        },
+        "HORS_COUVERTURE": {
+          "n": 23,
+          "recall": 0.913
+        },
+        "INCOHERENCE_PROFIL": {
+          "n": 65,
+          "recall": 1.0
+        },
+        "LIGNES_NON_PRESCRITES": {
+          "n": 157,
+          "recall": 1.0
+        },
+        "ORDONNANCE_EXPIREE": {
+          "n": 106,
+          "recall": 1.0
+        },
+        "PRESTATAIRE_RADIE": {
+          "n": 96,
+          "recall": 0.771
+        },
+        "QUANTITE_EXCESSIVE": {
+          "n": 102,
+          "recall": 0.99
+        },
+        "SOINS_JOUR_FERME": {
+          "n": 44,
+          "recall": 1.0
+        },
+        "SUBSTITUTION_PRODUIT": {
+          "n": 70,
+          "recall": 1.0
+        },
+        "SURCONSOMMATION": {
+          "n": 48,
+          "recall": 0.979
+        },
+        "SURFACTURATION": {
+          "n": 275,
+          "recall": 0.985
+        },
+        "UPCODING": {
+          "n": 143,
+          "recall": 0.909
+        }
+      },
+      "fenetres": {
+        "train": [
+          "2024-10-01",
+          "2026-01-21"
+        ],
+        "valid": [
+          "2026-01-22",
+          "2026-05-03"
+        ],
+        "test": [
+          "2026-05-04",
+          "2026-10-01"
+        ]
+      },
+      "status": "archived"
+    },
+    {
+      "version": "lightgbm-20261016-1406-078e86",
+      "file": "model_lightgbm-20261016-1406-078e86.joblib",
+      "algo": "lightgbm",
+      "strategie": "poids",
+      "params": {
+        "subsample": 1.0,
+        "reg_lambda": 0.0,
+        "num_leaves": 63,
+        "min_child_samples": 10,
+        "learning_rate": 0.05,
+        "colsample_bytree": 0.8
+      },
+      "trained_at": "2026-10-16T14:06:07+00:00",
       "seuil": 0.9999,
       "valid": {
         "pr_auc": 0.9988,

@@ -1,5 +1,5 @@
 {
-  "version": "lightgbm-20261016-1230-078e86",
+  "version": "lightgbm-20261016-1406-078e86",
   "comparaison": [
     {
       "candidat": "baseline_logreg",
@@ -66,8 +66,8 @@
     }
   ],
   "retenu": {
-    "version": "lightgbm-20261016-1230-078e86",
-    "file": "model_lightgbm-20261016-1230-078e86.joblib",
+    "version": "lightgbm-20261016-1406-078e86",
+    "file": "model_lightgbm-20261016-1406-078e86.joblib",
     "algo": "lightgbm",
     "strategie": "poids",
     "params": {
@@ -78,7 +78,7 @@
       "learning_rate": 0.05,
       "colsample_bytree": 0.8
     },
-    "trained_at": "2026-10-16T12:30:01+00:00",
+    "trained_at": "2026-10-16T14:06:07+00:00",
     "seuil": 0.9999,
     "valid": {
       "pr_auc": 0.9988,
