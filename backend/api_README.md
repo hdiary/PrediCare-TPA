@@ -151,7 +151,7 @@ pytest tests -q
 
 Couverture : authentification et rôles, un test par code de rejet, audit (S8), absence de décision automatique, identités, et les tests de sécurité **S1** et **S12** (`tests/test_security_s1_s12.py`).
 
-Preuves à montrer au jury sur la plateforme démarrée : `tests/s8_audit_check.sh` (audit) et `tests/s1_s12_check.sh` (accès par rôle, hachage, durée de session, verrouillage). Ce second script verrouille volontairement le compte `pro@predicare.local` ; la commande de déverrouillage est dans son en-tête.
+
 
 ## 10. Points ouverts
 
