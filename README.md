@@ -1,10 +1,10 @@
 # \# PrediCare TPA
 
-# \*\*Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.\*\*
+\*\*Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.\*\*
 
 # Projet Capstone - Cohorte IA - Partenariat Orange Digital Center (ODC) \& Ingedata.
 
-# > ⚠️ \*\*Données 100 % synthétiques.\*\* Aucune donnée de santé réelle n'est utilisée dans ce projet.
+> ⚠️ \*\*Données 100 % synthétiques.\*\* Aucune donnée de santé réelle n'est utilisée dans ce projet.
 
 # \---
 
