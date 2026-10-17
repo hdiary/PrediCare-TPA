@@ -1,0 +1,16 @@
+.env
+data/
+dataset/
+labels/
+__pycache__/
+*.pyc
+.pytest_cache/
+env/
+labels/
+.env
+__pycache__/
+*.pyc
+*.log
+*.sqlite3
+docker-compose.override.yml
+volumes/

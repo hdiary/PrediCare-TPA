@@ -45,7 +45,7 @@ export function ReimbursementsPage() {
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}
-            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+            className={`px-[18px] py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
               filter === f.value
                 ? 'bg-primary-700 text-white'
                 : 'bg-white dark:bg-surface-800 text-surface-600 dark:text-surface-300 border border-surface-300 dark:border-surface-700 hover:bg-surface-100 dark:hover:bg-surface-700'
@@ -59,7 +59,7 @@ export function ReimbursementsPage() {
       {/* Table */}
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">
+          <div className="p-8 space-y-3">
             {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : error ? (
@@ -75,12 +75,12 @@ export function ReimbursementsPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3">Date</th>
-                  <th className="px-6 py-3">Prestataire</th>
-                  <th className="px-6 py-3 text-right">Montant</th>
-                  <th className="px-6 py-3 text-right">Remboursé</th>
-                  <th className="px-6 py-3">Statut</th>
-                  <th className="px-6 py-3"></th>
+                  <th className="px-6 py-3.5">Date</th>
+                  <th className="px-6 py-3.5">Prestataire</th>
+                  <th className="px-6 py-3.5 text-right">Montant</th>
+                  <th className="px-6 py-3.5 text-right">Remboursé</th>
+                  <th className="px-6 py-3.5">Statut</th>
+                  <th className="px-6 py-3.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
@@ -98,7 +98,7 @@ export function ReimbursementsPage() {
                       <Badge className={INVOICE_STATUS_COLORS[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-xs text-primary-600 font-medium">Détails →</span>
+                      <span className="text-xs text-primary-700 dark:text-primary-400 font-medium">Détails →</span>
                     </td>
                   </tr>
                 ))}

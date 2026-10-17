@@ -63,7 +63,7 @@ export function ProviderInvoicesPage() {
             <button
               key={f.value}
               onClick={() => { setFilter(f.value); setPage(1); }}
-              className={`px-3.5 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+              className={`px-[18px] py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
                 filter === f.value
                   ? 'bg-primary-700 text-white'
                   : 'bg-white dark:bg-surface-800 text-surface-600 dark:text-surface-300 border border-surface-300 dark:border-surface-700 hover:bg-surface-100 dark:hover:bg-surface-700'
@@ -77,7 +77,7 @@ export function ProviderInvoicesPage() {
 
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">
+          <div className="p-8 space-y-3">
             {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : error ? (
@@ -93,11 +93,11 @@ export function ProviderInvoicesPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3">N° Facture</th>
-                  <th className="px-6 py-3">Date</th>
-                  <th className="px-6 py-3">Assuré</th>
-                  <th className="px-6 py-3 text-right">Montant</th>
-                  <th className="px-6 py-3">Statut</th>
+                  <th className="px-6 py-3.5">N° Facture</th>
+                  <th className="px-6 py-3.5">Date</th>
+                  <th className="px-6 py-3.5">Assuré</th>
+                  <th className="px-6 py-3.5 text-right">Montant</th>
+                  <th className="px-6 py-3.5">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
@@ -122,7 +122,7 @@ export function ProviderInvoicesPage() {
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-3 ">
+          <div className="flex items-center justify-between px-6 py-4 ">
             <p className="text-xs text-surface-400">
               {filtered.length} facture{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}
             </p>

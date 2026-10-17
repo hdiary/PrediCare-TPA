@@ -49,66 +49,62 @@ export function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 gradient-hero relative overflow-hidden">
-        <div className="absolute -top-24 -right-24 w-[28rem] h-[28rem] rounded-full bg-primary-100/70 blur-3xl" />
-        <div className="absolute -bottom-24 -left-16 w-80 h-80 rounded-full bg-kraft-200/50 blur-3xl" />
-        <div className="absolute right-10 top-24 w-72 h-72 rounded-full border border-primary-200/70" />
-        <div className="absolute right-24 top-40 w-72 h-72 rounded-full border border-primary-200/40" />
+      <div className="hidden lg:block lg:w-1/2 gradient-hero relative overflow-hidden px-20 pt-[140px] pb-[60px]">
+        <div className="absolute -top-[120px] -right-20 w-[420px] h-[420px] rounded-full bg-[#7C9A98] opacity-35" />
+        <div className="absolute top-[86px] right-10 w-[290px] h-[290px] rounded-full border border-[#8FB5B1]" />
+        <div className="absolute top-[150px] right-[130px] w-[290px] h-[290px] rounded-full border border-[#5E7F7C]" />
 
-        <div className="relative flex flex-col justify-center px-12 xl:px-20 w-full">
-          <div className="mb-10">
-            <Logo size="lg" />
-          </div>
+        <div className="relative">
+          <Logo size="lg" />
+        </div>
 
-          <h1 className="text-3xl xl:text-4xl font-semibold leading-[1.2] mb-5 max-w-lg text-surface-900 dark:text-white tracking-tight">
-            Détecter la fraude.<br />
-            Expliquer chaque alerte.<br />
-            <span className="text-primary-600 dark:text-primary-300">Protéger les assurés.</span>
-          </h1>
+        <h1 className="relative mt-12 text-[38px] leading-[1.2] text-surface-900 dark:text-[#E8F1F0]">
+          Détecter la fraude.<br />
+          Expliquer chaque alerte.<br />
+          <span className="text-primary-700 dark:text-primary-400">Protéger les assurés.</span>
+        </h1>
 
-          <p className="text-surface-600 dark:text-surface-300 text-base mb-10 max-w-md leading-relaxed">
-            La plateforme intelligente pour les tiers-payants santé. Analyse prédictive, explicabilité et contrôle humain.
-          </p>
+        <p className="relative mt-7 text-base leading-[1.6] text-surface-700 dark:text-surface-300">
+          La plateforme intelligente pour les tiers-payants santé.<br />
+          Analyse prédictive, explicabilité et contrôle humain.
+        </p>
 
-          <div className="flex flex-wrap gap-3 max-w-lg mb-10">
-            {[
-              { label: 'Conforme RGPD', icon: <ShieldCheck className="w-4 h-4" /> },
-              { label: 'IA explicable', icon: <BarChart3 className="w-4 h-4" /> },
-              { label: 'Contrôle humain', icon: <UserCheck className="w-4 h-4" /> },
-            ].map((badge) => (
-              <div key={badge.label} className="float-chip flex items-center gap-2.5 pl-2.5 pr-4 py-2">
-                <span className="w-8 h-8 rounded-lg bg-kraft-100 text-kraft-700 flex items-center justify-center">{badge.icon}</span>
-                <span className="text-sm font-semibold text-surface-900 dark:text-white">{badge.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Carte flottante : ligne de suivi, façon tableau de bord médical */}
-          <div className="float-chip p-4 max-w-xs">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-8 h-8 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center">
-                <Activity className="w-4 h-4" />
-              </span>
-              <span className="text-xs font-semibold text-surface-500">Surveillance en continu</span>
+        <div className="relative flex flex-wrap gap-3 mt-9">
+          {[
+            { label: 'Conforme RGPD', icon: <ShieldCheck className="w-4 h-4" /> },
+            { label: 'IA explicable', icon: <BarChart3 className="w-4 h-4" /> },
+            { label: 'Contrôle humain', icon: <UserCheck className="w-4 h-4" /> },
+          ].map((badge) => (
+            <div key={badge.label} className="flex items-center gap-3 px-[18px] py-4 rounded-xl bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-700 text-sm font-semibold text-surface-900 dark:text-[#E8F1F0]">
+              <span className="text-primary-700 dark:text-primary-400">{badge.icon}</span>
+              {badge.label}
             </div>
-            <svg viewBox="0 0 240 60" className="w-full h-14" fill="none" aria-hidden="true">
-              <path d="M0 34 H52 L64 14 L80 52 L94 24 L106 34 H150 L162 18 L176 46 L188 34 H240"
-                stroke="#C15F3C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          ))}
+        </div>
+
+        <div className="relative mt-10 w-80 p-[18px] rounded-xl bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-700">
+          <div className="flex items-center gap-3 text-[13px] text-surface-500 dark:text-surface-400">
+            <span className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center">
+              <Activity className="w-[18px] h-[18px]" />
+            </span>
+            Surveillance en continu
           </div>
+          <svg viewBox="0 0 230 60" className="mt-3.5 w-[230px] h-[60px]" fill="none" aria-hidden="true">
+            <path d="M0 34h50l14-24 18 46 14-22h28l14-20 16 40 12-20h64" stroke="#D9622B" strokeWidth="2" />
+          </svg>
         </div>
       </div>
 
       {/* Right panel - login form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
+      <div className="flex-1 flex items-center justify-center px-6 py-10 dark:bg-[#1C2120]">
+        <div className="w-full max-w-[448px] flex flex-col gap-6">
           <div className="lg:hidden mb-8 flex justify-center">
             <Logo size="lg" />
           </div>
 
           <div className="glass rounded-2xl p-8">
-            <h2 className="text-2xl font-semibold text-surface-900 dark:text-surface-100 mb-1">Connexion</h2>
-            <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">Accédez à votre espace PrediCare TPA</p>
+            <h2 className="text-[26px] text-surface-900 dark:text-[#E8F1F0]">Connexion</h2>
+            <p className="mt-2 mb-6 text-sm text-surface-500 dark:text-surface-400">Accédez à votre espace PrediCare TPA</p>
 
             {error && (
               <div className="mb-4 flex items-start gap-2 p-3 rounded-2xl bg-danger-50 dark:bg-danger-900/30 border border-danger-200 dark:border-danger-800 text-sm text-danger-700 dark:text-danger-300">
@@ -117,7 +113,7 @@ export function LoginPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <Input
                 label="Adresse email"
                 type="email"
@@ -128,7 +124,7 @@ export function LoginPage() {
                 icon={<Mail className="w-4 h-4" />}
               />
               <div>
-                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">
+                <label className="block text-sm font-medium text-surface-700 dark:text-surface-200 mb-2">
                   Mot de passe <span className="text-danger-500">*</span>
                 </label>
                 <div className="relative">
@@ -139,7 +135,7 @@ export function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 pl-10 pr-10 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                    className="w-full h-11 rounded-xl border border-surface-300 dark:border-surface-700 bg-white dark:bg-surface-900 text-surface-900 dark:text-[#E8F1F0] placeholder-surface-400 pl-10 pr-10 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
                   />
                   <button
                     type="button"
@@ -151,8 +147,8 @@ export function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
-                <span className="text-sm text-primary-600 hover:text-primary-700 cursor-pointer">Mot de passe oublié ?</span>
+              <div className="flex justify-end !mt-4">
+                <span className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 cursor-pointer underline">Mot de passe oublié ?</span>
               </div>
 
               <Button type="submit" className="w-full" size="lg" disabled={loading}>
@@ -168,9 +164,9 @@ export function LoginPage() {
           </div>
 
           {/* Demo accounts */}
-          <div className="mt-6 glass rounded-2xl p-5">
-            <p className="text-xs font-medium text-surface-500 dark:text-surface-400 mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-success-500 animate-pulse" />
+          <div className="glass rounded-2xl px-5 pt-5 pb-[22px]">
+            <p className="text-xs text-surface-500 dark:text-surface-400 mb-3.5 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#4ADE80]" />
               Comptes de démonstration
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -178,10 +174,10 @@ export function LoginPage() {
                 <button
                   key={acc.role}
                   onClick={() => fillDemo(acc.email, acc.password)}
-                  className="text-left px-4 py-3 rounded-xl border border-surface-300/80 bg-white hover:bg-surface-100 dark:bg-surface-700/50 dark:hover:bg-primary-900/20 transition-all"
+                  className="text-left px-3.5 py-3 rounded-xl border border-surface-300 dark:border-[#2A6A6B] bg-white hover:bg-surface-100 dark:bg-[#12363A] dark:hover:bg-surface-700 transition-colors"
                 >
-                  <p className="text-xs font-medium text-surface-700 dark:text-surface-200">{acc.display_name}</p>
-                  <p className="text-[10px] text-surface-400 mt-0.5">{acc.pseudonym}</p>
+                  <p className="text-[13px] font-semibold text-surface-900 dark:text-[#E8F1F0]">{acc.display_name}</p>
+                  <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-1">{acc.pseudonym}</p>
                 </button>
               ))}
             </div>

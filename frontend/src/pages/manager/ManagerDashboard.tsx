@@ -65,51 +65,51 @@ export function ManagerDashboard() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
+        <Card className="p-8">
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Factures vs Alertes</h3>
           <p className="text-xs text-surface-400 mb-4">Évolution hebdomadaire</p>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={kpis.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "rgba(20,20,19,0.04)" }}
-                contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }}
-                labelStyle={{ color: '#141413' }}
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: "rgba(134,168,164,0.12)" }}
+                contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }}
+                labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }}
               />
               <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Line type="monotone" dataKey="invoices" stroke="#5E5D59" strokeWidth={2.5} name="Factures" dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="alerts" stroke="#C15F3C" strokeWidth={2.5} name="Alertes" dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="invoices" stroke="#14B8A6" strokeWidth={2.5} name="Factures" dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="alerts" stroke="#D9622B" strokeWidth={2.5} name="Alertes" dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-8">
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Montant économisé</h3>
           <p className="text-xs text-surface-400 mb-4">Par semaine (EUR)</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={kpis.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "rgba(20,20,19,0.04)" }}
-                contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }}
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: "rgba(134,168,164,0.12)" }}
+                contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }}
                 formatter={(value) => [formatEUR(Number(value)), 'Économisé']}
               />
-              <Bar dataKey="saved" fill="#788C5D" radius={[6, 6, 0, 0]} barSize={28} name="Économisé" />
+              <Bar dataKey="saved" fill="#14B8A6" radius={[6, 6, 0, 0]} barSize={28} name="Économisé" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
       </div>
 
       {/* Priority alerts */}
-      <Card className="p-6">
+      <Card className="p-8">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Alertes prioritaires</h3>
             <p className="text-xs text-surface-400">Les alertes les plus récentes en attente</p>
           </div>
-          <Link to="/gestionnaire/alertes" className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium">
+          <Link to="/gestionnaire/alertes" className="flex items-center gap-1 text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 font-medium">
             Voir tout <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -119,7 +119,7 @@ export function ManagerDashboard() {
             <Link
               key={alert.id}
               to={`/gestionnaire/alertes/${alert.id}`}
-              className="flex items-center gap-4 p-3 rounded-xl border border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 transition-all"
+              className="flex items-center gap-4 p-3 rounded-[12px] border border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 transition-all"
             >
               <div className={`px-2.5 py-1 rounded-md text-xs font-semibold tabular-nums border ${riskColor(alert.score)}`}>
                 {alert.score.toFixed(2)}

@@ -142,7 +142,7 @@ export function ChatPage() {
   const maxChars = 1000;
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-13.5rem)]">
+    <div className="flex gap-4 h-[calc(100vh-14.5rem)]">
       {/* Conversation list */}
       <div className="hidden lg:flex w-64 flex-shrink-0 flex-col">
         <Card className="p-3 flex-1 flex flex-col">
@@ -190,7 +190,7 @@ export function ChatPage() {
 
         <Card className="flex-1 flex flex-col overflow-hidden">
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin p-4 md:p-6">
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-4 md:p-8">
             {messages.length === 0 && !streamingText && !typing ? (
               <EmptyState
                 icon={<Sparkles className="w-8 h-8" />}
@@ -211,7 +211,7 @@ export function ChatPage() {
                 }
               />
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
                     {msg.role === 'assistant' && (
@@ -264,8 +264,8 @@ export function ChatPage() {
                       </div>
                     </div>
                     {msg.role === 'user' && (
-                      <div className="w-8 h-8 rounded-lg bg-kraft-100 dark:bg-kraft-800 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-semibold text-kraft-700 dark:text-kraft-300">Moi</span>
+                      <div className="w-8 h-8 rounded-lg bg-primary-100 dark:bg-primary-900 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-semibold text-primary-700 dark:text-primary-300">Moi</span>
                       </div>
                     )}
                   </div>
@@ -324,7 +324,7 @@ export function ChatPage() {
                   onKeyDown={handleKeyDown}
                   placeholder="Écrivez votre message..."
                   maxLength={maxChars}
-                  className="chat-textarea w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/40 scrollbar-thin"
+                  className="chat-textarea w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 px-4 py-3 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 scrollbar-thin"
                   rows={1}
                 />
                 <span className="absolute right-3 bottom-2 text-xs text-surface-400 tabular-nums">
@@ -349,7 +349,7 @@ export function ChatPage() {
         {drawerSource && (
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-primary-600" />
+              <FileText className="w-5 h-5 text-primary-700 dark:text-primary-400" />
               <div>
                 <p className="font-semibold text-surface-800 dark:text-surface-100">{drawerSource.document}</p>
                 <p className="text-sm text-surface-400">Page {drawerSource.page}</p>

@@ -91,10 +91,10 @@ export function AdminUsers() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3">Pseudonyme</th>
-                  <th className="px-6 py-3">Nom d'affichage</th>
-                  <th className="px-6 py-3">Rôle</th>
-                  <th className="px-6 py-3">Statut</th>
+                  <th className="px-6 py-3.5">Pseudonyme</th>
+                  <th className="px-6 py-3.5">Nom d'affichage</th>
+                  <th className="px-6 py-3.5">Rôle</th>
+                  <th className="px-6 py-3.5">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">

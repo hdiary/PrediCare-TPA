@@ -21,7 +21,7 @@ export function AdminConfig() {
     }).catch(() => { setError(true); setLoading(false); });
   }, []);
 
-  if (loading) return <div className="space-y-4"><Skeleton className="h-96" /></div>;
+  if (loading) return <div className="space-y-5"><Skeleton className="h-96" /></div>;
   if (error || !settings) return <ErrorState message="Impossible de charger la configuration." />;
 
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(original);
@@ -56,10 +56,10 @@ export function AdminConfig() {
       )}
 
       {/* Alert threshold */}
-      <Card className="p-6">
+      <Card className="p-8">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-            <Settings className="w-5 h-5 text-primary-600" />
+            <Settings className="w-5 h-5 text-primary-700 dark:text-primary-400" />
           </div>
           <div>
             <h3 className="font-semibold text-surface-800 dark:text-surface-100">Seuil d'alerte</h3>
@@ -67,7 +67,7 @@ export function AdminConfig() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="flex items-center gap-4">
             <input
               type="range"
@@ -104,14 +104,14 @@ export function AdminConfig() {
       </Card>
 
       {/* Notification channels */}
-      <Card className="p-6">
+      <Card className="p-8">
         <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-5">Canaux de notification</h3>
 
         {/* Slack */}
         <div className="space-y-3 pb-5 border-b border-surface-300/60 dark:border-surface-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center">
                 <Slack className="w-4 h-4 text-surface-500" />
               </div>
               <div>
@@ -150,7 +150,7 @@ export function AdminConfig() {
         <div className="space-y-3 pt-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center">
                 <Mail className="w-4 h-4 text-surface-500" />
               </div>
               <div>

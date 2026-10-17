@@ -89,7 +89,7 @@ export function AdminAuditLog() {
 
       <Card className="overflow-hidden">
         {loading ? (
-          <div className="p-6 space-y-3">
+          <div className="p-8 space-y-3">
             {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 w-full" />)}
           </div>
         ) : error ? (
@@ -105,11 +105,11 @@ export function AdminAuditLog() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3">Horodatage</th>
-                  <th className="px-6 py-3">Acteur</th>
-                  <th className="px-6 py-3">Action</th>
-                  <th className="px-6 py-3">Objet</th>
-                  <th className="px-6 py-3">Modèle</th>
+                  <th className="px-6 py-3.5">Horodatage</th>
+                  <th className="px-6 py-3.5">Acteur</th>
+                  <th className="px-6 py-3.5">Action</th>
+                  <th className="px-6 py-3.5">Objet</th>
+                  <th className="px-6 py-3.5">Modèle</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
