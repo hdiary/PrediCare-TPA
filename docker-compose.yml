@@ -97,6 +97,31 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # ---------- Ingestion automatique du corpus RAG ----------
+  rag-indexer:
+    build:
+      context: ./backend
+      dockerfile: rag/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_URL: ${LLM_API_URL:-https://api.openai.com/v1/chat/completions}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-https://api.openai.com/v1/embeddings}
+      RAG_CORPUS_DIR: /corpus_rag
+    volumes:
+      - ./backend/rag/corpus_rag:/corpus_rag:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    restart: "no"
+
   # ---------- Registre des versions du modèle ----------
   mlflow:
     profiles: [ "full" ] # a decommenter pour activer mlflow dans le container
@@ -117,7 +142,7 @@ services:
     command: [ "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     environment:
       DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
-      AGENT_DATABASE_URL: postgresql://agent_ro:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
@@ -125,6 +150,14 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-https://api.openai.com/v1/embeddings}
+      LLM_API_URL: ${LLM_API_URL:-https://api.openai.com/v1/chat/completions}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
+      RAG_TOP_K: ${RAG_TOP_K:-6}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
+      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.93}
+      CACHE_TTL_HOURS: ${CACHE_TTL_HOURS:-24}
     depends_on:
       db:
         condition: service_healthy
