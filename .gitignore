@@ -1,5 +1,6 @@
 .env
 data/
+backups/
 dataset/
 labels/
 __pycache__/

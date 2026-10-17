@@ -1,7 +1,10 @@
 #!/bin/sh
 set -e
 MB="http://metabase:3000"
-DASH_NAME="PrediCare : Pilotage"
+BI_DEFINITION_FILE="${BI_DEFINITION_FILE:-/dashboard.json}"
+DASH_NAME=$(jq -r '.name' "$BI_DEFINITION_FILE")
+BI_VERSION=$(jq -r '.version' "$BI_DEFINITION_FILE")
+DASH_DESCRIPTION="PrediCare BI definition v$BI_VERSION"
 
 # ---------- helpers ----------
 api() {  # usage: api METHOD /path [curl args...]
@@ -55,9 +58,14 @@ SESSION=$(curl -sf -X POST "$MB/api/session" -H "Content-Type: application/json"
 DASH_OLD=$(api GET /dashboard | jq -r --arg n "$DASH_NAME" \
   '[.[] | select(.name==$n and (.archived|not))][0].id // empty')
 if [ -n "$DASH_OLD" ]; then
-  NB=$(api GET "/dashboard/$DASH_OLD" | jq '(.dashcards // .ordered_cards // []) | length')
-  if [ "$NB" -gt 0 ]; then echo "Dashboard déjà présent ($NB cartes)."; exit 0; fi
-  echo "Dashboard vide détecté : nettoyage et recréation."
+  DASH_INFO=$(api GET "/dashboard/$DASH_OLD")
+  NB=$(printf '%s' "$DASH_INFO" | jq '(.dashcards // .ordered_cards // []) | length')
+  DESCRIPTION=$(printf '%s' "$DASH_INFO" | jq -r '.description // ""')
+  if [ "$NB" -gt 0 ] && [ "$DESCRIPTION" = "$DASH_DESCRIPTION" ]; then
+    echo "Dashboard déjà à jour ($NB cartes, version $BI_VERSION)."
+    exit 0
+  fi
+  echo "Dashboard existant obsolète ou vide : archivage avant recréation."
   api PUT "/dashboard/$DASH_OLD" -d '{"archived":true}' > /dev/null
 fi
 
@@ -78,102 +86,63 @@ fi
 api POST "/database/$DB_ID/sync_schema" > /dev/null
 echo "Base PrediCare : ID $DB_ID"
 
-# ---------- 6. archive orphan cards with the same names ----------
-for NAME in "Factures traitées" "Montant économisé" "Taux de détection (Recall, %)" \
-            "Taux de confirmation des alertes (%)" "Volumes par mois" \
-            "Montant total vs alerté" "Top 10 prestataires alertés"; do
-  for CID in $(api GET /card | jq -r --arg n "$NAME" '.[] | select(.name==$n and (.archived|not)) | .id'); do
-    api PUT "/card/$CID" -d '{"archived":true}' > /dev/null
-  done
+# ---------- 6. archive cards from older dashboard definitions ----------
+CARD_NAMES=$(jq -c '[.cards[].name] + [
+  "Factures traitées", "Montant économisé",
+  "Taux de détection (Recall, %)",
+  "Taux de confirmation des alertes (%)", "Volumes par mois",
+  "Montant total vs alerté", "Top 10 prestataires alertés"]' \
+  "$BI_DEFINITION_FILE")
+for CID in $(api GET /card | jq -r --argjson names "$CARD_NAMES" \
+  '.[] | select((.archived|not) and (.name as $n | $names | index($n))) | .id'); do
+  api PUT "/card/$CID" -d '{"archived":true}' > /dev/null
 done
 
-# ---------- 7. SQL (reads only the view v_bi_factures) ----------
-SQL_NB=$(cat <<'EOF'
-SELECT COUNT(*) AS factures_traitees
-FROM v_bi_factures v WHERE 1=1
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
+# ---------- 7. cards from the versioned, portable BI definition ----------
+CARD_IDS='{}'
+while IFS= read -r CARD; do
+  KEY=$(printf '%s' "$CARD" | jq -r '.key')
+  NAME=$(printf '%s' "$CARD" | jq -r '.name')
+  DISPLAY=$(printf '%s' "$CARD" | jq -r '.display')
+  SQL=$(printf '%s' "$CARD" | jq -r '.sql')
+  CARD_ID=$(add_card "$NAME" "$DISPLAY" "$SQL")
+  [ -n "$CARD_ID" ] || { echo "ERREUR : carte '$NAME' non créée." >&2; exit 1; }
+  CARD_IDS=$(printf '%s' "$CARD_IDS" | jq --arg key "$KEY" --argjson id "$CARD_ID" \
+    '. + {($key): $id}')
+done <<EOF
+$(jq -c '.cards[]' "$BI_DEFINITION_FILE")
 EOF
-)
-SQL_RECALL=$(cat <<'EOF'
-SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE v.is_alert)
-       / NULLIF(COUNT(*), 0), 1) AS taux_detection_pct
-FROM v_bi_factures v
-WHERE v.est_fraude AND v.est_valide
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-EOF
-)
-SQL_CONF=$(cat <<'EOF'
-SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE v.decision = 'rejete')
-       / NULLIF(COUNT(*), 0), 1) AS taux_confirmation_pct
-FROM v_bi_factures v
-WHERE v.is_alert AND v.decision IN ('valide', 'rejete')
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-EOF
-)
-SQL_ECO=$(cat <<'EOF'
-SELECT COALESCE(SUM(v.montant_total), 0) AS montant_economise
-FROM v_bi_factures v
-WHERE v.is_alert AND v.decision = 'rejete'
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-EOF
-)
-SQL_VOL=$(cat <<'EOF'
-SELECT date_trunc('month', v.date_facture) AS mois, COUNT(*) AS nb_factures
-FROM v_bi_factures v WHERE 1=1
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-GROUP BY 1 ORDER BY 1
-EOF
-)
-SQL_ALERTE=$(cat <<'EOF'
-SELECT date_trunc('month', v.date_facture) AS mois,
-       SUM(v.montant_total) AS montant_total,
-       SUM(v.montant_total) FILTER (WHERE v.is_alert) AS montant_alerte
-FROM v_bi_factures v WHERE 1=1
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-GROUP BY 1 ORDER BY 1
-EOF
-)
-SQL_PRESTA=$(cat <<'EOF'
-SELECT v.prestataire_nom, COUNT(*) AS nb_alertes
-FROM v_bi_factures v
-WHERE v.is_alert
-[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]
-GROUP BY 1 ORDER BY 2 DESC LIMIT 10
-EOF
-)
 
-# ---------- 8. cards ----------
-C1=$(add_card "Factures traitées"                    scalar "$SQL_NB")
-C2=$(add_card "Montant économisé"                    scalar "$SQL_ECO")
-C3=$(add_card "Taux de détection (Recall, %)"        scalar "$SQL_RECALL")
-C4=$(add_card "Taux de confirmation des alertes (%)" scalar "$SQL_CONF")
-C5=$(add_card "Volumes par mois"                     line   "$SQL_VOL")
-C6=$(add_card "Montant total vs alerté"              bar    "$SQL_ALERTE")
-C7=$(add_card "Top 10 prestataires alertés"          bar    "$SQL_PRESTA")
-
-for v in "$C1" "$C2" "$C3" "$C4" "$C5" "$C6" "$C7"; do
-  [ -n "$v" ] || { echo "ERREUR : une carte n'a pas été créée (voir messages ci-dessus)." >&2; exit 1; }
-done
-
-# ---------- 9. dashboard + layout + filters ----------
-DASH_ID=$(api POST /dashboard -d "$(jq -n --arg n "$DASH_NAME" '{name:$n}')" | jq -r '.id // empty')
+# ---------- 8. dashboard + layout + date filters ----------
+DASH_ID=$(api POST /dashboard -d "$(jq -n --arg n "$DASH_NAME" \
+  --arg d "$DASH_DESCRIPTION" '{name:$n, description:$d}')" | jq -r '.id // empty')
 [ -n "$DASH_ID" ] || { echo "ERREUR : dashboard non créé." >&2; exit 1; }
 
-LAYOUT=$(jq -n \
-  --argjson c1 "$C1" --argjson c2 "$C2" --argjson c3 "$C3" --argjson c4 "$C4" \
-  --argjson c5 "$C5" --argjson c6 "$C6" --argjson c7 "$C7" '
-  def m(c): [
-    {parameter_id:"date_debut", card_id:c, target:["variable",["template-tag","date_debut"]]},
-    {parameter_id:"date_fin",   card_id:c, target:["variable",["template-tag","date_fin"]]}];
-  def dc(i; c; r; col; w; h): {id:i, card_id:c, row:r, col:col, size_x:w, size_y:h,
-                               parameter_mappings:m(c), visualization_settings:{}};
-  { parameters: [
-      {id:"date_debut", name:"Date début", slug:"date_debut", type:"date/single"},
-      {id:"date_fin",   name:"Date fin",   slug:"date_fin",   type:"date/single"}],
+LAYOUT=$(jq -n --argjson cards "$CARD_IDS" --slurpfile definition "$BI_DEFINITION_FILE" '
+  def mappings(c):
+    $definition[0].filters | map({
+      parameter_id: .id,
+      card_id: c,
+      target: ["variable", ["template-tag", .slug]]
+    });
+  {
+    parameters: $definition[0].filters,
     dashcards: [
-      dc(-1;$c1;0;0;6;3),  dc(-2;$c2;0;6;6;3), dc(-3;$c3;0;12;6;3), dc(-4;$c4;0;18;6;3),
-      dc(-5;$c5;3;0;12;7), dc(-6;$c6;3;12;12;7),
-      dc(-7;$c7;10;0;24;7)] }')
+      $definition[0].cards | to_entries[] |
+      .key as $index | .value as $card |
+      ($cards[$card.key]) as $card_id |
+      {
+        id: -(($index | tonumber) + 1),
+        card_id: $card_id,
+        row: $card.layout.row,
+        col: $card.layout.col,
+        size_x: $card.layout.width,
+        size_y: $card.layout.height,
+        parameter_mappings: mappings($card_id),
+        visualization_settings: {}
+      }
+    ]
+  }')
 api PUT "/dashboard/$DASH_ID" -d "$LAYOUT" > /dev/null
 
 # ---------- 10. signed embedding (non-blocking) ----------

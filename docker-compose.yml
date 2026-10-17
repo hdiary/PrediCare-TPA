@@ -39,6 +39,39 @@ services:
       retries: 10
       start_period: 20s
 
+  metabase-db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      POSTGRES_DB: ${POSTGRES_DB:-predicare}
+      METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
+    command:
+      - sh
+      - -ec
+      - |
+        until pg_isready --host "$$PGHOST" --port "$$PGPORT" --username "$$PGUSER" --dbname "$$POSTGRES_DB"; do sleep 2; done
+        if [ "$$(psql --dbname "$$POSTGRES_DB" --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'metabase_app'")" != "1" ]; then
+          psql --dbname "$$POSTGRES_DB" --set ON_ERROR_STOP=1 --command "CREATE DATABASE metabase_app"
+        fi
+        psql --dbname "$$POSTGRES_DB" --set ON_ERROR_STOP=1 --set metabase_password="$$METABASE_RO_PASSWORD" <<'SQL'
+        SELECT format('CREATE ROLE metabase_ro LOGIN PASSWORD %L', :'metabase_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'metabase_ro') \gexec
+        SELECT format('ALTER ROLE metabase_ro LOGIN PASSWORD %L', :'metabase_password')
+        WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'metabase_ro') \gexec
+        SELECT format('GRANT CONNECT ON DATABASE %I TO metabase_ro', current_database()) \gexec
+        GRANT USAGE ON SCHEMA public TO metabase_ro;
+        GRANT SELECT ON v_bi_factures TO metabase_ro;
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    restart: "no"
+
   metabase:
     image: metabase/metabase:v0.64-lts
     ports: [ "3000:3000" ]
@@ -49,10 +82,10 @@ services:
       MB_DB_USER: ${POSTGRES_USER}
       MB_DB_PASS: ${POSTGRES_PASSWORD}
       MB_DB_HOST: db # ← corrigé (service db, pas postgres)
+      MB_SESSION_SECRET_KEY: ${MB_SESSION_SECRET_KEY:-}
     depends_on:
-      db:
-        # ← corrigé
-        condition: service_healthy
+      metabase-db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
       interval: 15s
@@ -71,7 +104,8 @@ services:
       METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
     volumes:
       - ./db/metabase/setup.sh:/setup.sh:ro
-    command: sh -c "apk add --no-cache curl jq && sh /setup.sh"
+      - ./bi/dashboard.json:/dashboard.json:ro
+    command: sh -c "apk add --no-cache curl jq && tr -d '\\r' < /setup.sh > /tmp/setup.sh && sh /tmp/setup.sh"
     restart: "no"
   loader:
     build:
@@ -204,13 +238,32 @@ services:
       - api
     ports:
       - "5173:5173"
-  # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
-  # Se connecter avec le rôle bi_ro (lecture seule sur les vues), jamais avec POSTGRES_USER.
-  # superset:
-  #   image: apache/superset:<version>
-  #   environment:
-  #     SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-  #   ports: ["8088:8088"]
+
+  # ---------- Sauvegardes PostgreSQL chiffrées (optionnelles) ----------
+  # Activer avec : docker compose --profile backup up -d db-backup
+  db-backup:
+    profiles: [ "backup" ]
+    build: ./db/backup
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-predicare}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+
+  # Metabase (service metabase) reads only the BI view using metabase_ro.
 
 volumes:
   pgdata:

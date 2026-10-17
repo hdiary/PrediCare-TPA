@@ -1,3 +1,4 @@
+-- Randomized demo-only data; KPI tests use fixed cases in bi_kpi_checks.sql.
 -- Prédictions simulées : les fraudes labellisées ont des scores plutôt hauts
 INSERT INTO predictions (facture_id, model_version, score, threshold, is_alert)
 SELECT f.facture_id, 'test-v0', s.score, 0.8, s.score > 0.8

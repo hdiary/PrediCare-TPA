@@ -60,7 +60,7 @@
 
 # \- offre aux assurés un \*\*assistant IA\*\* (RAG + agent) qui répond sur leurs contrats et leur historique, avec des sources citées ;
 
-# \- fournit un \*\*tableau de bord décisionnel\*\* (volumes, montants économisés, taux de détection).
+# \- fournit un \*\*tableau de bord décisionnel\*\* (volumes, montants des factures rejetées, rappel de détection).
 
 # Principe fondamental : \*\*aucune décision n'est automatique\*\*. Le modèle propose, le gestionnaire valide ou rejette, et chaque décision est tracée.
 
@@ -122,7 +122,7 @@
 
 # 2\. \*\*Assistant conversationnel\*\* : question de l'assuré → agent IA (ReAct) → base vectorielle (contrats PDF) et base SQL (historique du compte, lecture seule) → LLM sécurisé → réponse sourcée.
 
-# 3\. \*\*Pilotage décisionnel\*\* : tableau de bord BI (volumes traités, montants économisés, taux de détection).
+# 3\. \*\*Pilotage décisionnel\*\* : tableau de bord BI (volumes traités, montants facturés rejetés, rappel de détection).
 
 # \### Conteneurs (Docker Compose)
 
@@ -140,9 +140,9 @@
 
 # | `n8n` | Workflow d'alertes | 5678 |
 
-# | `web` | Interface web | 3000 |
+# | `web` | Interface web | 5173 |
 
-# | `bi` | Tableau de bord décisionnel | à compléter |
+# | `metabase` | Tableaux de bord BI (connexion PostgreSQL en lecture seule) | 3000 |
 
 # \### Choix techniques
 
@@ -158,7 +158,7 @@
 
 # | Alertes | n8n | Low-code, workflows exportables en `.json` |
 
-# | BI | à compléter (Superset ou Metabase) | - |
+# | BI | Metabase | Dashboard généré depuis `bi/dashboard.json` |
 
 # | LLM / embeddings | à compléter | Coût et confidentialité (voir analyse FinOps) |
 
@@ -172,7 +172,7 @@
 
 # \- 8 Go de RAM recommandés
 
-# \- Ports libres : 3000, 5000, 5678, 8000
+# \- Ports libres : 3000, 5000, 5678, 8000, 5173
 
 # \### Installation
 
@@ -184,13 +184,11 @@
 
 # \# 1. Créer la configuration
 
-# cp .env.example .env
-
+# cp env.example .env
 # \#    puis remplacer chaque valeur "change\_me" (voir section 5)
-
-# \# 2. Démarrer toute la plateforme
-
-# docker compose up --build
+# \#    et définir BACKUP_ENCRYPTION_KEY (voir section 5)
+# \# 2. Démarrer la plateforme, l'API et le service de sauvegarde quotidienne
+# docker compose --profile full --profile backup up --build -d
 
 # ```
 
@@ -210,19 +208,18 @@
 
 # | n8n | http://localhost:5678 |
 
-# | MLflow | http://localhost:5000 |
+# | Metabase | http://localhost:3000 |
 
 # \### Arrêt et remise à zéro
 
 # ```bash
 
-# docker compose down        # arrêt (les données sont conservées)
-
-# docker compose down -v     # arrêt ET suppression des données (remise à zéro)
+# docker compose --profile full --profile backup down        # arrêt (les données sont conservées)
+# docker compose --profile full --profile backup down -v     # supprime aussi le volume PostgreSQL
 
 # ```
 
-# > ⚠️ Les migrations SQL ne s'exécutent qu'à la création du volume. Pour rejouer une migration modifiée : `docker compose down -v` puis `docker compose up --build`.
+# > Les migrations SQL versionnées s'appliquent aussi aux bases existantes. Ne supprimez le volume (`down -v`) que pour une remise à zéro volontaire.
 
 # \---
 
@@ -243,6 +240,10 @@
 # | `PSEUDO\_HMAC\_KEY` | Clé secrète de la pseudonymisation (ne jamais la perdre) |
 
 # | `IDENTITY\_ENCRYPTION\_KEY` | Chiffrement de la table d'identités |
+# | `BACKUP\_ENCRYPTION\_KEY` | Clé secrète (32 caractères minimum) des sauvegardes PostgreSQL chiffrées ; obligatoire pour activer le profil `backup` |
+# | `BACKUP\_RETENTION\_DAYS` | Durée de conservation des sauvegardes (défaut : 30 jours) |
+# | `BACKUP\_INTERVAL\_SECONDS` | Intervalle entre sauvegardes automatiques (défaut : 86400 secondes) |
+# | `MB\_SESSION\_SECRET\_KEY` | Clé aléatoire (32 caractères minimum) pour signer les sessions Metabase |
 
 # | `ALERT\_THRESHOLD` | Seuil d'alerte initial (modifiable en direct par l'administrateur) |
 
@@ -252,7 +253,8 @@
 
 # | `NEXT\_PUBLIC\_API\_URL` | Adresse publique de l'API (\*\*visible dans le navigateur, aucun secret\*\*) |
 
-# Générer une clé : `openssl rand -hex 32`
+# Générer `BACKUP\_ENCRYPTION\_KEY` : `node -p "require('crypto').randomBytes(32).toString('hex')"` ; conserver cette clé hors des sauvegardes, car sa perte empêche la restauration.
+# Générer `MB\_SESSION\_SECRET\_KEY` avec la même commande ; la définir avant le démarrage de Metabase.
 
 # \*\*Seuil d'alerte\*\* : modifiable sans toucher au code depuis l'écran d'administration ; le changement est appliqué immédiatement.
 
@@ -300,7 +302,7 @@
 
 # ├── docker-compose.yml        # démarrage de toute la plateforme
 
-# ├── .env.example              # modèle de configuration
+# ├── env.example               # modèle de configuration
 
 # ├── frontend/                 # interface web
 
@@ -328,9 +330,8 @@
 
 # ├── n8n/workflows/            # workflows importables (.json)
 
-# ├── bi/                       # export du tableau de bord
-
-# ├── scripts/                  # backup.sh, restore.sh
+# ├── bi/                       # définition JSON exportable + documentation BI
+# ├── scripts/                  # wrappers backup.sh, restore.sh
 
 # └── docs/                     # architecture, conformité, sécurité, FinOps, guides
 
@@ -350,7 +351,7 @@
 
 # | Utilisable | Interface web, connexion, 4 rôles | à compléter |
 
-# | Persistante | Volume PostgreSQL, sauvegarde et restauration | à compléter |
+# | Persistante | Volume PostgreSQL, sauvegardes chiffrées quotidiennes et restauration vérifiable | implémenté |
 
 # | Configurable | `.env` et écran d'administration (seuil en direct) | à compléter |
 
@@ -364,15 +365,28 @@
 
 # \### Sauvegarde et restauration
 
+# Configurer `BACKUP\_ENCRYPTION\_KEY` dans `.env`, puis activer le service qui
+# effectue une sauvegarde chiffrée au démarrage et toutes les 24 heures :
+
 # ```bash
 
-# ./scripts/backup.sh                    # sauvegarde chiffrée de la base
-
-# ./scripts/restore.sh <fichier></fichier>         # restauration
-
+# docker compose --profile backup up -d db-backup
+# .\scripts\backup.ps1                   # sauvegarde manuelle (PowerShell)
+# .\scripts\restore.ps1 predicare_<date>.dump.gpg -VerifyOnly
+# .\scripts\restore.ps1 predicare_<date>.dump.gpg -TargetDb predicare_restore
 # ```
 
-# Procédure détaillée, planification quotidienne et résolution des incidents : voir `docs/guides/guide\_exploitation.md` (à compléter).
+# Sous Linux/macOS, les wrappers équivalents sont `bash scripts/backup.sh` et
+# `bash scripts/restore.sh`.
+
+# Les sauvegardes sont déposées dans `backups/`, chiffrées avec GnuPG AES-256
+# et conservées 30 jours par défaut. L'option `--verify-only` restaure dans une
+# base temporaire, compare les volumes des tables principales à la source puis
+# supprime cette base. Une restauration normale crée une nouvelle base et ne
+# remplace jamais la base de production. Conserver la clé de chiffrement hors
+# du dépôt et des sauvegardes.
+
+# Voir aussi la documentation des indicateurs et des exports dans `bi/README.md`.
 
 # \### Mise à jour et retour arrière du modèle
 
