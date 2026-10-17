@@ -182,3 +182,23 @@ export interface InvoicePrescription {
   prescriber_pseudo: string;
   diagnosis?: string;
 }
+
+/** Rôles ouverts à l'inscription ; gestionnaire et administrateur sont créés par un administrateur. */
+export type SignupRole = 'insured' | 'provider';
+
+export interface RegisterPayload {
+  role: SignupRole;
+  email: string;
+  password: string;
+  consent: boolean;
+  // assuré
+  first_name?: string;
+  last_name?: string;
+  policy_number?: string;
+  birth_date?: string;
+  // professionnel de santé
+  organization_name?: string;
+  provider_code?: string;
+  tax_id?: string;
+  onm_number?: string;
+}

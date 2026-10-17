@@ -189,8 +189,72 @@ export const mockInvoiceResult: InvoiceSubmissionResult = {
   errors: [],
 };
 
-export const mockChatResponse = (message: string): { answer: string; sources: { document: string; page: number; excerpt: string }[] } => {
+const mockProviderChatResponse = (lower: string): { answer: string; sources: { document: string; page: number; excerpt: string }[] } => {
+  if (lower.includes('rejet')) {
+    return {
+      answer: "Votre dernière facture a été **rejetée** pour le motif suivant : *numéro d'ordonnance manquant pour un acte soumis à prescription*.\n\nVous pouvez la corriger depuis **Mes factures** en ajoutant l'ordonnance, puis la redéposer.",
+      sources: [],
+    };
+  }
+  if (lower.includes('facture') || lower.includes('dossier') || lower.includes('fac-')) {
+    return {
+      answer: 'Votre facture **FAC-2024-1018** est actuellement **en cours de contrôle**.\n\nElle a été réceptionnée et passe les vérifications automatiques. Vous serez prévenu dès qu\'elle est acceptée ou si une correction est demandée.',
+      sources: [],
+    };
+  }
+  if (lower.includes('justificatif') || lower.includes('ordonnance') || lower.includes('prescription') || lower.includes('pièce') || lower.includes('piece')) {
+    return {
+      answer: 'Pour un acte soumis à prescription, joignez à la facture :\n\n- le **numéro et la date de l\'ordonnance**\n- l\'identité du **prescripteur**\n- le scan de l\'ordonnance si vous l\'avez (facultatif)\n\nUne ordonnance expirée ou ne couvrant pas les lignes facturées sera signalée au contrôle.',
+      sources: [{ document: 'Guide Réseau de Soins National', page: 6, excerpt: 'Les actes et produits soumis à prescription doivent être accompagnés de l\'ordonnance correspondante, valide à la date du soin.' }],
+    };
+  }
+  if (lower.includes('tarif') || lower.includes('consultation') || lower.includes('barème') || lower.includes('bareme')) {
+    return {
+      answer: 'Le **tarif de référence** d\'une consultation de médecine générale figure au barème des actes, avec un **tarif maximum** à ne pas dépasser. Au-delà, la facture est signalée.\n\nPrécisez l\'acte pour obtenir le tarif exact.',
+      sources: [{ document: 'Barème de Référence des Actes', page: 3, excerpt: 'Pour chaque acte : tarif minimum, tarif de référence et tarif maximum.' }],
+    };
+  }
+  return {
+    answer: 'Je peux vous renseigner sur l\'état de vos factures, les motifs de rejet, les pièces à fournir et le barème des actes. N\'hésitez pas à me poser une question plus précise.',
+    sources: [],
+  };
+};
+
+export const mockProviderConversations: Conversation[] = [
+  {
+    id: 'CONV-P01',
+    title: 'Facture rejetée',
+    last_message: 'Votre dernière facture a été rejetée pour le motif suivant...',
+    updated_at: '2024-10-14T09:10:00Z',
+    messages: [
+      { id: 'pmsg-1', role: 'user', content: 'Pourquoi ma dernière facture a-t-elle été rejetée ?', timestamp: '2024-10-14T09:05:00Z' },
+      {
+        id: 'pmsg-2', role: 'assistant',
+        content: "Votre dernière facture a été **rejetée** pour le motif suivant : *numéro d'ordonnance manquant pour un acte soumis à prescription*.\n\nVous pouvez la corriger depuis **Mes factures** en ajoutant l'ordonnance, puis la redéposer.",
+        timestamp: '2024-10-14T09:10:00Z', feedback: 'up',
+      },
+    ],
+  },
+  {
+    id: 'CONV-P02',
+    title: 'Tarif d\'une consultation',
+    last_message: 'Le tarif de référence d\'une consultation de médecine générale figure au barème...',
+    updated_at: '2024-10-09T15:40:00Z',
+    messages: [
+      { id: 'pmsg-3', role: 'user', content: 'Quel est le tarif de référence d\'une consultation ?', timestamp: '2024-10-09T15:35:00Z' },
+      {
+        id: 'pmsg-4', role: 'assistant',
+        content: 'Le **tarif de référence** d\'une consultation de médecine générale figure au barème des actes, avec un **tarif maximum** à ne pas dépasser. Au-delà, la facture est signalée.\n\nPrécisez l\'acte pour obtenir le tarif exact.',
+        sources: [{ document: 'Barème de Référence des Actes', page: 3, excerpt: 'Pour chaque acte : tarif minimum, tarif de référence et tarif maximum.' }],
+        timestamp: '2024-10-09T15:40:00Z', feedback: null,
+      },
+    ],
+  },
+];
+
+export const mockChatResponse = (message: string, role?: 'insured' | 'provider' | string): { answer: string; sources: { document: string; page: number; excerpt: string }[] } => {
   const lower = message.toLowerCase();
+  if (role === 'provider') return mockProviderChatResponse(lower);
   if (lower.includes('plafond') || lower.includes('dentaire')) {
     return {
       answer: 'Votre plafond de remboursement dentaire est de **300 EUR par semestre** pour les soins conservateurs (détartrage, soins, dévitalisation). Pour l\'orthodontie, le plafond est de 600 EUR par année civile.\n\nCe plafond est réinitialisé au 1er janvier de chaque année.',

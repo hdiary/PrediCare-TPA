@@ -1,5 +1,6 @@
 import type {
   AuthResponse,
+  RegisterPayload,
   Role,
   Invoice,
   Alert,
@@ -22,6 +23,7 @@ import {
   mockAlerts,
   mockAlertDetail,
   mockPrescriptionAlerts,
+  mockProviderConversations,
   mockKPIData,
   mockServiceStatus,
   mockSystemMetrics,
@@ -33,7 +35,7 @@ import {
   mockChatResponse,
 } from "./mockData";
 
-const USE_MOCKS = true;
+export const USE_MOCKS = true;
 const BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -191,6 +193,33 @@ export const api = {
     if (!res.ok) throw new Error("Erreur lors de l'envoi de l'ordonnance");
   },
 
+  // ---- Comptes : routes publiques (sans jeton) ----
+  async register(payload: RegisterPayload): Promise<{ status: "pending" }> {
+    if (USE_MOCKS) {
+      await delay(900);
+      // Réponse identique que l'e-mail existe déjà ou non : on ne révèle pas quels comptes existent.
+      return { status: "pending" };
+    }
+    return request("/auth/register", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  async requestPasswordReset(email: string): Promise<void> {
+    if (USE_MOCKS) {
+      await delay(700);
+      return;
+    }
+    await request("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    if (USE_MOCKS) {
+      await delay(700);
+      if (token === "expire") throw new Error("Ce lien a expiré ou a déjà été utilisé. Refaites une demande.");
+      return;
+    }
+    await request("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) });
+  },
+
   async getPrescriptionAlerts(filters?: {
     rule?: string;
     minSeverity?: number;
@@ -315,10 +344,10 @@ export const api = {
     });
   },
 
-  async getConversations(): Promise<{ conversations: Conversation[] }> {
+  async getConversations(role?: Role): Promise<{ conversations: Conversation[] }> {
     if (USE_MOCKS) {
       await delay(300);
-      return { conversations: mockConversations };
+      return { conversations: role === "provider" ? mockProviderConversations : mockConversations };
     }
     return request("/chat/history");
   },
@@ -326,6 +355,7 @@ export const api = {
   async sendMessage(
     conversationId: string | null,
     message: string,
+    role?: Role,
   ): Promise<{
     conversation_id: string;
     answer: string;
@@ -333,7 +363,7 @@ export const api = {
   }> {
     if (USE_MOCKS) {
       await delay(1000);
-      const resp = mockChatResponse(message);
+      const resp = mockChatResponse(message, role);
       return {
         conversation_id: conversationId || "CONV-NEW",
         answer: resp.answer,

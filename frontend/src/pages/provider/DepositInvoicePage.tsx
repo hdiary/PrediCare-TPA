@@ -319,7 +319,7 @@ export function DepositInvoicePage() {
               <div className="space-y-2">
                 {lines.map((line, idx) => (
                   <div key={line.id} className="flex items-start gap-2 p-3 rounded-xl border border-surface-300/80 dark:border-surface-600 bg-surface-100 dark:bg-surface-700/50">
-                    <div className="flex-1 grid grid-cols-12 gap-2">
+                    <div className="flex-1 min-w-0 grid grid-cols-6 md:grid-cols-12 gap-2">
                       <div className="col-span-2">
                         <label className="text-xs text-surface-400">Code</label>
                         <input
@@ -329,7 +329,7 @@ export function DepositInvoicePage() {
                           className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3.5 py-1.5 text-sm focus:border-primary-500"
                         />
                       </div>
-                      <div className="col-span-5">
+                      <div className="col-span-4 md:col-span-5">
                         <label className="text-xs text-surface-400">Libellé</label>
                         <input
                           value={line.label}
@@ -348,7 +348,7 @@ export function DepositInvoicePage() {
                           className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3.5 py-1.5 text-sm tabular-nums focus:border-primary-500"
                         />
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-4 md:col-span-3">
                         <label className="text-xs text-surface-400">Tarif (EUR)</label>
                         <input
                           type="number"

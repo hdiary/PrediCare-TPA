@@ -108,12 +108,12 @@ export function PrescriptionAlertsPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3.5">Gravité</th>
-                  <th className="px-6 py-3.5">Anomalie</th>
-                  <th className="px-6 py-3.5">Ordonnance</th>
-                  <th className="px-6 py-3.5">Prescripteur</th>
-                  <th className="px-6 py-3.5">Assuré</th>
-                  <th className="px-6 py-3.5">Date</th>
+                  <th className="px-4 md:px-6 py-3.5">Gravité</th>
+                  <th className="px-4 md:px-6 py-3.5">Anomalie</th>
+                  <th className="px-4 md:px-6 py-3.5">Ordonnance</th>
+                  <th className="px-4 md:px-6 py-3.5 hidden md:table-cell">Prescripteur</th>
+                  <th className="px-4 md:px-6 py-3.5 hidden md:table-cell">Assuré</th>
+                  <th className="px-4 md:px-6 py-3.5">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
@@ -123,12 +123,12 @@ export function PrescriptionAlertsPage() {
                     onClick={() => setSelected(a)}
                     className="hover:bg-surface-50 dark:hover:bg-surface-700/50 cursor-pointer transition-colors"
                   >
-                    <td className="px-6 py-4"><SeverityBadge severity={a.severity} /></td>
-                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200">{PRESCRIPTION_RULES[a.rule].label}</td>
-                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{a.prescription_id}</td>
-                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{a.prescriber_pseudo}</td>
-                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{a.insured_pseudo}</td>
-                    <td className="px-6 py-4 text-sm text-surface-500 tabular-nums">{formatDate(a.prescription_date)}</td>
+                    <td className="px-4 md:px-6 py-4"><SeverityBadge severity={a.severity} /></td>
+                    <td className="px-4 md:px-6 py-4 text-sm text-surface-700 dark:text-surface-200">{PRESCRIPTION_RULES[a.rule].label}</td>
+                    <td className="px-4 md:px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{a.prescription_id}</td>
+                    <td className="px-4 md:px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono hidden md:table-cell">{a.prescriber_pseudo}</td>
+                    <td className="px-4 md:px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono hidden md:table-cell">{a.insured_pseudo}</td>
+                    <td className="px-4 md:px-6 py-4 text-sm text-surface-500 tabular-nums">{formatDate(a.prescription_date)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -158,7 +158,7 @@ export function PrescriptionAlertsPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-1">À vérifier</p>
               <p className="text-sm text-surface-600 dark:text-surface-300">{PRESCRIPTION_RULES[selected.rule].check}</p>
             </div>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><dt className="text-xs text-surface-500">Diagnostic</dt><dd className="text-surface-800 dark:text-surface-100">{selected.diagnosis ?? 'Non renseigné'}</dd></div>
               <div><dt className="text-xs text-surface-500">Date de prescription</dt><dd className="text-surface-800 dark:text-surface-100">{formatDate(selected.prescription_date)}</dd></div>
               <div><dt className="text-xs text-surface-500">Prescripteur</dt><dd className="font-mono text-surface-800 dark:text-surface-100">{selected.prescriber_pseudo}</dd></div>
