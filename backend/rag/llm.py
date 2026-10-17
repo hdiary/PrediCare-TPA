@@ -1,4 +1,6 @@
 """OpenAI-compatible chat-completion client."""
+from typing import Any
+
 import httpx
 
 
@@ -32,3 +34,36 @@ class ChatCompletionClient:
         usage = payload.get("usage", {})
         return answer, int(usage.get("prompt_tokens", 0)), int(
             usage.get("completion_tokens", 0))
+
+    def complete_with_tools(
+        self,
+        system_prompt: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], int, int]:
+        response = httpx.post(
+            self.api_url,
+            headers={"Authorization": f"******"},
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    *messages,
+                ],
+                "tools": tools,
+                "tool_choice": "auto",
+                "temperature": 0,
+            },
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        message = payload["choices"][0]["message"]
+        usage = payload.get("usage", {})
+        if not isinstance(message, dict):
+            raise ValueError("LLM returned an invalid assistant message")
+        return (
+            message,
+            int(usage.get("prompt_tokens", 0)),
+            int(usage.get("completion_tokens", 0)),
+        )

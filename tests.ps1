@@ -76,7 +76,6 @@ foreach ($t in $tests) {
     Write-Host "==========================================" -ForegroundColor Cyan
 
     $output = docker compose run --rm --no-deps `
-        -e "AGENT_DATABASE_URL=postgresql://postgres:dev_postgres_pwd@db:5432/predicare" `
         rag-indexer python -m rag.ask `
         --contract-id $t.contract `
         --question "$($t.q)" 2>&1 | Out-String

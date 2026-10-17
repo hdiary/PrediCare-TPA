@@ -6,6 +6,8 @@ _EMAIL = re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
 _PHONE = re.compile(r"(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)")
 _CURRENCY_SUFFIX = re.compile(r"^\s*(?:Ar\b|Ariary\b|MGA\b|€|\$)", re.IGNORECASE)
 _PSEUDONYMOUS_BENEFICIARY_ID = re.compile(r"\bASS-[A-Z0-9]+\b", re.IGNORECASE)
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_INVOICE_ID = re.compile(r"\bFAC-\d{8}\b", re.IGNORECASE)
 
 
 def contains_sensitive_data(answer: str) -> bool:
@@ -13,6 +15,13 @@ def contains_sensitive_data(answer: str) -> bool:
         return True
     for match in _PHONE.finditer(answer):
         if len(re.sub(r"\D", "", match.group())) < 8:
+            continue
+        if _ISO_DATE.fullmatch(match.group()):
+            continue
+        if any(
+            invoice.start() <= match.start() and invoice.end() >= match.end()
+            for invoice in _INVOICE_ID.finditer(answer)
+        ):
             continue
         if _CURRENCY_SUFFIX.match(answer[match.end():]):
             continue

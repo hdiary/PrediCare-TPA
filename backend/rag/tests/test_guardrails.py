@@ -41,6 +41,8 @@ class GuardrailTests(unittest.TestCase):
             "Le remboursement est de 90 %, avec un plafond de 2 000 000 Ar."))
         self.assertFalse(contains_sensitive_data(
             "Le plafond annuel atteint 20 000 000 MGA."))
+        self.assertFalse(contains_sensitive_data(
+            "Facture FAC-00000001 reçue le 2026-09-12."))
 
 
 if __name__ == "__main__":

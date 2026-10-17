@@ -8,7 +8,7 @@ WORKDIR /app
 COPY db_init/requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
-COPY clean.py pseudo.py encrypt_identities.py load.py alembic.ini ./
+COPY clean.py pseudo.py encrypt_identities.py load.py configure_agent_role.py alembic.ini ./
 COPY migrations ./migrations
 COPY db_init/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh \

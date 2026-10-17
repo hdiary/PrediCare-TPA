@@ -31,6 +31,9 @@ python load.py --wait 90 --wait-only
 echo "[db-init] applying migrations..."
 alembic upgrade head
 
+echo "[db-init] configuring the RAG agent database role..."
+python configure_agent_role.py
+
 if python load.py --is-initialised; then
     echo "[db-init] database already loaded, nothing to do."
     exit 0

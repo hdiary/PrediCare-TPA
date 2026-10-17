@@ -2,3 +2,4 @@ httpx>=0.27,<1
 psycopg[binary]>=3.2,<4
 pypdf>=5,<7
 SQLAlchemy>=2.0,<3
+pytest>=8,<10
