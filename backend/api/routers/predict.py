@@ -25,7 +25,10 @@ router = APIRouter(tags=["predict"])
 
 
 def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str):
-    """Trace le rejet (commit immédiat) puis lève la réponse 422/409. Aucune valeur reçue n'est journalisée."""
+    """Trace le rejet (commit immédiat) puis lève la réponse 422/409/403.
+
+    Aucune valeur reçue n'est journalisée.
+    """
     facture_id = raw.get("facture_id") if isinstance(raw.get("facture_id"), str) else None
     facture_id = facture_id[:64] if facture_id else None
     write_audit(
@@ -56,6 +59,17 @@ def predict(
 ):
     started = time.perf_counter()
     settings = get_settings()
+
+    # 0. Autorisation : un professionnel de santé ne soumet que les factures de SON prestataire
+    #    (sinon il pourrait scorer ou polluer le dossier d'un autre établissement).
+    if user["role"] == "professionnel_sante":
+        propre = user.get("prestataire_id")
+        fourni = payload.get("prestataire_id")
+        if propre is None or (fourni is not None and fourni != propre):
+            _reject(conn, user, payload,
+                    [{"code": "PRESTATAIRE_NON_AUTORISE", "champ": "prestataire_id",
+                      "message": "Seules les factures de votre établissement sont acceptées"}],
+                    403, "autorisation")
 
     # 1. Validation : les 10 codes du contrat (+ CHAMP_INTERDIT, VALEUR_INVALIDE)
     erreurs, clean = validate_invoice(payload, conn)

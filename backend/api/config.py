@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5          # échecs consécutifs avant verrouillage du compte
     login_lockout_minutes: int = 15      # durée du verrouillage
     cors_origins: str = "http://localhost:3000"
+    max_body_bytes: int = 1_000_000      # taille maximale d'une requête (413 au-delà)
     alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
 
     # Registre de modèles (MLflow)

@@ -100,7 +100,7 @@ def identite(
     user: dict = Depends(require_role("gestionnaire")),
     conn=Depends(get_db),
 ):
-    """Identité de l'assuré, déchiffrée à la demande pour traiter une alerte. Chaque accès est tracé."""
+    """Identité de l'assuré, déchiffrée à la demande. Chaque accès est tracé."""
     _alerte_ou_404(conn, facture_id)
     assure_id = repo.get_assure_de_facture(conn, facture_id)
     blob = repo.get_identite_chiffree(conn, assure_id) if assure_id else None

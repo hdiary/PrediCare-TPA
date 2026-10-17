@@ -32,6 +32,8 @@ TYPES_LIGNE = {"ACTE", "MEDICAMENT"}
 CANAUX = {"PAPIER_SCAN", "EMAIL", "PORTAIL_PRESTATAIRE"}
 MODES = {"TIERS_PAYANT", "REMBOURSEMENT_ASSURE"}
 MAX_LIGNES = 100
+MAX_TEXTE = 64              # numero_facture et autres textes libres
+MAX_CODE_LIGNE = 40
 MAX_QUANTITE = 32767        # SMALLINT
 MAX_MONTANT = 10**12
 
@@ -88,7 +90,11 @@ def _text(raw: dict, key: str, errors: list[dict], pattern=None, invalid_code="V
     value = raw.get(key)
     if _blank(value):
         return None
-    if not isinstance(value, str) or (pattern and not pattern.match(value.strip())):
+    if (
+        not isinstance(value, str)
+        or len(value.strip()) > MAX_TEXTE
+        or (pattern and not pattern.match(value.strip()))
+    ):
         _err(errors, invalid_code, key, "Format invalide")
         return None
     return value.strip()
@@ -134,8 +140,8 @@ def _check_lignes(raw: dict, errors: list[dict], parsed: dict) -> None:
         if _blank(code):
             _err(errors, "CHAMP_OBLIGATOIRE_MANQUANT", f"{champ}.code", "Champ obligatoire")
             ok = False
-        elif not isinstance(code, str):
-            _err(errors, "VALEUR_INVALIDE", f"{champ}.code", "Texte attendu")
+        elif not isinstance(code, str) or len(code.strip()) > MAX_CODE_LIGNE:
+            _err(errors, "VALEUR_INVALIDE", f"{champ}.code", "Texte de 40 caractères maximum")
             ok = False
 
         type_ligne = ln.get("type_ligne")
@@ -244,7 +250,8 @@ def validate_structure(raw: dict, today: date | None = None) -> tuple[list[dict]
     if date_soin and df and df < date_soin.isoformat():
         _err(errors, "DATE_IMPOSSIBLE", "date_facture", "date_facture antérieure à date_soin")
     if df and dr and dr < df:
-        _err(errors, "DATE_IMPOSSIBLE", "date_reception", "date_reception antérieure à date_facture")
+        _err(errors, "DATE_IMPOSSIBLE", "date_reception",
+             "date_reception antérieure à date_facture")
 
     _check_lignes(raw, errors, parsed)
     return errors, {k: v for k, v in parsed.items() if v is not None}

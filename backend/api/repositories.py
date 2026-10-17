@@ -35,7 +35,10 @@ def categorie_existe(conn, type_facture: str) -> bool:
 
 
 def lookup_codes(conn, codes: list[str]) -> dict[str, dict]:
-    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}} (équivaut à ref_codes)."""
+    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}}.
+
+    Équivaut à ref_codes.
+    """
     rows = conn.execute(
         "SELECT code_acte AS code, 'ACTE' AS type_ligne, libelle FROM referentiel_actes "
         "WHERE code_acte = ANY(%s) "
@@ -75,7 +78,9 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
     """
     total = clean["montant_total"]
     date_soin = date.fromisoformat(clean["date_soin"])
-    date_facture = date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    date_facture = (
+        date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    )
     date_reception = (
         date.fromisoformat(clean["date_reception"]) if clean.get("date_reception")
         else date_reception_defaut
@@ -86,7 +91,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
         "canal_reception, mode_reglement, attestation_pec_id, entente_prealable_id, devise, "
         "nb_lignes, montant_total, montant_eligible, montant_pris_en_charge, reste_a_charge, "
         "statut, motif_rejet, date_traitement) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "%s, "
         "0, %s, 'EN_COURS', NULL, NULL)",
         (
             clean["facture_id"], clean["numero_facture"], clean["prestataire_id"],
@@ -102,7 +108,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO lignes_facture (ligne_id, facture_id, num_ligne, code, type_ligne, "
-            "libelle, quantite, prix_unitaire, montant) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "libelle, quantite, prix_unitaire, montant) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             [
                 (f"{clean['facture_id']}-L{ln['num_ligne']:02d}", clean["facture_id"],
                  ln["num_ligne"], ln["code"], ln["type_ligne"], ln["libelle"],

@@ -11,14 +11,13 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users
 from api.config import get_settings
+from api.logging_config import configure_logging
+from api.middleware import BodySizeLimitMiddleware
 from api.routers import admin, alerts, auth, health, predict
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
-)
+configure_logging()
 logger = logging.getLogger("predicare")
 
 
@@ -44,6 +43,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="PrediCare TPA API", version=health.VERSION, lifespan=lifespan)
 
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=get_settings().max_body_bytes)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
