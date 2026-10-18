@@ -1,14 +1,14 @@
 {
-  "version": "lightgbm-20261016-1406-078e86",
+  "version": "lightgbm-20261018-1157-078e86",
   "comparaison": [
     {
       "candidat": "baseline_logreg",
-      "pr_auc_valid": 0.9753,
-      "pr_auc_test": 0.9773,
-      "recall_test": 0.9531,
-      "precision_test": 0.8599,
-      "recall_test_seuil_0.8": 0.9255,
-      "precision_test_seuil_0.8": 0.928
+      "pr_auc_valid": 0.9752,
+      "pr_auc_test": 0.9772,
+      "recall_test": 0.9524,
+      "precision_test": 0.8614,
+      "recall_test_seuil_0.8": 0.9262,
+      "precision_test_seuil_0.8": 0.9274
     },
     {
       "candidat": "hgb_poids",
@@ -66,8 +66,8 @@
     }
   ],
   "retenu": {
-    "version": "lightgbm-20261016-1406-078e86",
-    "file": "model_lightgbm-20261016-1406-078e86.joblib",
+    "version": "lightgbm-20261018-1157-078e86",
+    "file": "model_lightgbm-20261018-1157-078e86.joblib",
     "algo": "lightgbm",
     "strategie": "poids",
     "params": {
@@ -78,7 +78,7 @@
       "learning_rate": 0.05,
       "colsample_bytree": 0.8
     },
-    "trained_at": "2026-10-16T14:06:07+00:00",
+    "trained_at": "2026-10-18T11:57:07+00:00",
     "seuil": 0.9999,
     "valid": {
       "pr_auc": 0.9988,

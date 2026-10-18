@@ -122,6 +122,7 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
+    
   # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     profiles: [ "full" ] # a decommenter pour activer l'API dans le container
