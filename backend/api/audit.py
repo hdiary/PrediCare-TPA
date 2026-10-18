@@ -1,7 +1,4 @@
-"""Journal d'audit (AI Act art. 12).
-
-Une ligne par prédiction, décision, rejet ou accès sensible.
-"""
+"""Journal d'audit (AI Act art. 12) : une ligne par prédiction, décision, rejet ou accès sensible."""
 from psycopg.types.json import Jsonb
 
 

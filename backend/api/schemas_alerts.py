@@ -37,6 +37,7 @@ class AlertSummary(BaseModel):
     version_modele: str
     date: datetime
     montant_total: int | None = None
+    nb_regles: int = 0
     derniere_decision: DecisionValue | None = None
     date_decision: datetime | None = None
 

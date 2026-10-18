@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5          # échecs consécutifs avant verrouillage du compte
     login_lockout_minutes: int = 15      # durée du verrouillage
     cors_origins: str = "http://localhost:3000"
-    max_body_bytes: int = 1_000_000      # taille maximale d'une requête (413 au-delà)
     alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
 
     # Registre de modèles (MLflow)
@@ -24,11 +23,27 @@ class Settings(BaseSettings):
     shap_top_k: int = 5
     model_retry_interval_s: int = 10       # délai mini entre deux tentatives de chargement
 
+    # Dérive (P3-19)
+    drift_features: str = ""            # variables suivies (séparées par des virgules) ; vide = top SHAP
+    drift_top_k: int = 5
+    drift_reference_size: int = 500     # nombre de premières prédictions servant de référence
+    drift_window_days: int = 7
+    drift_min_samples: int = 30
+
     # Comptes de démonstration (créés au démarrage si DEMO_PASSWORD est défini)
     demo_password: str | None = None
 
     # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
     identity_encryption_key: str | None = None
+
+    # Alertes n8n (P3-13)
+    n8n_webhook_url: str | None = None      # ex. http://n8n:5678/webhook/predicare-alert
+    n8n_webhook_secret: str | None = None   # openssl rand -hex 32
+    n8n_timeout_s: float = 3.0              # jamais bloquant pour /predict
+
+    @property
+    def drift_feature_list(self) -> list[str]:
+        return [f.strip() for f in self.drift_features.split(",") if f.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

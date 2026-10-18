@@ -1,5 +1,5 @@
 {
-  "name": "PrediCare - Alerte fraude (Gmail + Slack) v3",
+  "name": "PrediCare - Alerte fraude",
   "nodes": [
     {
       "parameters": {

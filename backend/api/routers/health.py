@@ -9,7 +9,7 @@ from api.services.model_registry import registry
 
 router = APIRouter(tags=["health"])
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 _STARTED = time.monotonic()
 
 

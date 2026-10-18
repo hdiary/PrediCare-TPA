@@ -8,6 +8,13 @@ class ShapItem(BaseModel):
     contribution: float
 
 
+class RegleItem(BaseModel):
+    regle_code: str
+    severite: str
+    message: str
+    details: dict | None = None
+
+
 class PredictResponse(BaseModel):
     """Gestionnaire : réponse complète. Professionnel de santé : accusé de réception seul."""
 
@@ -22,6 +29,7 @@ class PredictResponse(BaseModel):
     version_modele: str | None = None
     shap: list[ShapItem] | None = None
     latence_ms: int | None = None
+    regles: list[RegleItem] | None = None   # alertes de règles de prescription (gestionnaire)
 
 
 PREDICT_REQUEST_EXAMPLE = {

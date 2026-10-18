@@ -6,7 +6,7 @@ gestionnaire décide, et chaque décision est tracée dans le journal d'audit.
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 
 from api import repositories as repo
 from api.audit import write_audit
@@ -31,11 +31,14 @@ def _alerte_ou_404(conn, facture_id: str) -> dict:
 
 @router.get("", response_model=list[AlertSummary], dependencies=[manager_only])
 def list_alerts(
+    response: Response,
     statut: Literal["en_attente", "traitees", "toutes"] = "en_attente",
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     conn=Depends(get_db),
 ):
+    """Liste paginée. Le nombre total (pour la pagination du front) est dans X-Total-Count."""
+    response.headers["X-Total-Count"] = str(repo.count_alertes(conn, statut))
     return repo.list_alertes(conn, statut, limit, offset)
 
 
@@ -46,6 +49,7 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
     return {
         "prediction": pred,
         "shap": shap["valeurs"] if shap else None,
+        "regles": repo.list_alertes_regles(conn, pred["prediction_id"]),
         "decisions": repo.list_decisions(conn, pred["prediction_id"]),
     }
 
@@ -100,7 +104,7 @@ def identite(
     user: dict = Depends(require_role("gestionnaire")),
     conn=Depends(get_db),
 ):
-    """Identité de l'assuré, déchiffrée à la demande. Chaque accès est tracé."""
+    """Identité de l'assuré, déchiffrée à la demande pour traiter une alerte. Chaque accès est tracé."""
     _alerte_ou_404(conn, facture_id)
     assure_id = repo.get_assure_de_facture(conn, facture_id)
     blob = repo.get_identite_chiffree(conn, assure_id) if assure_id else None

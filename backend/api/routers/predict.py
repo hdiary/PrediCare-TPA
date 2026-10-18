@@ -17,6 +17,7 @@ from api.services.features import (
     build_features,
 )
 from api.services.model_registry import get_registry
+from api.services.rules import evaluate_rules
 from api.services.scoring import predict_with_explanation
 from api.validation import InvoiceRejected, today_mg, validate_invoice
 
@@ -25,10 +26,7 @@ router = APIRouter(tags=["predict"])
 
 
 def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str):
-    """Trace le rejet (commit immédiat) puis lève la réponse 422/409/403.
-
-    Aucune valeur reçue n'est journalisée.
-    """
+    """Trace le rejet (commit immédiat) puis lève la réponse 422/409. Aucune valeur reçue n'est journalisée."""
     facture_id = raw.get("facture_id") if isinstance(raw.get("facture_id"), str) else None
     facture_id = facture_id[:64] if facture_id else None
     write_audit(
@@ -59,17 +57,6 @@ def predict(
 ):
     started = time.perf_counter()
     settings = get_settings()
-
-    # 0. Autorisation : un professionnel de santé ne soumet que les factures de SON prestataire
-    #    (sinon il pourrait scorer ou polluer le dossier d'un autre établissement).
-    if user["role"] == "professionnel_sante":
-        propre = user.get("prestataire_id")
-        fourni = payload.get("prestataire_id")
-        if propre is None or (fourni is not None and fourni != propre):
-            _reject(conn, user, payload,
-                    [{"code": "PRESTATAIRE_NON_AUTORISE", "champ": "prestataire_id",
-                      "message": "Seules les factures de votre établissement sont acceptées"}],
-                    403, "autorisation")
 
     # 1. Validation : les 10 codes du contrat (+ CHAMP_INTERDIT, VALEUR_INVALIDE)
     erreurs, clean = validate_invoice(payload, conn)
@@ -119,6 +106,9 @@ def predict(
             soumis_par=user["user_id"],
         )
         repo.insert_shap(conn, prediction_id, clean["facture_id"], result["shap_complet"])
+        # Règles de prescription (P3-16) : stockées avec l'explication ; jamais bloquantes
+        findings = evaluate_rules(conn, clean)
+        repo.insert_alertes_regles(conn, prediction_id, clean["facture_id"], findings)
         write_audit(
             conn,
             event_type="prediction",
@@ -134,6 +124,7 @@ def predict(
                 "seuil": seuil,
                 "is_alert": is_alert,
                 "shap": result["shap"],
+                "regles": [f.regle_code for f in findings],
                 "latence_ms": latence_ms,
             },
         )
@@ -152,4 +143,5 @@ def predict(
         version_modele=bundle.version,
         shap=result["shap"],
         latence_ms=latence_ms,
+        regles=[f.as_dict() for f in findings],
     )

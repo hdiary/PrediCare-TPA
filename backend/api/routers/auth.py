@@ -88,12 +88,6 @@ def login(body: LoginRequest, conn=Depends(get_db)):
 @router.post("/token", response_model=TokenResponse, include_in_schema=True)
 def token(form: OAuth2PasswordRequestForm = Depends(), conn=Depends(get_db)):
     """Même chose en formulaire : fait fonctionner le bouton « Authorize » de /docs."""
-    if len(form.username) > 254 or len(form.password) > 128:   # mêmes bornes que LoginRequest
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Identifiants invalides",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
     return _token_response(_authenticate(conn, form.username, form.password))
 
 
