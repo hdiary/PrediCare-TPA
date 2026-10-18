@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["backend"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501", "F401", "I001"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend"]

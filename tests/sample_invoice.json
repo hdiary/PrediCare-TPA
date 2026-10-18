@@ -1,0 +1,14 @@
+{
+  "facture_id": "FAC-90000001",
+  "numero_facture": "PRE214/2026/90001",
+  "prestataire_id": "REMPLACER_PAR_UN_PRESTATAIRE_EXISTANT",
+  "assure_id": "REMPLACER_PAR_UN_ASSURE_EXISTANT",
+  "contrat_id": "REMPLACER_PAR_SON_CONTRAT",
+  "type_facture": "CONSULTATION",
+  "date_soin": "2026-10-10",
+  "heure_soin": "09:30",
+  "devise": "MGA",
+  "lignes": [
+    {"code": "CONS-GEN", "type_ligne": "ACTE", "quantite": 1, "prix_unitaire": 25000}
+  ]
+}

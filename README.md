@@ -1,4 +1,4 @@
-# \# PrediCare TPA
+# PrediCare TPA
 
 \*\*Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.\*\*
 
@@ -182,7 +182,7 @@
 
 # cd predicare-tpa
 
-# \# 1. Créer la configuration
+#### 1. Créer la configuration
 
 # cp .env.example .env
 

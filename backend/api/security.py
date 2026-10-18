@@ -1,0 +1,58 @@
+"""Hachage des mots de passe (bcrypt) et jetons JWT."""
+from datetime import UTC, datetime, timedelta
+
+import bcrypt
+import jwt
+
+from api.config import get_settings
+
+
+def _prep(password: str) -> bytes:
+    # bcrypt ne lit que les 72 premiers octets
+    return password.encode("utf-8")[:72]
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(_prep(password), bcrypt.gensalt()).decode("ascii")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(_prep(password), password_hash.encode("ascii"))
+    except ValueError:
+        return False
+
+
+# Hash factice : permet de dépenser le même temps de calcul quand l'email
+# n'existe pas, pour ne pas révéler quels comptes existent.
+DUMMY_HASH = hash_password("dummy-password-for-timing")
+
+
+def create_access_token(user_id: int, role: str) -> tuple[str, int]:
+    """Retourne (jeton, durée en secondes).
+
+    Le jeton ne contient que l'identifiant et le rôle ; le rôle réel est
+    relu en base à chaque requête (voir deps.get_current_user).
+    """
+    settings = get_settings()
+    now = datetime.now(UTC)
+    expires_in = settings.jwt_expire_minutes * 60
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "iat": now,
+        "exp": now + timedelta(seconds=expires_in),
+    }
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return token, expires_in
+
+
+def decode_token(token: str) -> dict:
+    """Lève jwt.PyJWTError si le jeton est invalide ou expiré."""
+    settings = get_settings()
+    return jwt.decode(
+        token,
+        settings.jwt_secret,
+        algorithms=[settings.jwt_algorithm],
+        options={"require": ["exp", "sub"]},
+    )
