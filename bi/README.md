@@ -88,5 +88,6 @@ docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" \
   -d "${POSTGRES_DB:-predicare}" < tests/bi_kpi_checks.sql
 ```
 
-Le script termine sans exception si le rappel (50 %), la couverture (83,333 %),
-le taux de rejet (75 %) et les sommes en MGA correspondent aux cas de test.
+Le script termine sans exception si le taux d'alerte (80 %), la précision
+opérationnelle (33,3 %), le montant à risque (1 144) et le montant économisé
+(55) correspondent aux cas de test.
