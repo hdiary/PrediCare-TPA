@@ -1,76 +1,61 @@
 {
   "version": 3,
-  "name": "PrediCare : Pilotage",
-  "filters": [
-    {
-      "id": "date_debut",
-      "name": "Date début",
-      "slug": "date_debut",
-      "type": "date/single"
-    },
-    {
-      "id": "date_fin",
-      "name": "Date fin",
-      "slug": "date_fin",
-      "type": "date/single"
-    }
-  ],
+  "name": "PrediCare - Pilotage BI",
+  "description": "Vues Metabase basees sur le snapshot BI rafraichi toutes les cinq minutes.",
   "cards": [
     {
-      "key": "factures",
-      "name": "Factures observées",
+      "key": "factures_traitees",
+      "name": "Factures traitees",
       "display": "scalar",
-      "sql": "SELECT COUNT(*) AS factures_observees\nFROM v_bi_factures v WHERE 1=1\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]",
-      "layout": { "row": 0, "col": 0, "width": 6, "height": 3 }
+      "sql": "SELECT COUNT(*) AS factures_traitees FROM mv_bi_factures"
     },
     {
-      "key": "rejets_mga",
-      "name": "Montant des factures alertées rejetées (MGA)",
+      "key": "montant_reclame",
+      "name": "Montant total reclame",
       "display": "scalar",
-      "sql": "SELECT SUM(v.montant_total) AS montant_facture_rejetee_mga\nFROM v_bi_factures v\nWHERE v.is_alert AND v.decision = 'rejete' AND v.devise = 'MGA'\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]",
-      "layout": { "row": 0, "col": 6, "width": 6, "height": 3 }
+      "sql": "SELECT COALESCE(SUM(montant_total), 0) AS montant_reclame FROM mv_bi_factures"
     },
     {
-      "key": "recall",
-      "name": "Rappel sur les fraudes valides labellisées (%)",
+      "key": "montant_a_risque",
+      "name": "Montant a risque",
       "display": "scalar",
-      "sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE v.is_alert)\n       / NULLIF(COUNT(*), 0), 1) AS rappel_pct\nFROM v_bi_factures v\n      WHERE v.est_fraude AND v.est_valide AND v.is_alert IS NOT NULL\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]",
-      "layout": { "row": 0, "col": 12, "width": 6, "height": 3 }
+      "sql": "SELECT COALESCE(SUM(montant_total) FILTER (WHERE is_alert AND decision IS NULL), 0) AS montant_a_risque FROM mv_bi_factures"
     },
     {
-      "key": "rejet_alertes",
-      "name": "Taux de rejet des alertes décidées (%)",
+      "key": "montant_economise",
+      "name": "Montant economise",
       "display": "scalar",
-      "sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE v.decision = 'rejete')\n       / NULLIF(COUNT(*), 0), 1) AS taux_rejet_pct\nFROM v_bi_factures v\nWHERE v.is_alert AND v.decision IN ('valide', 'rejete')\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]",
-      "layout": { "row": 0, "col": 18, "width": 6, "height": 3 }
+      "sql": "SELECT COALESCE(SUM(c.montant_reclame - c.montant_calcule), 0) AS montant_economise FROM mv_bi_factures v JOIN calculs_remboursement c USING (facture_id) WHERE v.decision IN ('REJETER', 'CONFIRMER_FRAUDE', 'rejete', 'fraude_confirmee')"
     },
     {
-      "key": "couverture",
-      "name": "Factures avec prédiction (%)",
+      "key": "taux_alerte",
+      "name": "Taux d'alerte",
       "display": "scalar",
-      "sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE v.is_alert IS NOT NULL)\n       / NULLIF(COUNT(*), 0), 3) AS couverture_scoring_pct\nFROM v_bi_factures v WHERE 1=1\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]",
-      "layout": { "row": 3, "col": 0, "width": 6, "height": 3 }
+      "sql": "SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE is_alert) / NULLIF(COUNT(*), 0), 0) AS taux_alerte_pct FROM mv_bi_factures"
     },
     {
-      "key": "volumes_mensuels",
-      "name": "Volume de factures par mois",
+      "key": "precision_operationnelle",
+      "name": "Precision operationnelle",
+      "display": "scalar",
+      "sql": "SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE decision IN ('CONFIRMER_FRAUDE', 'fraude_confirmee')) / NULLIF(COUNT(*) FILTER (WHERE decision IS NOT NULL), 0), 0) AS precision_pct FROM mv_bi_factures WHERE is_alert"
+    },
+    {
+      "key": "volumes_journaliers",
+      "name": "Factures et alertes par jour",
       "display": "line",
-      "sql": "SELECT date_trunc('month', v.date_facture) AS mois,\n       COUNT(*) AS nb_factures\nFROM v_bi_factures v WHERE 1=1\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]\nGROUP BY 1 ORDER BY 1",
-      "layout": { "row": 3, "col": 6, "width": 9, "height": 7 }
+      "sql": "SELECT date_facture AS jour, COUNT(*) AS factures, COUNT(*) FILTER (WHERE is_alert) AS alertes FROM mv_bi_factures GROUP BY date_facture ORDER BY date_facture"
     },
     {
-      "key": "montants_mensuels",
-      "name": "Montants facturés vs alertés par mois (MGA)",
+      "key": "scores",
+      "name": "Distribution des scores",
       "display": "bar",
-      "sql": "SELECT date_trunc('month', v.date_facture) AS mois,\n       SUM(v.montant_total) AS montant_facture_mga,\n       SUM(v.montant_total) FILTER (WHERE v.is_alert) AS montant_alerte_mga\nFROM v_bi_factures v\nWHERE v.devise = 'MGA'\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]\nGROUP BY 1 ORDER BY 1",
-      "layout": { "row": 3, "col": 15, "width": 9, "height": 7 }
+      "sql": "SELECT width_bucket(score, 0, 1, 10) AS tranche, COUNT(*) AS volume FROM mv_bi_factures WHERE score IS NOT NULL GROUP BY tranche ORDER BY tranche"
     },
     {
-      "key": "prestataires",
-      "name": "Top 10 prestataires alertés (factures)",
+      "key": "prestataires_risque",
+      "name": "Top prestataires a risque",
       "display": "bar",
-      "sql": "SELECT v.prestataire_nom, COUNT(*) AS nb_factures_alertees\nFROM v_bi_factures v\nWHERE v.is_alert\n[[AND v.date_facture >= {{date_debut}}]] [[AND v.date_facture <= {{date_fin}}]]\nGROUP BY 1 ORDER BY 2 DESC LIMIT 10",
-      "layout": { "row": 10, "col": 0, "width": 24, "height": 7 }
+      "sql": "SELECT prestataire_id, prestataire_nom, COUNT(*) AS alertes FROM mv_bi_factures WHERE is_alert GROUP BY prestataire_id, prestataire_nom ORDER BY alertes DESC LIMIT 10"
     }
   ]
 }

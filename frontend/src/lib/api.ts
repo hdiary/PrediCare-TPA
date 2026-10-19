@@ -18,6 +18,7 @@ import type {
   AdminSettings,
   Conversation,
   InvoiceSubmissionResult,
+  BIKpiData,
 } from "./types";
 
 import {
@@ -381,6 +382,35 @@ export const api = {
       return mockKPIData;
     }
     return request(`/kpis${period ? `?period=${period}` : ""}`);
+  },
+
+  async getBIKPIs(days = 30): Promise<BIKpiData> {
+    if (USE_MOCKS) {
+      await delay(300);
+      return {
+        factures_traitees: mockKPIData.invoices_processed,
+        alertes_generees: mockKPIData.alerts_pending,
+        alertes_en_attente: mockKPIData.alerts_pending,
+        alertes_traitees: 0,
+        alertes_escaladees: 0,
+        montant_reclame: mockKPIData.invoices_processed,
+        montant_a_risque: 0,
+        montant_economise: mockKPIData.amount_saved,
+        fraudes_confirmees: 0,
+        alertes_decidees: 0,
+        taux_alerte: mockKPIData.detection_rate,
+        precision_operationnelle: null,
+        date_rafraichissement: new Date().toISOString(),
+        stale: false,
+        par_jour: mockKPIData.series.map((point) => ({
+          jour: point.date, factures: point.invoices, alertes: point.alerts,
+        })),
+        top_prestataires: [],
+        distribution_scores: [],
+        notifications: [],
+      };
+    }
+    return request(`/api/v1/bi/kpis?jours=${days}`);
   },
 
   async getServiceStatus(): Promise<ServiceStatus> {

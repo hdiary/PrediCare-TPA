@@ -11,7 +11,7 @@ import {
 import { Card, Skeleton, ErrorState, Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatEUR, formatPercent, formatDate, riskColor, ALERT_TYPE_LABELS } from '@/lib/format';
-import type { KPIData, AlertApiSummary } from '@/lib/types';
+import type { BIKpiData, AlertApiSummary } from '@/lib/types';
 
 const ICON_TONES: Record<string, string> = {
   primary: 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300',
@@ -21,13 +21,13 @@ const ICON_TONES: Record<string, string> = {
 };
 
 export function ManagerDashboard() {
-  const [kpis, setKpis] = useState<KPIData | null>(null);
+  const [kpis, setKpis] = useState<BIKpiData | null>(null);
   const [alerts, setAlerts] = useState<AlertApiSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.getKPIs(), api.getAlerts({ status: 'EN_ATTENTE' })])
+    Promise.all([api.getBIKPIs(), api.getAlerts({ status: 'EN_ATTENTE' })])
       .then(([k, a]) => { setKpis(k); setAlerts(a.items.slice(0, 5)); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -36,10 +36,10 @@ export function ManagerDashboard() {
   if (error || !kpis) return <ErrorState message="Impossible de charger le tableau de bord." />;
 
   const kpiCards = [
-    { label: 'Factures traitées', value: kpis.invoices_processed.toLocaleString('fr-FR'), icon: <FileText className="w-5 h-5" />, trend: '+12%', trendUp: true, color: 'primary' },
-    { label: 'Montant économisé', value: formatEUR(kpis.amount_saved), icon: <Euro className="w-5 h-5" />, trend: '+8%', trendUp: true, color: 'success' },
-    { label: 'Taux de détection', value: formatPercent(kpis.detection_rate), icon: <Target className="w-5 h-5" />, trend: '+2.1%', trendUp: true, color: 'kraft' },
-    { label: 'Alertes en attente', value: kpis.alerts_pending.toString(), icon: <AlertTriangle className="w-5 h-5" />, trend: '-5', trendUp: false, color: 'warning' },
+    { label: 'Factures traitées', value: kpis.factures_traitees.toLocaleString('fr-FR'), icon: <FileText className="w-5 h-5" />, trend: '', trendUp: true, color: 'primary' },
+    { label: 'Montant à risque', value: formatEUR(kpis.montant_a_risque), icon: <Euro className="w-5 h-5" />, trend: '', trendUp: true, color: 'warning' },
+    { label: 'Taux d’alerte', value: formatPercent(kpis.taux_alerte), icon: <Target className="w-5 h-5" />, trend: '', trendUp: true, color: 'kraft' },
+    { label: 'Alertes en attente', value: kpis.alertes_en_attente.toString(), icon: <AlertTriangle className="w-5 h-5" />, trend: '', trendUp: false, color: 'warning' },
   ];
 
   return (
@@ -54,7 +54,7 @@ export function ManagerDashboard() {
               </div>
               <div className={`flex items-center gap-1 text-xs font-medium ${card.trendUp ? 'text-success-600' : 'text-danger-600'}`}>
                 {card.trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {card.trend}
+                {card.trend || '—'}
               </div>
             </div>
             <p className="text-xs text-surface-400 mb-1">{card.label}</p>
@@ -69,7 +69,7 @@ export function ManagerDashboard() {
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Factures vs Alertes</h3>
           <p className="text-xs text-surface-400 mb-4">Évolution hebdomadaire</p>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={kpis.series}>
+            <LineChart data={kpis.par_jour.map((point) => ({ date: point.jour, invoices: point.factures, alerts: point.alertes }))}>
               <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
@@ -88,7 +88,7 @@ export function ManagerDashboard() {
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Montant économisé</h3>
           <p className="text-xs text-surface-400 mb-4">Par semaine (EUR)</p>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={kpis.series}>
+            <BarChart data={kpis.par_jour.map((point) => ({ date: point.jour, saved: 0 }))}>
               <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />

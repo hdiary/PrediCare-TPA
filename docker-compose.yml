@@ -267,6 +267,34 @@ services:
       retries: 5
       start_period: 40s
 
+  # ---------- Snapshot BI unique, rafraîchi toutes les cinq minutes ----------
+  bi-refresh:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      PGDATABASE: ${POSTGRES_DB:-predicare}
+    command:
+      - sh
+      - -ec
+      - |
+        until pg_isready; do sleep 2; done
+        while true; do
+          psql --set ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_bi_factures"
+          sleep 300
+        done
+    depends_on:
+      loader:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
   # ---------- Frontend React/Vite ----------
   web:
     # profiles: [ "full" ] # a decommenter pour activer le frontend dans le container

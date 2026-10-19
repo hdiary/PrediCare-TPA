@@ -13,8 +13,14 @@ recréer. Les exécutions répétées d'une même version sont idempotentes.
 
 - URL locale : <http://localhost:3000>
 - La connexion Metabase à PostgreSQL utilise le rôle `metabase_ro`, en lecture
-  seule sur la vue `v_bi_factures`; ne pas utiliser le superutilisateur pour
-  les questions BI.
+  seule sur la vue matérialisée `mv_bi_factures`; ne pas utiliser le
+  superutilisateur pour les questions BI.
+- `mv_bi_factures` est rafraîchie exclusivement par `bi-refresh` toutes les
+  cinq minutes avec `REFRESH MATERIALIZED VIEW CONCURRENTLY`. Aucun trigger
+  BI n'est installé sur les tables métier.
+- Le dashboard manager consomme aussi `GET /api/v1/bi/kpis?jours=30`.
+  Le champ `stale=true` signale que l'API sert la dernière valeur connue
+  lorsqu'une source BI est temporairement indisponible.
 - Les vues exposent, par facture, la dernière prédiction enregistrée et la
   dernière décision associée à cette prédiction. En cas d'égalité
   d'horodatage, l'identifiant de ligne le plus élevé départage les versions.
@@ -25,14 +31,15 @@ recréer. Les exécutions répétées d'une même version sont idempotentes.
 
 | Carte | Définition |
 |---|---|
-| Factures observées | Nombre de factures du jeu chargé dans la période. Ce n'est pas un décompte des inférences réussies du modèle. |
-| Montant des factures alertées rejetées (MGA) | Somme de `montant_total` des factures alertées et dont la dernière décision est `rejete`, limitées à la devise MGA. C'est un montant facturé rejeté, **pas une économie réalisée**. |
-| Rappel sur les fraudes valides labellisées (%) | Parmi les factures avec `est_fraude = true`, `est_valide = true` et une prédiction, part de celles dont la dernière prédiction est une alerte. Sans labels scorés dans la période, le résultat est vide. |
-| Taux de rejet des alertes décidées (%) | Parmi les alertes avec décision finale `valide` ou `rejete`, part des décisions `rejete`. Les décisions `a_investiguer` et les alertes sans décision finale sont exclues. C'est un taux de rejet, pas la précision du modèle. |
-| Factures avec prédiction (%) | Part des factures de la période disposant d'une prédiction. Ce taux de couverture permet d'interpréter le rappel et d'identifier un scoring incomplet. |
-| Volume de factures par mois | Nombre de factures par mois de `date_facture`, toutes devises confondues. |
-| Montants facturés vs alertés par mois (MGA) | Sommes mensuelles en MGA de `montant_total`, pour toutes les factures et pour le sous-ensemble alerté. Les autres devises sont exclues de cette carte. |
-| Top 10 prestataires alertés (factures) | Prestataires ayant le plus grand nombre de factures alertées dans la période. |
+| Factures traitées | Nombre de factures de la période. |
+| Montant total réclamé | Somme de `montant_total`. |
+| Montant à risque | Somme du réclamé des factures en alerte, avant décision. |
+| Montant économisé | Somme de `montant_reclame - montant_calcule` pour les décisions `REJETER` et `CONFIRMER_FRAUDE`. |
+| Taux d'alerte | Factures en alerte / factures traitées. |
+| Précision opérationnelle | Fraudes confirmées / alertes décidées. |
+| Volume journalier | Factures et alertes groupées par `date_facture`. |
+| Distribution des scores | Histogramme en dix tranches sur `[0, 1]`. |
+| Top prestataires à risque | Prestataires ayant le plus d'alertes. |
 
 Le jeu fourni est en MGA. Si d'autres devises sont introduites, adapter les
 cartes monétaires pour ne jamais additionner des devises différentes. Pour
@@ -51,7 +58,7 @@ taux de rejet restent vides plutôt que de laisser croire à un montant nul.
    base, le loader et Metabase :
 
    ```sh
-   docker compose up -d db loader metabase metabase-init
+   docker compose up -d db loader bi-refresh metabase metabase-init
    ```
 
    `metabase-db-init` crée la base applicative `metabase_app` si elle n'existe

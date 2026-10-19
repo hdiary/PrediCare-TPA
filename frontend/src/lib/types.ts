@@ -126,6 +126,27 @@ export interface KPIData {
   series: { date: string; invoices: number; alerts: number; saved: number }[];
 }
 
+export interface BIKpiData {
+  factures_traitees: number;
+  alertes_generees: number;
+  alertes_en_attente: number;
+  alertes_traitees: number;
+  alertes_escaladees: number;
+  montant_reclame: number;
+  montant_a_risque: number;
+  montant_economise: number;
+  fraudes_confirmees: number;
+  alertes_decidees: number;
+  taux_alerte: number;
+  precision_operationnelle: number | null;
+  date_rafraichissement: string;
+  stale: boolean;
+  par_jour: { jour: string; factures: number; alertes: number }[];
+  top_prestataires: { prestataire_id: string; prestataire_nom: string; alertes: number }[];
+  distribution_scores: { bucket: number; count: number }[];
+  notifications: { etat: string; count: number }[];
+}
+
 export interface ServiceStatus {
   api: ServiceState;
   database: ServiceState;
