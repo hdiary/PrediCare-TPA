@@ -50,7 +50,7 @@ export function AdminModels() {
     });
   };
 
-  if (loading) return <div className="space-y-4"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
+  if (loading) return <div className="space-y-5"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   if (error) return <ErrorState message="Impossible de charger les modèles." onRetry={load} />;
 
   return (
@@ -72,13 +72,13 @@ export function AdminModels() {
           <table className="w-full">
             <thead>
               <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                <th className="px-6 py-3">Version</th>
-                <th className="px-6 py-3">Date</th>
-                <th className="px-6 py-3 text-right">Recall</th>
-                <th className="px-6 py-3 text-right">Précision</th>
-                <th className="px-6 py-3">Statut</th>
-                <th className="px-6 py-3">Comparer</th>
-                <th className="px-6 py-3 text-right">Action</th>
+                <th className="px-6 py-3.5">Version</th>
+                <th className="px-6 py-3.5">Date</th>
+                <th className="px-6 py-3.5 text-right">Recall</th>
+                <th className="px-6 py-3.5 text-right">Précision</th>
+                <th className="px-6 py-3.5">Statut</th>
+                <th className="px-6 py-3.5">Comparer</th>
+                <th className="px-6 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">

@@ -56,7 +56,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
   };
 
   return (
-    <aside className={`${collapsed ? 'w-20' : 'w-64'} flex-shrink-0 h-screen sticky top-0 bg-surface-100 dark:bg-surface-800 border-r border-surface-300/80 dark:border-surface-700 flex flex-col transition-all duration-300 hidden md:flex`}>
+    <aside className={`${collapsed ? 'w-20' : 'w-64'} flex-shrink-0 h-screen sticky top-0 bg-surface-100 dark:bg-surface-850 border-r border-surface-300/80 dark:border-surface-700 flex flex-col transition-all duration-300 hidden md:flex`}>
       <div className="flex items-center justify-between px-4 py-4 border-b border-surface-300/60 dark:border-surface-700">
         {collapsed ? <div className="w-10 h-10 mx-auto"><Logo size="sm" /></div> : <Logo />}
         <button
@@ -75,9 +75,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                 to={item.to}
                 end={item.to === '/gestionnaire' || item.to === '/admin' || item.to === '/assurant' || item.to === '/professionnel'}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  `flex items-center gap-3 px-3.5 h-11 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-surface-200 text-surface-900 dark:bg-surface-700 dark:text-white [&>svg]:text-primary-600'
+                      ? 'bg-surface-200 text-surface-900 dark:bg-surface-700 dark:text-white [&>svg]:text-primary-700 dark:[&>svg]:text-primary-400'
                       : 'text-surface-600 dark:text-surface-300 hover:bg-surface-200/60 hover:text-surface-900 dark:hover:bg-surface-700'
                   } ${collapsed ? 'justify-center' : ''}`
                 }

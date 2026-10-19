@@ -92,7 +92,7 @@ export function AdminSupervision() {
 
       {/* Drift alert banner */}
       {driftHigh && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-danger-50 dark:bg-danger-900/30 border border-danger-200 dark:border-danger-800 animate-fade-in">
+        <div className="flex items-center gap-3 px-[18px] py-4 rounded-xl bg-danger-50 dark:bg-danger-900/30 border border-danger-200 dark:border-danger-800 animate-fade-in">
           <AlertTriangle className="w-5 h-5 text-danger-600 flex-shrink-0" />
           <p className="text-sm text-danger-700 dark:text-danger-300">
             <strong>Dérive du modèle détectée.</strong> Le PSI ({metrics.drift_psi.toFixed(3)}) dépasse le seuil de 0,10. Une réévaluation du modèle est recommandée.
@@ -105,7 +105,7 @@ export function AdminSupervision() {
         {Object.entries(status).map(([key, state]) => (
           <Card key={key} className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-9 h-9 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-500 dark:text-surface-300">
+              <div className="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-500 dark:text-surface-300">
                 {SERVICE_ICONS[key]}
               </div>
               <span className={`w-2.5 h-2.5 rounded-full ${serviceStateColor(state)} ${state !== 'ok' ? 'animate-pulse' : ''}`} />
@@ -120,7 +120,7 @@ export function AdminSupervision() {
 
       {/* Live metrics charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
+        <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <Timer className="w-4 h-4 text-surface-400" />
             <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Latence p95 (ms)</h3>
@@ -129,20 +129,20 @@ export function AdminSupervision() {
             <AreaChart data={metrics.series}>
               <defs>
                 <linearGradient id="latGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#C15F3C" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="#C15F3C" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#14B8A6" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#14B8A6" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }} />
-              <Area type="monotone" dataKey="latency" stroke="#C15F3C" strokeWidth={2} fill="url(#latGrad)" name="Latence (ms)" />
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
+              <Area type="monotone" dataKey="latency" stroke="#14B8A6" strokeWidth={2} fill="url(#latGrad)" name="Latence (ms)" />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-surface-400" />
             <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Requêtes / min</h3>
@@ -151,37 +151,37 @@ export function AdminSupervision() {
             <AreaChart data={metrics.series}>
               <defs>
                 <linearGradient id="reqGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#788C5D" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="#788C5D" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#D9622B" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#D9622B" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }} />
-              <Area type="monotone" dataKey="requests" stroke="#788C5D" strokeWidth={2} fill="url(#reqGrad)" name="Requêtes/min" />
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
+              <Area type="monotone" dataKey="requests" stroke="#D9622B" strokeWidth={2} fill="url(#reqGrad)" name="Requêtes/min" />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4 h-4 text-surface-400" />
             <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Taux d'erreur (%)</h3>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={metrics.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }} />
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
               <Line type="monotone" dataKey="errors" stroke="#C62828" strokeWidth={2} dot={false} name="Erreurs" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
 
         {/* Drift card */}
-        <Card className="p-6">
+        <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <TrendingDown className="w-4 h-4 text-surface-400" />
             <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Dérive du modèle (PSI)</h3>
@@ -210,10 +210,10 @@ export function AdminSupervision() {
           </div>
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={metrics.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#EAE7DC" className="dark:opacity-20" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#87867F' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#87867F' }} axisLine={false} tickLine={false} domain={[0, 0.2]} />
-              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E3DFD3', boxShadow: 'none', fontSize: '12px', padding: '10px 14px' }} />
+              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#86A8A4' }} axisLine={false} tickLine={false} domain={[0, 0.2]} />
+              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
               <Line type="monotone" dataKey="psi" stroke={driftHigh ? '#C62828' : '#2E7D32'} strokeWidth={2} dot={false} name="PSI" />
             </LineChart>
           </ResponsiveContainer>
