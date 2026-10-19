@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Receipt, Calendar, Euro, User, X } from 'lucide-react';
+import { Receipt, Calendar, Banknote, User, X } from 'lucide-react';
 import { Card, Badge, Button, Drawer, Skeleton, ErrorState, EmptyState } from '@/components/ui';
 import { api } from '@/lib/api';
-import { formatEUR, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
+import { formatMGA, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 
 const STATUS_FILTERS = [
@@ -92,8 +92,8 @@ export function ReimbursementsPage() {
                   >
                     <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 tabular-nums">{formatDate(inv.date)}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{inv.provider_pseudo || '—'}</td>
-                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums font-medium">{formatEUR(inv.amount)}</td>
-                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums">{formatEUR(inv.reimbursed_amount)}</td>
+                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums font-medium">{formatMGA(inv.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums">{formatMGA(inv.reimbursed_amount)}</td>
                     <td className="px-6 py-4">
                       <Badge className={INVOICE_STATUS_COLORS[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
                     </td>
@@ -139,21 +139,21 @@ export function ReimbursementsPage() {
 
             <div className="rounded-xl border border-surface-300/80 dark:border-surface-600 bg-surface-100 dark:bg-surface-700/50 p-4">
               <div className="flex items-center gap-2 text-surface-400 mb-3">
-                <Euro className="w-4 h-4" />
+                <Banknote className="w-4 h-4" />
                 <span className="text-xs font-medium">Montants</span>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-600 dark:text-surface-300">Montant facturé</span>
-                  <span className="font-medium tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(selected.amount)}</span>
+                  <span className="font-medium tabular-nums text-surface-800 dark:text-surface-100">{formatMGA(selected.amount)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-600 dark:text-surface-300">Montant remboursé</span>
-                  <span className="font-medium tabular-nums text-success-600">{formatEUR(selected.reimbursed_amount)}</span>
+                  <span className="font-medium tabular-nums text-success-600">{formatMGA(selected.reimbursed_amount)}</span>
                 </div>
                 <div className="border-t border-surface-200 dark:border-surface-600 pt-2 flex justify-between text-sm">
                   <span className="text-surface-600 dark:text-surface-300">Reste à charge</span>
-                  <span className="font-medium tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(selected.amount - selected.reimbursed_amount)}</span>
+                  <span className="font-medium tabular-nums text-surface-800 dark:text-surface-100">{formatMGA(selected.amount - selected.reimbursed_amount)}</span>
                 </div>
               </div>
             </div>
@@ -169,7 +169,7 @@ export function ReimbursementsPage() {
                         <span className="text-surface-700 dark:text-surface-200">{line.label}</span>
                         <span className="text-surface-400 ml-1">×{line.quantity}</span>
                       </div>
-                      <span className="font-medium tabular-nums text-surface-700 dark:text-surface-200">{formatEUR(line.amount)}</span>
+                      <span className="font-medium tabular-nums text-surface-700 dark:text-surface-200">{formatMGA(line.amount)}</span>
                     </div>
                   ))}
                 </div>

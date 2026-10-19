@@ -28,10 +28,10 @@ services:
       METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
 
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d
-    ports:
-      - "127.0.0.1:5432:5432"
+      - pgdata:/var/lib/postgresql/data # données persistantes
+      # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
+      # ports:
+      # - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
       interval: 10s
@@ -109,8 +109,8 @@ services:
     restart: "no"
   loader:
     build:
-      context: ./backend/ingestion
-      dockerfile: db_init/Dockerfile
+      context: .
+      dockerfile: backend/ingestion/db_init/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
       DATASET_DIR: /data/dataset
@@ -186,7 +186,7 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-    
+
   # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     # profiles: [ "full" ] # a decommenter pour activer l'API dans le container
@@ -197,6 +197,11 @@ services:
       DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
+      # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD-123465789}
+      SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD-12346798}
+      SEED_PDS_PASSWORD: ${SEED_PDS_PASSWORD-123456789}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-30}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@predicare.local}
@@ -261,7 +266,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -310,33 +315,13 @@ services:
       - api
     ports:
       - "5173:5173"
-
-  # ---------- Sauvegardes PostgreSQL chiffrées (optionnelles) ----------
-  # Activer avec : docker compose --profile backup up -d db-backup
-  db-backup:
-    profiles: [ "backup" ]
-    build: ./db/backup
-    restart: unless-stopped
-    environment:
-      PGHOST: db
-      PGPORT: 5432
-      PGDATABASE: ${POSTGRES_DB:-predicare}
-      PGUSER: ${POSTGRES_USER:-postgres}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
-      BACKUP_DIR: /backups
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
-      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
-    volumes:
-      - ./backups:/backups
-      - models_data:/models
-    depends_on:
-      db:
-        condition: service_healthy
-      loader:
-        condition: service_completed_successfully
-
-  # Metabase (service metabase) reads only the BI view using metabase_ro.
+  # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
+  # Se connecter avec le rôle bi_ro (lecture seule sur les vues), jamais avec POSTGRES_USER.
+  # superset:
+  #   image: apache/superset:<version>
+  #   environment:
+  #     SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+  #   ports: ["8088:8088"]
 
 volumes:
   pgdata:

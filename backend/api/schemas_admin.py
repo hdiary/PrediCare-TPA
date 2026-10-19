@@ -1,5 +1,6 @@
-"""Schémas des endpoints d'administration, de KPI et de supervision."""
-from datetime import date, datetime
+"""Schémas de l'écran d'administration (seuil d'alerte et canaux de notification)."""
+import re
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 

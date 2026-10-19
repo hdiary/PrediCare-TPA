@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Receipt, Search, FileText } from 'lucide-react';
 import { Card, Badge, Button, Drawer, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
 import { api } from '@/lib/api';
-import { formatEUR, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
+import { formatMGA, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
 
 const STATUS_FILTERS = [
@@ -110,7 +110,7 @@ export function ProviderInvoicesPage() {
                     <td className="px-6 py-4 text-sm font-mono font-medium text-surface-700 dark:text-surface-200">{inv.id}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 tabular-nums">{formatDate(inv.date)}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{inv.insured_pseudo || '—'}</td>
-                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums font-medium">{formatEUR(inv.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums font-medium">{formatMGA(inv.amount)}</td>
                     <td className="px-6 py-4">
                       <Badge className={INVOICE_STATUS_COLORS[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
                     </td>
@@ -161,11 +161,11 @@ export function ProviderInvoicesPage() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-600 dark:text-surface-300">Montant facturé</span>
-                  <span className="font-medium tabular-nums">{formatEUR(selected.amount)}</span>
+                  <span className="font-medium tabular-nums">{formatMGA(selected.amount)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-surface-600 dark:text-surface-300">Remboursé</span>
-                  <span className="font-medium tabular-nums text-success-600">{formatEUR(selected.reimbursed_amount)}</span>
+                  <span className="font-medium tabular-nums text-success-600">{formatMGA(selected.reimbursed_amount)}</span>
                 </div>
               </div>
             </div>

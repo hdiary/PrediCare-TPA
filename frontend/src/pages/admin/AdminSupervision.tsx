@@ -30,6 +30,7 @@ const STATE_LABELS: Record<string, string> = {
   ok: 'Opérationnel',
   degraded: 'Dégradé',
   down: 'Hors service',
+  unknown: 'Non surveillé',
 };
 
 export function AdminSupervision() {
@@ -108,7 +109,7 @@ export function AdminSupervision() {
               <div className="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-500 dark:text-surface-300">
                 {SERVICE_ICONS[key]}
               </div>
-              <span className={`w-2.5 h-2.5 rounded-full ${serviceStateColor(state)} ${state !== 'ok' ? 'animate-pulse' : ''}`} />
+              <span className={`w-2.5 h-2.5 rounded-full ${serviceStateColor(state)} ${state === 'degraded' || state === 'down' ? 'animate-pulse' : ''}`} />
             </div>
             <p className="text-sm font-semibold text-surface-700 dark:text-surface-200">{SERVICE_LABELS[key]}</p>
             <p className={`text-xs mt-0.5 ${state === 'ok' ? 'text-success-600' : state === 'degraded' ? 'text-warning-600' : 'text-danger-600'}`}>

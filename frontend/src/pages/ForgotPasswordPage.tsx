@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, AlertCircle, MailCheck, ArrowLeft } from 'lucide-react';
 import { AuthLayout } from '@/components/AuthLayout';
 import { Button, Input, Spinner } from '@/components/ui';
-import { api, USE_MOCKS } from '@/lib/api';
+import { api, isMock } from '@/lib/api';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -42,7 +42,7 @@ export function ForgotPasswordPage() {
           <p className="text-xs text-surface-500 dark:text-surface-400">
             Rien reçu ? Vérifiez vos courriers indésirables, ou refaites une demande.
           </p>
-          {USE_MOCKS && (
+          {isMock('password') && (
             <Link
               to="/reinitialiser-mot-de-passe?token=demo"
               className="w-full text-xs rounded-xl border border-dashed border-surface-300 dark:border-surface-600 p-3 text-surface-600 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-700"

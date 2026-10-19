@@ -35,7 +35,10 @@ def categorie_existe(conn, type_facture: str) -> bool:
 
 
 def lookup_codes(conn, codes: list[str]) -> dict[str, dict]:
-    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}} (équivaut à ref_codes)."""
+    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}}.
+
+    Équivaut à ref_codes.
+    """
     rows = conn.execute(
         "SELECT code_acte AS code, 'ACTE' AS type_ligne, libelle FROM referentiel_actes "
         "WHERE code_acte = ANY(%s) "
@@ -80,7 +83,9 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date, calculation: 
     covered = calculation.get("montant_rembourse", 0)
     remaining = calculation.get("reste_a_charge", total)
     date_soin = date.fromisoformat(clean["date_soin"])
-    date_facture = date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    date_facture = (
+        date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    )
     date_reception = (
         date.fromisoformat(clean["date_reception"]) if clean.get("date_reception")
         else date_reception_defaut
@@ -107,7 +112,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date, calculation: 
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO lignes_facture (ligne_id, facture_id, num_ligne, code, type_ligne, "
-            "libelle, quantite, prix_unitaire, montant) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "libelle, quantite, prix_unitaire, montant) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             [
                 (f"{clean['facture_id']}-L{ln['num_ligne']:02d}", clean["facture_id"],
                  ln["num_ligne"], ln["code"], ln["type_ligne"], ln["libelle"],
@@ -366,84 +372,167 @@ def insert_alert(conn, *, facture_id: str, codes: list[str], priority: str = "MO
 
 def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
-        "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "
-        "FROM alertes_prescription WHERE prediction_id = %s ORDER BY alerte_regle_id",
-        (prediction_id,),
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs {clause} "
+        f"ORDER BY utilisateur_id{pagination}",
+        params,
     ).fetchall()
 
 
-# ---------- KPI (P3-15) ----------
-
-def kpi_summary(conn, jours: int) -> dict:
-    """Agrégats sur la période (jours derniers jours). Aucune donnée personnelle."""
-    row = conn.execute(
-        "SELECT count(*) AS factures_scorees, "
-        "count(*) FILTER (WHERE p.est_alerte) AS alertes_total, "
-        "count(*) FILTER (WHERE p.est_alerte AND d.decision IS NULL) AS alertes_en_attente, "
-        "count(*) FILTER (WHERE d.decision IS NOT NULL) AS alertes_traitees, "
-        "count(*) FILTER (WHERE d.decision = 'fraude_confirmee') AS fraudes_confirmees, "
-        "count(*) FILTER (WHERE d.decision = 'faux_positif') AS faux_positifs, "
-        "count(*) FILTER (WHERE d.decision = 'a_investiguer') AS a_investiguer, "
-        "COALESCE(sum(f.montant_total) FILTER (WHERE p.est_alerte AND d.decision IS NULL), 0) "
-        "AS montant_en_attente, "
-        "COALESCE(sum(f.montant_total) FILTER (WHERE d.decision = 'fraude_confirmee'), 0) "
-        "AS montant_fraude_confirmee, "
-        "COALESCE(avg(p.score), 0) AS score_moyen "
-        "FROM predictions p JOIN factures f ON f.facture_id = p.facture_id "
-        f"{_DERNIERE_DECISION} "
-        "WHERE p.date >= now() - make_interval(days => %s)",
-        (jours,),
-    ).fetchone()
-    return dict(row)
-
-
-def kpi_economies(conn, jours: int) -> int:
-    """Somme des montants économisés saisis par les gestionnaires (dernière décision de chaque alerte)."""
-    row = conn.execute(
-        "SELECT COALESCE(sum(d.montant_economise), 0) AS total "
-        "FROM predictions p JOIN LATERAL (SELECT decision, montant_economise "
-        "FROM decisions_gestionnaire WHERE prediction_id = p.prediction_id "
-        "ORDER BY date_decision DESC, decision_id DESC LIMIT 1) d ON TRUE "
-        "WHERE d.decision = 'fraude_confirmee' AND p.date >= now() - make_interval(days => %s)",
-        (jours,),
-    ).fetchone()
-    return int(row["total"])
-
-
-def kpi_par_jour(conn, jours: int) -> list[dict]:
+def get_utilisateur(conn, user_id: int) -> dict | None:
     return conn.execute(
-        "SELECT p.date::date AS jour, count(*) AS factures, "
-        "count(*) FILTER (WHERE p.est_alerte) AS alertes "
-        "FROM predictions p WHERE p.date >= now() - make_interval(days => %s) "
-        "GROUP BY 1 ORDER BY 1",
-        (jours,),
-    ).fetchall()
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+    ).fetchone()
 
 
-def kpi_regles(conn, jours: int) -> list[dict]:
+def get_utilisateur_par_email(conn, email: str) -> dict | None:
     return conn.execute(
-        "SELECT regle_code, count(*) AS n FROM alertes_prescription "
-        "WHERE cree_le >= now() - make_interval(days => %s) GROUP BY 1 ORDER BY n DESC",
-        (jours,),
-    ).fetchall()
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE email = %s", (email,)
+    ).fetchone()
 
 
-# ---------- configuration modifiable (P3-17) ----------
+def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT mot_de_passe_hash FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+    ).fetchone()
+    return row["mot_de_passe_hash"] if row else None
 
-def set_config(conn, cle: str, valeur: str, par: str) -> None:
+
+def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
+                       assure_id: str | None, prestataire_id: str | None,
+                       actif: bool) -> dict | None:
+    """Crée un compte ; retourne None si l'adresse existe déjà (aucune erreur levée)."""
+    return conn.execute(
+        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, prestataire_id, "
+        "actif) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING "
+        f"RETURNING {_COLS_UTILISATEUR}",
+        (email, password_hash, role, assure_id, prestataire_id, actif),
+    ).fetchone()
+
+
+def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
+    """Met à jour les seuls champs autorisés (noms de colonnes jamais issus du client)."""
+    inconnus = set(champs) - _CHAMPS_MODIFIABLES
+    if inconnus:
+        raise ValueError(f"Champs non modifiables : {sorted(inconnus)}")
+    if not champs:
+        return get_utilisateur(conn, user_id)
+    sets = ", ".join(f"{k} = %s" for k in champs)
+    return conn.execute(
+        f"UPDATE utilisateurs SET {sets} WHERE utilisateur_id = %s RETURNING {_COLS_UTILISATEUR}",
+        [*champs.values(), user_id],
+    ).fetchone()
+
+
+def set_mot_de_passe(conn, user_id: int, password_hash: str) -> None:
+    """Change le mot de passe et lève un éventuel verrouillage de connexion."""
     conn.execute(
-        "INSERT INTO configuration (cle, valeur, mis_a_jour_le, mis_a_jour_par) "
-        "VALUES (%s, %s, now(), %s) "
-        "ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, "
-        "mis_a_jour_le = now(), mis_a_jour_par = EXCLUDED.mis_a_jour_par",
-        (cle, valeur, par),
+        "UPDATE utilisateurs SET mot_de_passe_hash = %s, tentatives_echouees = 0, "
+        "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
+        (password_hash, user_id),
     )
 
 
-def get_config_row(conn, cle: str) -> dict | None:
+def deverrouiller_utilisateur(conn, user_id: int) -> bool:
+    cur = conn.execute(
+        "UPDATE utilisateurs SET tentatives_echouees = 0, verrouille_jusqua = NULL "
+        "WHERE utilisateur_id = %s",
+        (user_id,),
+    )
+    return cur.rowcount > 0
+
+
+def est_verrouille(conn, user_id: int) -> bool:
+    row = conn.execute(
+        "SELECT (verrouille_jusqua IS NOT NULL AND verrouille_jusqua > now()) AS v "
+        "FROM utilisateurs WHERE utilisateur_id = %s",
+        (user_id,),
+    ).fetchone()
+    return bool(row and row["v"])
+
+
+def enregistrer_echec_mot_de_passe(conn, user_id: int, max_tentatives: int,
+                                   minutes_verrou: int) -> None:
+    """Même compteur que la connexion : après N échecs, le compte est verrouillé."""
+    conn.execute(
+        "UPDATE utilisateurs SET "
+        "tentatives_echouees = CASE WHEN tentatives_echouees + 1 >= %s "
+        "THEN 0 ELSE tentatives_echouees + 1 END, "
+        "verrouille_jusqua = CASE WHEN tentatives_echouees + 1 >= %s "
+        "THEN now() + make_interval(mins => %s) ELSE verrouille_jusqua END "
+        "WHERE utilisateur_id = %s",
+        (max_tentatives, max_tentatives, minutes_verrou, user_id),
+    )
+
+
+# ---------- jetons de réinitialisation de mot de passe ----------
+# Seul le hachage SHA-256 du jeton est stocké : une fuite de la base ne donne aucun lien valide.
+# La table est créée à la première utilisation si les migrations ne l'ont pas déjà fait
+# (voir aussi api/sql/001_reinitialisations_mdp.sql).
+
+_reset_table_ready = False
+
+
+def ensure_reset_table(conn) -> None:
+    global _reset_table_ready
+    if _reset_table_ready:
+        return
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS reinitialisations_mdp ("
+            "reset_id BIGSERIAL PRIMARY KEY, "
+            "utilisateur_id INTEGER NOT NULL REFERENCES utilisateurs(utilisateur_id) "
+            "ON DELETE CASCADE, "
+            "token_hash TEXT NOT NULL UNIQUE, "
+            "cree_le TIMESTAMPTZ NOT NULL DEFAULT now(), "
+            "expire_le TIMESTAMPTZ NOT NULL, "
+            "utilise_le TIMESTAMPTZ)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_reinitialisations_mdp_utilisateur "
+            "ON reinitialisations_mdp (utilisateur_id)"
+        )
+        conn.commit()   # le DDL ne doit pas être annulé par un échec ultérieur de la requête
+    except (psycopg.errors.DuplicateTable, psycopg.errors.UniqueViolation,
+            psycopg.errors.DuplicateObject):
+        conn.rollback()   # un autre processus l'a créée en même temps
+    _reset_table_ready = True
+
+
+def compter_demandes_reinitialisation(conn, user_id: int, minutes: int = 60) -> int:
+    ensure_reset_table(conn)
     return conn.execute(
-        "SELECT cle, valeur, mis_a_jour_le, mis_a_jour_par FROM configuration WHERE cle = %s",
-        (cle,),
+        "SELECT count(*) AS n FROM reinitialisations_mdp "
+        "WHERE utilisateur_id = %s AND cree_le > now() - make_interval(mins => %s)",
+        (user_id, minutes),
+    ).fetchone()["n"]
+
+
+def creer_jeton_reinitialisation(conn, user_id: int, token_hash: str, ttl_minutes: int) -> None:
+    """Enregistre un nouveau jeton et invalide les précédents du même compte."""
+    ensure_reset_table(conn)
+    conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE utilisateur_id = %s AND utilise_le IS NULL",
+        (user_id,),
+    )
+    conn.execute(
+        "DELETE FROM reinitialisations_mdp WHERE expire_le < now() - interval '7 days'"
+    )
+    conn.execute(
+        "INSERT INTO reinitialisations_mdp (utilisateur_id, token_hash, expire_le) "
+        "VALUES (%s, %s, now() + make_interval(mins => %s))",
+        (user_id, token_hash, ttl_minutes),
+    )
+
+
+def consommer_jeton_reinitialisation(conn, token_hash: str) -> int | None:
+    """Usage unique et atomique : retourne l'utilisateur si le jeton est valide, sinon None."""
+    ensure_reset_table(conn)
+    row = conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE token_hash = %s AND utilise_le IS NULL AND expire_le > now() "
+        "RETURNING utilisateur_id",
+        (token_hash,),
     ).fetchone()
 
 
@@ -461,91 +550,61 @@ def list_audit(conn, type_evenement: str | None, limit: int, offset: int) -> lis
     if type_evenement:
         where, params = "WHERE type_evenement = %s", [type_evenement]
     return conn.execute(
-        "SELECT audit_id, horodatage, type_evenement, utilisateur_id, type_entite, entite_id, "
-        "nom_modele, version_modele, entree, sortie FROM journal_audit "
-        f"{where} ORDER BY audit_id DESC LIMIT %s OFFSET %s",
-        (*params, limit, offset),
+        "SELECT p.facture_id, p.score, d.decision, d.date_decision, d.gestionnaire_id "
+        "FROM decisions_gestionnaire d "
+        "JOIN predictions p ON p.prediction_id = d.prediction_id "
+        "JOIN factures f ON f.facture_id = p.facture_id "
+        "WHERE f.prestataire_id = %s AND p.facture_id <> %s "
+        "ORDER BY d.date_decision DESC, d.decision_id DESC LIMIT %s",
+        (prestataire_id, hors_facture_id, limit),
     ).fetchall()
 
+# ---------- référentiels pour pdf_extract ----------
 
-def rollback_target(conn, current_version: str, limit: int = 50) -> str | None:
-    """Version à restaurer : celle qui était active avant l'activation de la version courante.
+def load_reference_tables(conn) -> dict:
+    """Charge les 3 tables nécessaires à pdf_extract.build_reference()."""
+    rows_actes = conn.execute(
+        "SELECT code_acte AS code, libelle FROM referentiel_actes"
+    ).fetchall()
+    rows_meds = conn.execute(
+        "SELECT code_medicament AS code, libelle FROM referentiel_medicaments"
+    ).fetchall()
+    rows_prestataires = conn.execute(
+        "SELECT prestataire_id, nom, nif, numero_onm FROM prestataires"
+    ).fetchall()
 
-    S'appuie sur le journal d'audit (événements `modele_charge`, champ previous_version).
+    return {
+        "referentiel_actes": [dict(r) for r in rows_actes],
+        "referentiel_medicaments": [dict(r) for r in rows_meds],
+        "prestataires": [dict(r) for r in rows_prestataires],
+    }
+    """Charge les 3 tables nécessaires à pdf_extract.build_reference().
+
+    Seul endroit qui connaît les colonnes utilisées par l'extraction PDF :
+      - referentiel_actes(code_acte, libelle)
+      - referentiel_medicaments(code_medicament, libelle)
+      - prestataires(prestataire_id, nom, nif, numero_onm)
     """
-    rows = conn.execute(
-        "SELECT entree->>'previous_version' AS prev, sortie->>'active_version' AS v "
-        "FROM journal_audit WHERE type_evenement = 'modele_charge' "
-        "ORDER BY audit_id DESC LIMIT %s",
-        (limit,),
+    rows_actes = conn.execute(
+        "SELECT code_acte AS code, libelle FROM referentiel_actes"
     ).fetchall()
-    for r in rows:
-        if r["v"] == current_version and r["prev"] and r["prev"] != current_version:
-            return r["prev"]
-    return None
+    rows_meds = conn.execute(
+        "SELECT code_medicament AS code, libelle FROM referentiel_medicaments"
+    ).fetchall()
+    rows_prestataires = conn.execute(
+        "SELECT prestataire_id, nom, nif, numero_onm FROM prestataires"
+    ).fetchall()
+
+    return {
+        "referentiel_actes":    [dict(r) for r in rows_actes],
+        "referentiel_medicaments": [dict(r) for r in rows_meds],
+        "prestataires":         [dict(r) for r in rows_prestataires],
+    }
 
 
-# ---------- métriques et dérive (P3-18 / P3-19) ----------
-
-def metrics_predictions(conn, hours: int) -> dict:
+def contrat_de_assure(conn, assure_id: str) -> str | None:
+    """Contrat auquel est rattaché l'assuré (le PDF de facture ne le mentionne pas)."""
     row = conn.execute(
-        "SELECT count(*) AS volume, count(*) FILTER (WHERE est_alerte) AS alertes, "
-        "percentile_cont(0.5) WITHIN GROUP (ORDER BY latence_ms) AS p50, "
-        "percentile_cont(0.95) WITHIN GROUP (ORDER BY latence_ms) AS p95, "
-        "max(latence_ms) AS max_latence "
-        "FROM predictions WHERE date >= now() - make_interval(hours => %s)",
-        (hours,),
+        "SELECT contrat_id FROM assures WHERE assure_id = %s", (assure_id,)
     ).fetchone()
-    return dict(row)
-
-
-def metrics_audit_counts(conn, hours: int) -> dict[str, int]:
-    rows = conn.execute(
-        "SELECT type_evenement, count(*) AS n FROM journal_audit "
-        "WHERE horodatage >= now() - make_interval(hours => %s) GROUP BY 1",
-        (hours,),
-    ).fetchall()
-    return {r["type_evenement"]: int(r["n"]) for r in rows}
-
-
-def drift_reference_variables(conn, size: int) -> list[dict]:
-    """Référence = les `size` premières prédictions (distribution de départ)."""
-    rows = conn.execute(
-        "SELECT variables FROM predictions WHERE variables IS NOT NULL "
-        "ORDER BY prediction_id ASC LIMIT %s", (size,)
-    ).fetchall()
-    return [r["variables"] for r in rows]
-
-
-def drift_current_variables(conn, days: int, skip_first: int) -> list[dict]:
-    """Courant = prédictions des `days` derniers jours, hors échantillon de référence."""
-    rows = conn.execute(
-        "SELECT variables FROM predictions WHERE variables IS NOT NULL "
-        "AND date >= now() - make_interval(days => %s) "
-        "AND prediction_id > (SELECT COALESCE(max(prediction_id), 0) FROM ("
-        "  SELECT prediction_id FROM predictions ORDER BY prediction_id ASC LIMIT %s) r) "
-        "ORDER BY prediction_id ASC",
-        (days, skip_first),
-    ).fetchall()
-    return [r["variables"] for r in rows]
-
-
-def recent_shap_importance(conn, limit: int = 300) -> dict[str, float]:
-    """Importance moyenne |SHAP| par variable (sur les dernières explications)."""
-    rows = conn.execute(
-        "SELECT valeurs->'toutes' AS toutes FROM explications_shap "
-        "ORDER BY prediction_id DESC LIMIT %s", (limit,)
-    ).fetchall()
-    sums: dict[str, float] = {}
-    n = 0
-    for r in rows:
-        toutes = r["toutes"]
-        if not isinstance(toutes, dict):
-            continue
-        n += 1
-        for k, v in toutes.items():
-            try:
-                sums[k] = sums.get(k, 0.0) + abs(float(v))
-            except (TypeError, ValueError):
-                continue
-    return {k: v / n for k, v in sums.items()} if n else {}
+    return row["contrat_id"] if row else None

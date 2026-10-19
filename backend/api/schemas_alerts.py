@@ -42,7 +42,9 @@ class AlertSummary(BaseModel):
     version_modele: str
     date: datetime
     montant_total: int | None = None
-    nb_regles: int = 0
+    prestataire_id: str | None = None
+    assure_id: str | None = None
+    type_facture: str | None = None
     derniere_decision: DecisionValue | None = None
     date_decision: datetime | None = None
     type: str = "FRAUDE"

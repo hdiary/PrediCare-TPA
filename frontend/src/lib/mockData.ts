@@ -1,4 +1,5 @@
 import type {
+  UserRow,
   Alert,
   PrescriptionAlert,
   AlertDetail,
@@ -288,4 +289,16 @@ export const mockPrescriptionAlerts: PrescriptionAlert[] = [
   { id: 'PRA-005', prescription_id: 'ORD-0044298', rule: 'DOUBLON_PRESCRIPTION', severity: 2, detail: 'mêmes lignes déjà prescrites il y a 1 j (même prescripteur)', diagnosis: 'Gastrite', prescription_date: '2026-06-02', prescriber_pseudo: 'PRS-0078', insured_pseudo: 'ASS-004225' },
   { id: 'PRA-006', prescription_id: 'ORD-0036677', rule: 'INADEQUATION_DIAGNOSTIC', severity: 2, detail: "LAB-GE, LAB-ECBU jamais prescrit pour « Rhinite allergique »", diagnosis: 'Rhinite allergique', prescription_date: '2026-04-08', prescriber_pseudo: 'PRS-0102', insured_pseudo: 'ASS-004226' },
   { id: 'PRA-007', prescription_id: 'ORD-0040215', rule: 'PRESCRIPTEUR_INCOMPATIBLE', severity: 2, detail: 'PEDIATRIE : « Trouble anxieux » hors de son champ habituel', diagnosis: 'Trouble anxieux', prescription_date: '2026-02-17', prescriber_pseudo: 'PRS-0063', insured_pseudo: 'ASS-004227' },
+];
+
+export const mockUserRows: UserRow[] = [
+  ...MOCK_ACCOUNTS.map((acc) => ({
+    pseudonym: acc.pseudonym, display_name: acc.display_name, role: acc.role, email: acc.email, status: 'active' as const,
+  })),
+  { pseudonym: 'GST-0008', display_name: 'Gestionnaire A', role: 'manager', email: 'gst8@predicare.fr', status: 'active' },
+  { pseudonym: 'GST-0011', display_name: 'Gestionnaire B', role: 'manager', email: 'gst11@predicare.fr', status: 'inactive' },
+  { pseudonym: 'PRS-0052', display_name: 'Praticien B', role: 'provider', email: 'prs52@predicare.fr', status: 'active' },
+  { pseudonym: 'PRS-0078', display_name: 'Praticien C', role: 'provider', email: 'prs78@predicare.fr', status: 'active' },
+  { pseudonym: 'ASS-004218', display_name: 'Assuré B', role: 'insured', email: 'ass4218@predicare.fr', status: 'active' },
+  { pseudonym: 'ASS-004219', display_name: 'Assuré C', role: 'insured', email: 'ass4219@predicare.fr', status: 'active' },
 ];

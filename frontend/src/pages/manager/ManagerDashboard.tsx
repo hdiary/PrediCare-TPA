@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  TrendingUp, TrendingDown, FileText, Euro, Target, AlertTriangle,
+  TrendingUp, TrendingDown, FileText, Banknote, Target, AlertTriangle,
   ArrowRight, Clock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -86,7 +86,7 @@ export function ManagerDashboard() {
 
         <Card className="p-8">
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Montant économisé</h3>
-          <p className="text-xs text-surface-400 mb-4">Par semaine (EUR)</p>
+          <p className="text-xs text-surface-400 mb-4">Par semaine (MGA)</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={kpis.par_jour.map((point) => ({ date: point.jour, saved: 0 }))}>
               <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
@@ -94,7 +94,7 @@ export function ManagerDashboard() {
               <YAxis tick={{ fontSize: 12, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
               <Tooltip cursor={{ fill: "rgba(134,168,164,0.12)" }}
                 contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }}
-                formatter={(value) => [formatEUR(Number(value)), 'Économisé']}
+                formatter={(value) => [formatMGA(Number(value)), 'Économisé']}
               />
               <Bar dataKey="saved" fill="#14B8A6" radius={[6, 6, 0, 0]} barSize={28} name="Économisé" />
             </BarChart>

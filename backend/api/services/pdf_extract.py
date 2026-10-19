@@ -260,19 +260,98 @@ def extract_document(pdf_bytes: bytes, ref: dict | None = None) -> Extraction:
     res.data.pop("patient_present", None)
     return res
 
-
 def build_reference(tables: dict) -> dict:
-    """Référentiels pour les contrôles (à construire une fois depuis la base)."""
-    acts = tables["referentiel_actes"].rename(columns={"code_acte": "code"})[["code", "libelle"]]
-    meds = tables["referentiel_medicaments"].rename(columns={"code_medicament": "code"})[["code", "libelle"]]
-    import pandas as pd
-    both = pd.concat([acts, meds], ignore_index=True)
-    p = tables["prestataires"]
+    """Référentiels pour les contrôles (à construire une fois depuis la base).
+
+    `tables` : dictionnaire de listes de dicts — clés 'referentiel_actes',
+    'referentiel_medicaments', 'prestataires'.
+    """
+    acts = tables["referentiel_actes"]
+    meds = tables["referentiel_medicaments"]
+    both = [
+        {"code": a["code"], "libelle": a["libelle"]} for a in acts
+    ] + [
+        {"code": m["code"], "libelle": m["libelle"]} for m in meds
+    ]
+
+    prestataires = tables["prestataires"]
+
+    nif_to_prestataire = {
+        str(p["nif"]): p["prestataire_id"]
+        for p in prestataires
+        if p.get("nif") not in (None, "", "nan")
+    }
+
+    onm_to_prestataire = {
+        p["numero_onm"]: p["prestataire_id"]
+        for p in prestataires
+        if isinstance(p.get("numero_onm"), str) and p["numero_onm"]
+    }
+
+    # Noms uniques seulement (un nom en double est ambigu → ignoré)
+    nom_counter: dict[str, int] = {}
+    for p in prestataires:
+        if p.get("nom"):
+            key = _norm(p["nom"])
+            nom_counter[key] = nom_counter.get(key, 0) + 1
+
+    name_to_prestataire = {
+        _norm(p["nom"]): p["prestataire_id"]
+        for p in prestataires
+        if p.get("nom") and nom_counter.get(_norm(p["nom"])) == 1
+    }
+
     return {
-        "codes": set(both["code"]),
-        "label_to_code": {_norm(l): c for c, l in zip(both["code"], both["libelle"])},
-        "nif_to_prestataire": {str(n): i for n, i in zip(p["nif"], p["prestataire_id"]) if str(n) != "nan"},
-        "onm_to_prestataire": {n: i for n, i in zip(p["numero_onm"], p["prestataire_id"]) if isinstance(n, str)},
-        "name_to_prestataire": {_norm(n): i for n, i in zip(p["nom"], p["prestataire_id"])
-                                if list(p["nom"]).count(n) == 1},   # noms uniques seulement
+        "codes": {row["code"] for row in both},
+        "label_to_code": {_norm(row["libelle"]): row["code"] for row in both},
+        "nif_to_prestataire": nif_to_prestataire,
+        "onm_to_prestataire": onm_to_prestataire,
+        "name_to_prestataire": name_to_prestataire,
+    }
+    """Référentiels pour les contrôles (à construire une fois depuis la base).
+
+    `tables` : dictionnaire de listes de dicts — clés 'referentiel_actes',
+    'referentiel_medicaments', 'prestataires'.
+    """
+    acts = tables["referentiel_actes"]
+    meds = tables["referentiel_medicaments"]
+    both = [
+        {"code": a["code"], "libelle": a["libelle"]} for a in acts
+    ] + [
+        {"code": m["code"], "libelle": m["libelle"]} for m in meds
+    ]
+
+    prestataires = tables["prestataires"]
+
+    nif_to_prestataire = {
+        str(p["nif"]): p["prestataire_id"]
+        for p in prestataires
+        if p.get("nif") not in (None, "", "nan")
+    }
+
+    onm_to_prestataire = {
+        p["numero_onm"]: p["prestataire_id"]
+        for p in prestataires
+        if isinstance(p.get("numero_onm"), str) and p["numero_onm"]
+    }
+
+    # Noms uniques seulement (un nom en double est ambigu → ignoré)
+    nom_counter: dict[str, int] = {}
+    for p in prestataires:
+        if p.get("nom"):
+            key = _norm(p["nom"])
+            nom_counter[key] = nom_counter.get(key, 0) + 1
+
+    name_to_prestataire = {
+        _norm(p["nom"]): p["prestataire_id"]
+        for p in prestataires
+        if p.get("nom") and nom_counter.get(_norm(p["nom"])) == 1
+    }
+
+    return {
+        "codes": {row["code"] for row in both},
+        "label_to_code": {_norm(row["libelle"]): row["code"] for row in both},
+        "nif_to_prestataire": nif_to_prestataire,
+        "onm_to_prestataire": onm_to_prestataire,
+        "name_to_prestataire": name_to_prestataire,
     }

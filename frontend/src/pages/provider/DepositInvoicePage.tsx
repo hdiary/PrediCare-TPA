@@ -1,13 +1,25 @@
 import { useState, useRef } from 'react';
 import {
   UploadCloud, FileText, Plus, Trash2, CheckCircle2,
-  AlertTriangle, ArrowLeft, File, Calendar, Euro, ClipboardList,
+  AlertTriangle, ArrowLeft, File, Calendar, Banknote, ClipboardList,
 } from 'lucide-react';
 import { Card, Button, Input, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
-import { formatEUR } from '@/lib/format';
+import { formatMGA } from '@/lib/format';
 import { useToast } from '@/components/ui/Toast';
 import type { InvoiceSubmissionResult, InvoicePrescription } from '@/lib/types';
+
+const INVOICE_TYPES = [
+  { value: 'CONSULTATION', label: 'Consultation' },
+  { value: 'DENTAIRE', label: 'Dentaire' },
+  { value: 'HOSPITALISATION', label: 'Hospitalisation' },
+  { value: 'IMAGERIE', label: 'Imagerie' },
+  { value: 'KINESITHERAPIE', label: 'Kinésithérapie' },
+  { value: 'LABORATOIRE', label: 'Laboratoire' },
+  { value: 'MATERNITE', label: 'Maternité' },
+  { value: 'OPTIQUE', label: 'Optique' },
+  { value: 'PHARMACIE', label: 'Pharmacie' },
+];
 
 interface InvoiceLineForm {
   id: string;
@@ -29,6 +41,10 @@ export function DepositInvoicePage() {
   ]);
   const [insuredPseudo, setInsuredPseudo] = useState('');
   const [careDate, setCareDate] = useState('');
+  const [careTime, setCareTime] = useState('08:00');
+  const [contractId, setContractId] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceType, setInvoiceType] = useState('CONSULTATION');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasPrescription, setHasPrescription] = useState(false);
   const [rxId, setRxId] = useState('');
@@ -46,9 +62,8 @@ export function DepositInvoicePage() {
       showToast('Le fichier ne doit pas dépasser 10 Mo', 'error');
       return;
     }
-    const validTypes = ['text/csv', 'application/json', 'application/pdf'];
-    if (!validTypes.includes(f.type) && !f.name.match(/\.(csv|json|pdf)$/i)) {
-      showToast('Format accepté: CSV, JSON ou PDF', 'error');
+    if (!f.name.match(/\.pdf$/i)) {
+      showToast('Seul le format PDF est accepté pour le moment (ou utilisez la saisie manuelle)', 'error');
       return;
     }
     setFile(f);
@@ -81,8 +96,12 @@ export function DepositInvoicePage() {
 
   const handleSubmit = async () => {
     if (mode === 'manual') {
-      if (!insuredPseudo || !careDate) {
+      if (!insuredPseudo || !careDate || !contractId || !invoiceNumber) {
         showToast('Veuillez remplir tous les champs requis', 'error');
+        return;
+      }
+      if (lines.some((l) => !l.code.trim() || l.quantity < 1 || l.unit_price <= 0)) {
+        showToast('Chaque ligne doit avoir un code, une quantité et un tarif positifs', 'error');
         return;
       }
     } else if (!file) {
@@ -115,30 +134,23 @@ export function DepositInvoicePage() {
         res = await api.submitInvoice({
           insured_pseudo: insuredPseudo,
           care_date: careDate,
+          care_time: careTime,
+          contract_id: contractId,
+          invoice_number: invoiceNumber,
+          invoice_type: invoiceType,
           lines,
           ...(prescription ? { prescription } : {}),
         });
       }
-      if (prescription && rxScan) {
+      if (res.status === 'accepted' && prescription && rxScan) {
         await api.uploadPrescriptionScan(res.invoice_id, rxScan);
       }
-      setResult({
-        invoice_id: 'FAC-2024-1049',
-        status: 'accepted',
-        errors: [],
-      });
+      setResult(res); // résultat réel : accepté, ou rejeté avec les motifs renvoyés par l'API
       setStep('result');
-      showToast('Facture déposée avec succès', 'success');
-    } catch {
-      setResult({
-        invoice_id: 'FAC-2024-1049',
-        status: 'rejected',
-        errors: [
-          { field: 'lines[2].code', message: 'Code d\'acte inconnu' },
-          { field: 'lines[3].quantity', message: 'Quantité invalide (max 10)' },
-        ],
-      });
-      setStep('result');
+      if (res.status === 'accepted') showToast('Facture déposée avec succès', 'success');
+    } catch (err) {
+      // erreur technique (réseau, serveur indisponible...) : on reste sur le formulaire
+      showToast(err instanceof Error ? err.message : 'Erreur lors du dépôt', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -148,6 +160,10 @@ export function DepositInvoicePage() {
     setStep('form');
     setFile(null);
     setResult(null);
+    setCareTime('08:00');
+    setContractId('');
+    setInvoiceNumber('');
+    setInvoiceType('CONSULTATION');
     setLines([{ id: crypto.randomUUID(), code: '', label: '', quantity: 1, unit_price: 0 }]);
     setInsuredPseudo('');
     setCareDate('');
@@ -264,7 +280,7 @@ export function DepositInvoicePage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,.json,.pdf"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
@@ -284,7 +300,7 @@ export function DepositInvoicePage() {
                   <p className="text-sm font-medium text-surface-700 dark:text-surface-200 mb-1">
                     Glissez votre fichier ici ou cliquez pour parcourir
                   </p>
-                  <p className="text-xs text-surface-400">CSV, JSON ou PDF · 10 Mo max</p>
+                  <p className="text-xs text-surface-400">Fichier PDF · 10 Mo max</p>
                 </>
               )}
             </div>
@@ -300,10 +316,41 @@ export function DepositInvoicePage() {
                 required
               />
               <Input
+                label="N° de contrat"
+                value={contractId}
+                onChange={(e) => setContractId(e.target.value)}
+                placeholder="CTR-000001"
+                required
+              />
+              <Input
+                label="N° de facture"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+                placeholder="PRE214/2026/00001"
+                required
+              />
+              <div>
+                <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1.5">Type de facture</label>
+                <select
+                  value={invoiceType}
+                  onChange={(e) => setInvoiceType(e.target.value)}
+                  className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3.5 py-2.5 text-sm text-surface-800 dark:text-surface-100"
+                >
+                  {INVOICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+              <Input
                 label="Date de soins"
                 type="date"
                 value={careDate}
                 onChange={(e) => setCareDate(e.target.value)}
+                required
+              />
+              <Input
+                label="Heure de soins"
+                type="time"
+                value={careTime}
+                onChange={(e) => setCareTime(e.target.value)}
                 required
               />
             </div>
@@ -349,7 +396,7 @@ export function DepositInvoicePage() {
                         />
                       </div>
                       <div className="col-span-4 md:col-span-3">
-                        <label className="text-xs text-surface-400">Tarif (EUR)</label>
+                        <label className="text-xs text-surface-400">Tarif (MGA)</label>
                         <input
                           type="number"
                           step="0.01"
@@ -371,9 +418,9 @@ export function DepositInvoicePage() {
 
               <div className="flex justify-end">
                 <div className="rounded-xl bg-surface-50 dark:bg-surface-700 px-[18px] py-4 flex items-center gap-2">
-                  <Euro className="w-4 h-4 text-surface-400" />
+                  <Banknote className="w-4 h-4 text-surface-400" />
                   <span className="text-sm text-surface-500">Total :</span>
-                  <span className="text-lg font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(total)}</span>
+                  <span className="text-lg font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatMGA(total)}</span>
                 </div>
               </div>
             </div>

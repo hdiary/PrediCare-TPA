@@ -1,8 +1,6 @@
 """Point d'entrée FastAPI de PrediCare TPA."""
 import logging
 import threading
-import time
-import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,18 +9,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api import db
-from api.bootstrap import ensure_demo_users
+from api.bootstrap import ensure_demo_users, ensure_seed_users
 from api.config import get_settings
 from api.routers import admin, alerts, auth, chat, factures, health, kpis, model, predict, ordonnances
 from api.services.metrics import http_metrics
+from api.logging_config import configure_logging
+from api.middleware import BodySizeLimitMiddleware
+from api.routers import admin, alerts, auth, health, invoices, predict
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
 from api.v1.router import router as api_v1_router
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
-)
+configure_logging()
 logger = logging.getLogger("predicare")
 
 
@@ -47,13 +45,7 @@ async def lifespan(_: FastAPI):
         logger.warning("JWT_SECRET faible ou par défaut : générer avec `openssl rand -hex 32`")
     db.init_pool()
     ensure_demo_users()
-    try:
-        from rag.factory import create_agent
-
-        app.state.rag_agent = create_agent()
-    except ValueError as exc:
-        app.state.rag_agent = None
-        logger.warning("rag_disabled: %s", exc)
+    ensure_seed_users()
     # En arrière-plan : un MLflow lent ou absent ne doit pas retarder le démarrage de l'API
     threading.Thread(target=_initial_model_load, daemon=True).start()
     yield
@@ -65,53 +57,20 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="PrediCare TPA API", version=health.VERSION, lifespan=lifespan)
 
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=get_settings().max_body_bytes)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    # En-têtes lisibles par le front (sans cela, le navigateur les masque en cross-origin)
-    expose_headers=["X-Total-Count", "X-Request-ID", "Retry-After"],
 )
-
-
-@app.middleware("http")
-async def observability(request: Request, call_next):
-    """Identifiant de requête (X-Request-ID) + métriques de volume, erreurs et latence (P3-18)."""
-    request.state.request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
-    started = time.perf_counter()
-    status_code = 500
-    try:
-        response = await call_next(request)
-        status_code = response.status_code
-        response.headers["X-Request-ID"] = request.state.request_id
-        return response
-    finally:
-        route = request.scope.get("route")
-        http_metrics.record(
-            request.method,
-            getattr(route, "path", "non_routee"),
-            status_code,
-            (time.perf_counter() - started) * 1000,
-        )
 
 
 @app.exception_handler(db.DatabaseUnavailableError)
 async def database_unavailable_handler(_: Request, exc: db.DatabaseUnavailableError):
     logger.error("database_unavailable: %s", exc)
     return JSONResponse(status_code=503, content={"detail": "Base de données indisponible"})
-
-
-@app.exception_handler(Exception)
-async def unhandled_error_handler(request: Request, exc: Exception):
-    """Erreur inattendue : message neutre pour le front, détail dans les logs (avec l'id de requête)."""
-    request_id = getattr(request.state, "request_id", None)
-    logger.error("unhandled_error request_id=%s error=%r", request_id, exc)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Erreur interne du serveur", "request_id": request_id},
-    )
 
 
 @app.exception_handler(InvoiceRejected)
@@ -145,6 +104,6 @@ app.include_router(factures.router)
 app.include_router(ordonnances.router)
 app.include_router(model.router)
 app.include_router(alerts.router)
-app.include_router(kpis.router)
+app.include_router(invoices.router)
 app.include_router(admin.router)
 app.include_router(api_v1_router)

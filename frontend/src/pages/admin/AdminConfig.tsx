@@ -25,7 +25,6 @@ export function AdminConfig() {
   if (error || !settings) return <ErrorState message="Impossible de charger la configuration." />;
 
   const hasChanges = JSON.stringify(settings) !== JSON.stringify(original);
-  const estimatedAlerts = Math.round(34 * (settings.alert_threshold / 0.8));
 
   const handleSave = async () => {
     setSaving(true);
@@ -33,8 +32,9 @@ export function AdminConfig() {
       await api.updateAdminSettings(settings);
       setOriginal(settings);
       showToast('Configuration enregistrée', 'success');
-    } catch {
-      showToast('Erreur lors de l\'enregistrement', 'error');
+    } catch (err) {
+      // le message de l'API (ex. « Adresses e-mail invalides ») aide plus qu'un texte générique
+      showToast(err instanceof Error && err.message ? err.message : 'Erreur lors de l\'enregistrement', 'error');
     } finally {
       setSaving(false);
     }
@@ -89,11 +89,6 @@ export function AdminConfig() {
                 className="w-20 rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3.5 py-1.5 text-sm tabular-nums text-center focus:border-primary-500"
               />
             </div>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-50 dark:bg-surface-700">
-            <span className="text-sm text-surface-500 dark:text-surface-400">Alertes estimées (30 derniers jours)</span>
-            <span className="text-lg font-bold tabular-nums text-primary-700 dark:text-primary-300">{estimatedAlerts}</span>
           </div>
 
           <div className="flex items-start gap-2 p-3 rounded-2xl bg-kraft-50 dark:bg-kraft-900/20 border border-kraft-200 dark:border-kraft-800">
@@ -156,6 +151,7 @@ export function AdminConfig() {
           {settings.channels.slack.enabled && (
             <div className="ml-12">
               <label className="text-xs text-surface-400 mb-1 block">Canal Slack</label>
+              <label className="text-xs text-surface-400 mb-1 block">Canal Slack (ex. #predicare-alertes)</label>
               <input
                 type="text"
                 value={settings.channels.slack.channel}
@@ -164,6 +160,7 @@ export function AdminConfig() {
                   channels: { ...settings.channels, slack: { ...settings.channels.slack, channel: e.target.value } },
                 })}
                 placeholder="#alertes-fraude"
+                placeholder="#predicare-alertes"
                 className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3 py-2 text-sm focus:border-primary-500"
               />
             </div>
@@ -194,7 +191,7 @@ export function AdminConfig() {
           </div>
           {settings.channels.email.enabled && (
             <div className="ml-12">
-              <label className="text-xs text-surface-400 mb-1 block">Adresse de réception</label>
+              <label className="text-xs text-surface-400 mb-1 block">Adresses de réception (séparées par des virgules)</label>
               <input
                 type="email"
                 value={settings.channels.email.address}
@@ -202,7 +199,7 @@ export function AdminConfig() {
                   ...settings,
                   channels: { ...settings.channels, email: { ...settings.channels.email, address: e.target.value } },
                 })}
-                placeholder="alerts@predicare.fr"
+                placeholder="gestion@exemple.mg, alertes@exemple.mg"
                 className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3 py-2 text-sm focus:border-primary-500"
               />
             </div>

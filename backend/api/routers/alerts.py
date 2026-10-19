@@ -2,7 +2,7 @@
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from api import repositories as repo
 from api.audit import write_audit
@@ -33,6 +33,7 @@ def _alerte_ou_404(conn, facture_id: str) -> dict:
 @router.get("/alerts", response_model=list[AlertSummary], dependencies=[manager_only])
 @router.get("/alertes", response_model=list[AlertSummary], dependencies=[manager_only])
 def list_alerts(
+<<<<<<< HEAD
     response: Response,
     statut: Literal[
         "EN_ATTENTE", "VALIDEE", "REJETEE", "ESCALADEE", "TRAITEE", "TOUTES",
@@ -40,6 +41,9 @@ def list_alerts(
     ] = Query("EN_ATTENTE"),
     priorite: Literal["FAIBLE", "MOYENNE", "HAUTE"] | None = None,
     type_alerte: str | None = Query(default=None, alias="type"),
+=======
+    statut: Literal["en_attente", "traitees", "toutes"] = "en_attente",
+>>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     page: int | None = Query(default=None, ge=1),
@@ -47,6 +51,7 @@ def list_alerts(
     tri: Literal["priorite", "date", "score"] = "priorite",
     conn=Depends(get_db),
 ):
+<<<<<<< HEAD
     """Return manager alerts, ordered by priority by default."""
     if page is not None:
         limit = page_size or limit
@@ -58,6 +63,9 @@ def list_alerts(
         conn, statut, limit, offset, priorite=priorite,
         type_alerte=type_alerte, tri=tri,
     )
+=======
+    return repo.list_alertes(conn, statut, limit, offset)
+>>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
 
 
 @router.get("/alerts/{facture_id}", response_model=AlertDetailOut, dependencies=[manager_only])
@@ -68,16 +76,29 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
     if summary is None:
         raise HTTPException(status_code=404, detail="Alerte introuvable")
     shap = repo.get_shap(conn, pred["prediction_id"])
+<<<<<<< HEAD
     rules = repo.list_alertes_regles(conn, pred["prediction_id"])
     codes = list(summary.get("codes") or [])
     codes.extend(rule["regle_code"] for rule in rules if rule.get("regle_code"))
+=======
+    facture, lignes = repo.get_facture_et_lignes(conn, facture_id)
+>>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
     return {
         "prediction": summary,
         "facture": repo.get_alert_invoice(conn, facture_id),
         "shap": shap["valeurs"] if shap else None,
+<<<<<<< HEAD
         "codes_fraude": sorted(set(codes)),
         "regles": rules,
+=======
+>>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
         "decisions": repo.list_decisions(conn, pred["prediction_id"]),
+        "facture": facture,
+        "lignes": lignes,
+        "historique_prestataire": (
+            repo.historique_prestataire(conn, facture["prestataire_id"], facture_id)
+            if facture else []
+        ),
     }
 
 
@@ -146,7 +167,11 @@ def identite(
     user: dict = Depends(require_role("gestionnaire")),
     conn=Depends(get_db),
 ):
+<<<<<<< HEAD
     """Decrypt insured identity only for a manager and audit the access."""
+=======
+    """Identité de l'assuré, déchiffrée à la demande. Chaque accès est tracé."""
+>>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
     _alerte_ou_404(conn, facture_id)
     assure_id = repo.get_assure_de_facture(conn, facture_id)
     blob = repo.get_identite_chiffree(conn, assure_id) if assure_id else None
