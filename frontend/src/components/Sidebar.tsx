@@ -25,7 +25,6 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   provider: [
     { to: '/professionnel', label: 'Déposer une facture', icon: <FileText className="w-5 h-5" /> },
     { to: '/professionnel/factures', label: 'Mes factures', icon: <Receipt className="w-5 h-5" /> },
-    { to: '/professionnel/assistant', label: 'Assistant', icon: <MessageSquare className="w-5 h-5" /> },
     { to: '/professionnel/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   manager: [

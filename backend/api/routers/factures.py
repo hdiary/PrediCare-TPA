@@ -7,7 +7,6 @@ from api.db import get_db
 from api.deps import require_role
 from api.schemas_domain import FacturePrestataireOut
 from api.schemas_domain import InvoiceCreateSubmission
-from api.schemas_predict import PredictResponse
 from api.routers.predict import predict
 from api.services.model_registry import get_registry
 
@@ -15,7 +14,7 @@ router = APIRouter(prefix="/factures", tags=["factures"])
 provider_only = Depends(require_role("professionnel_sante"))
 
 
-@router.post("", response_model=PredictResponse, response_model_exclude_none=True, status_code=201)
+@router.post("", response_model=FacturePrestataireOut, status_code=201)
 def create_invoice(
     body: InvoiceCreateSubmission = Body(...),
     user: dict = Depends(require_role("professionnel_sante")),
@@ -25,8 +24,20 @@ def create_invoice(
     payload = body.model_dump(mode="json")
     if payload.get("prestataire_id") is None:
         payload["prestataire_id"] = user["prestataire_id"]
-    return predict(payload=payload, user=user, conn=conn, registry=registry,
-                   record_rejection=True, pending_when_unavailable=True)
+    predict(
+        payload=payload,
+        user=user,
+        conn=conn,
+        registry=registry,
+        record_rejection=True,
+        pending_when_unavailable=True,
+    )
+    result = repo.get_invoice_for_provider(
+        conn, payload["facture_id"], user["prestataire_id"]
+    )
+    if result is None:
+        raise RuntimeError("La facture créée est introuvable dans le périmètre du prestataire")
+    return result
 
 
 @router.get("", response_model=list[FacturePrestataireOut], dependencies=[provider_only])

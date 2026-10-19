@@ -134,7 +134,7 @@ def bi_model(conn=Depends(get_db)):
     return dict(row) if row else {"version_active": None, "predictions": 0, "score_moyen": None}
 
 
-@router.get("/refresh-status", dependencies=[Depends(require_role("administrateur"))])
+@router.get("/refresh-status", dependencies=[Depends(require_role("gestionnaire"))])
 def bi_refresh_status():
     return {
         "mode": "materialized_views",

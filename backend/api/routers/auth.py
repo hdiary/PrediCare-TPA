@@ -34,6 +34,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 def _authenticate(conn, email: str, password: str) -> dict:
     settings = get_settings()
+    if len(password.encode("utf-8")) > 72:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identifiants invalides",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     row = conn.execute(
         "SELECT utilisateur_id AS user_id, email, mot_de_passe_hash AS password_hash, role, "
         "assure_id, prestataire_id, actif AS is_active, tentatives_echouees, "

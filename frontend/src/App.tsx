@@ -80,7 +80,6 @@ export default function App() {
                 {/* Provider routes */}
                 <Route path="/professionnel" element={<AppLayout allowedRoles={['provider']}><DepositInvoicePage /></AppLayout>} />
                 <Route path="/professionnel/factures" element={<AppLayout allowedRoles={['provider']}><ProviderInvoicesPage /></AppLayout>} />
-                <Route path="/professionnel/assistant" element={<AppLayout allowedRoles={['provider']}><ChatPage /></AppLayout>} />
                 <Route path="/professionnel/aide" element={<AppLayout allowedRoles={['provider']}><HelpPage /></AppLayout>} />
 
                 {/* Manager routes */}

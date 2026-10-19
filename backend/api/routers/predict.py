@@ -36,10 +36,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["predict"])
 
 
-def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str,
-            record_rejection: bool = False):
-    """Trace le rejet (commit immédiat) puis lève la réponse 422/409. Aucune valeur reçue n'est journalisée."""
-def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str):
+def _reject(
+    conn,
+    user,
+    raw: dict,
+    erreurs: list[dict],
+    http_status: int,
+    etape: str,
+    record_rejection: bool = False,
+):
     """Trace le rejet (commit immédiat) puis lève la réponse 422/409/403.
 
     Aucune valeur reçue n'est journalisée.
@@ -84,27 +89,38 @@ def predict(
 
     payload = dict(payload)
     if user["role"] == "professionnel_sante":
-        supplied = payload.get("prestataire_id")
-        if supplied is not None and supplied != user["prestataire_id"]:
-            raise HTTPException(status_code=403, detail="Prestataire différent du JWT")
-        payload["prestataire_id"] = user["prestataire_id"]
-    # 0. Autorisation : un professionnel de santé ne soumet que les factures de SON prestataire
-    #    (sinon il pourrait scorer ou polluer le dossier d'un autre établissement).
-    if user["role"] == "professionnel_sante":
         propre = user.get("prestataire_id")
-        fourni = payload.get("prestataire_id")
         if propre is None:
-            # Compte non rattaché : problème de configuration du compte, pas de la facture.
-            _reject(conn, user, payload,
-                    [{"code": "PRESTATAIRE_NON_RATTACHE", "champ": "prestataire_id",
-                      "message": "Votre compte n'est rattaché à aucun établissement. "
-                                 "Contactez un administrateur pour le lier à un prestataire."}],
-                    403, "autorisation")
-        if fourni is not None and fourni != propre:
-            _reject(conn, user, payload,
-                    [{"code": "PRESTATAIRE_NON_AUTORISE", "champ": "prestataire_id",
-                      "message": "Seules les factures de votre établissement sont acceptées"}],
-                    403, "autorisation")
+            _reject(
+                conn,
+                user,
+                payload,
+                [{
+                    "code": "PRESTATAIRE_NON_RATTACHE",
+                    "champ": "prestataire_id",
+                    "message": (
+                        "Votre compte n'est rattaché à aucun établissement. "
+                        "Contactez un administrateur pour le lier à un prestataire."
+                    ),
+                }],
+                403,
+                "autorisation",
+            )
+        supplied = payload.get("prestataire_id")
+        if supplied is not None and supplied != propre:
+            _reject(
+                conn,
+                user,
+                payload,
+                [{
+                    "code": "PRESTATAIRE_NON_AUTORISE",
+                    "champ": "prestataire_id",
+                    "message": "Seules les factures de votre établissement sont acceptées",
+                }],
+                403,
+                "autorisation",
+            )
+        payload["prestataire_id"] = user["prestataire_id"]
 
     # 1. Validation : les 10 codes du contrat (+ CHAMP_INTERDIT, VALEUR_INVALIDE)
     erreurs, clean = validate_invoice(payload, conn)

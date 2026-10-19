@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users, ensure_seed_users
 from api.config import get_settings
-from api.routers import admin, alerts, auth, chat, factures, health, model, predict, ordonnances
+from api.routers import admin, alerts, auth, bi, chat, factures, health, model, predict, ordonnances
 from api.services.metrics import http_metrics
 from api.logging_config import configure_logging
 from api.middleware import BodySizeLimitMiddleware
@@ -107,4 +107,5 @@ app.include_router(model.router)
 app.include_router(alerts.router)
 app.include_router(invoices.router)
 app.include_router(admin.router)
+app.include_router(bi.router)
 app.include_router(api_v1_router)

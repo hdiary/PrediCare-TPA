@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 15      # durée du verrouillage
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
-    max_body_bytes: int = 10 * 1024 * 1024
+    max_body_bytes: int = 1 * 1024 * 1024
 
     # Registre de modèles (MLflow)
     mlflow_tracking_uri: str = "http://mlflow:5000"

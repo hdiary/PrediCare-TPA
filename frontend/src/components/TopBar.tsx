@@ -15,7 +15,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/assurant/aide': 'Aide',
   '/professionnel': 'Déposer une facture',
   '/professionnel/factures': 'Mes factures',
-  '/professionnel/assistant': 'Assistant',
   '/professionnel/aide': 'Aide',
   '/gestionnaire': 'Tableau de bord',
   '/gestionnaire/alertes': 'Alertes',
@@ -37,7 +36,6 @@ const MOBILE_NAV_BY_ROLE: Record<Role, { to: string; label: string; icon: ReactN
   provider: [
     { to: '/professionnel', label: 'Déposer', icon: <span>📄</span> },
     { to: '/professionnel/factures', label: 'Factures', icon: <span>🧾</span> },
-    { to: '/professionnel/assistant', label: 'Assistant', icon: <span>💬</span> },
   ],
   manager: [
     { to: '/gestionnaire', label: 'Tableau', icon: <span>📊</span> },

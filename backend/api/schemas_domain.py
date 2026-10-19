@@ -76,9 +76,7 @@ class InvoiceCreate(BaseModel):
 
 
 class InvoiceCreateSubmission(InvoiceCreate):
-    """Provider submission contract, including the optional ownership claim."""
-
-    prestataire_id: str | None = Field(default=None, pattern=r"^PRE-[0-9]{5}$")
+    """Provider submission contract; ownership is taken only from the JWT."""
 
 
 class InvoiceOut(BaseModel):

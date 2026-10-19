@@ -12,7 +12,7 @@ router = APIRouter(tags=["kpis"])
 @router.get(
     "/kpis",
     response_model=KpiResponse,
-    dependencies=[Depends(require_role("gestionnaire", "administrateur"))],
+    dependencies=[Depends(require_role("gestionnaire"))],
     summary="Indicateurs du tableau de bord",
 )
 def kpis(

@@ -291,6 +291,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # ---------- Sauvegarde PostgreSQL + volume des modèles ----------
+  backup:
+    profiles: ["ops"]
+    build:
+      context: ./database/backup
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-predicare}
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - models_data:/models:ro
+      - backups_data:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
   # ---------- Frontend React/Vite ----------
   web:
     # profiles: [ "full" ] # a decommenter pour activer le frontend dans le container
@@ -318,3 +338,4 @@ volumes:
   mlflow_data:
   n8n_data: # prepared_data:
   models_data:
+  backups_data:
