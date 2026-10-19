@@ -197,7 +197,7 @@ services:
       DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
+      # DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
       # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD-123465789}
       SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD-12346798}
@@ -249,8 +249,7 @@ services:
         if [ ! -f /home/node/.n8n/.predicare-workflows-imported ]; then
           n8n import:workflow --separate --input=/workflows &&
           touch /home/node/.n8n/.predicare-workflows-imported;
-        fi;
-        exec n8n start
+        fi; exec n8n start
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
@@ -295,7 +294,7 @@ services:
       loader:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test: [ "CMD-SHELL", "pg_isready" ]
       interval: 30s
       timeout: 5s
       retries: 5

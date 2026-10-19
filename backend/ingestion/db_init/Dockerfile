@@ -5,20 +5,29 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
+# --- Dépendances Python ---
 COPY backend/ingestion/db_init/requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
-COPY clean.py pseudo.py encrypt_identities.py load.py configure_agent_role.py alembic.ini ./
-COPY migrations ./migrations
-COPY db_init/entrypoint.sh /entrypoint.sh
-COPY backend/ingestion/clean.py backend/ingestion/pseudo.py backend/ingestion/encrypt_identities.py backend/ingestion/load.py ./
-COPY database/alembic.ini ./
+# --- Scripts d'ingestion (chemins racine) ---
+COPY backend/ingestion/clean.py \
+    backend/ingestion/pseudo.py \
+    backend/ingestion/encrypt_identities.py \
+    backend/ingestion/load.py \
+    backend/ingestion/configure_agent_role.py \
+    ./
+
+# --- Alembic : config + migrations (une seule source de vérité) ---
+COPY database/alembic.ini ./alembic.ini
 COPY database/migrations ./migrations
+
+# --- Entrypoint (une seule fois) ---
 COPY backend/ingestion/db_init/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh \
     && useradd --create-home --uid 10001 dbinit \
     && mkdir -p /work && chown dbinit /work
+
 USER dbinit
 
 # The dataset is NOT baked into the image: mount it read-only at /data/dataset.
