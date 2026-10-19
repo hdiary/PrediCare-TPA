@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users
 from api.config import get_settings
-from api.routers import admin, alerts, auth, chat, factures, health, kpis, model, predict
+from api.routers import admin, alerts, auth, chat, factures, health, kpis, model, predict, ordonnances
 from api.services.metrics import http_metrics
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
@@ -142,6 +142,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(predict.router)
 app.include_router(factures.router)
+app.include_router(ordonnances.router)
 app.include_router(model.router)
 app.include_router(alerts.router)
 app.include_router(kpis.router)

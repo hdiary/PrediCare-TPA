@@ -257,6 +257,27 @@ def insert_alertes_regles(conn, prediction_id: int, facture_id: str, findings) -
         )
 
 
+def insert_prescription_alerts(conn, ordonnance_id: str, findings, utilisateur_id: int) -> None:
+    if not findings:
+        return
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO alertes_prescription "
+            "(prediction_id, facture_id, ordonnance_id, type_alerte, regle_code, severite, message, details, utilisateur_id) "
+            "VALUES (NULL, NULL, %s, 'PRESCRIPTION', %s, 'HAUTE', %s, %s, %s)",
+            [(ordonnance_id, f.code, f.libelle, Jsonb(f.details), utilisateur_id) for f in findings],
+        )
+
+
+def insert_alert(conn, *, facture_id: str, codes: list[str], priority: str = "MOYENNE") -> int:
+    row = conn.execute(
+        "INSERT INTO alertes (facture_id, type, priorite, codes) VALUES (%s, 'FRAUDE', %s, %s) "
+        "RETURNING alerte_id",
+        (facture_id, priority, Jsonb(codes)),
+    ).fetchone()
+    return row["alerte_id"] if row else 0
+
+
 def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
         "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "

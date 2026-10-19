@@ -209,6 +209,49 @@ class PrescriptionOut(BaseModel):
     lignes: list[PrescriptionLineOut] = Field(default_factory=list)
 
 
+class PrescriptionLineCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    num_ligne: int = Field(ge=1)
+    code: str = Field(min_length=1, max_length=80)
+    libelle: str = Field(min_length=1, max_length=255)
+    quantite: int = Field(gt=0)
+    posologie: str | None = Field(default=None, max_length=255)
+
+
+class PrescriptionCreate(BaseModel):
+    """Prescription input; prescripteur_id is always taken from the JWT."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ordonnance_id: str = Field(pattern=r"^ORD-[0-9]{7}$")
+    assure_id: str = Field(pattern=r"^ASS-[0-9A-F]{10}$")
+    date_prescription: date
+    validite_jours: int = Field(ge=1)
+    type_ordonnance: PrescriptionType
+    diagnostic: str | None = Field(default=None, max_length=255)
+    renseignement_clinique: str | None = Field(default=None, max_length=1000)
+    lignes: list[PrescriptionLineCreate] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_lines(self):
+        if len({line.num_ligne for line in self.lignes}) != len(self.lignes):
+            raise ValueError("Les numéros de ligne doivent être uniques")
+        return self
+
+
+class PrescriptionValidityOut(BaseModel):
+    ordonnance_id: str
+    valide: bool
+    date_expiration: date
+    anomalies: list[str] = Field(default_factory=list)
+
+
+# French domain names kept as public aliases for the HTTP contract.
+OrdonnanceCreate = PrescriptionCreate
+OrdonnanceValiditeOut = PrescriptionValidityOut
+
+
 class ModelVersionOut(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 

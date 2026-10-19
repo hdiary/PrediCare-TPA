@@ -129,53 +129,63 @@ def predict(
         raise HTTPException(status_code=500, detail="Erreur de préparation des données") from exc
 
     seuil = repo.get_seuil_alerte(conn, settings.alert_threshold)
-    non_blocking = {"SPECIALITE_NON_DECLAREE", "TYPE_ORDONNANCE_INCOHERENT"}
-    is_alert = result["score"] >= seuil or any(
-        finding.code not in non_blocking for finding in fraud_findings
-    )
+    alert_rule_codes = {
+        "QUANTITE_EXCESSIVE", "INCOHERENCE_PROFIL", "DOUBLON",
+        "PRESTATAIRE_RADIE", "ORDONNANCE_EXPIREE",
+    }
+    rule_alert_codes = [f.code for f in fraud_findings if f.code in alert_rule_codes]
+    is_alert = result["score"] >= seuil or bool(rule_alert_codes)
     latence_ms = int((time.perf_counter() - started) * 1000)
 
     # 4. Stockage + audit dans UNE transaction (validée à la sortie de la requête)
     try:
-        repo.insert_facture(conn, clean, today_mg(), calculation)
-        if calculation is not None:
-            repo.insert_calculation(conn, clean["facture_id"], calculation)
-        prediction_id = repo.insert_prediction(
-            conn,
-            facture_id=clean["facture_id"],
-            nom_modele=bundle.name,
-            version_modele=bundle.version,
-            score=result["score"],
-            seuil=seuil,
-            est_alerte=is_alert,
-            latence_ms=latence_ms,
-            variables=result["variables"],
-            soumis_par=user["user_id"],
-        )
-        repo.insert_shap(conn, prediction_id, clean["facture_id"], result["shap_complet"])
-        # Règles de prescription (P3-16) : stockées avec l'explication ; jamais bloquantes
-        findings = evaluate_rules(conn, clean)
-        repo.insert_alertes_regles(conn, prediction_id, clean["facture_id"], findings)
-        write_audit(
-            conn,
-            event_type="prediction",
-            actor_id=user["user_id"],
-            entity_type="facture",
-            entity_id=clean["facture_id"],
-            model_name=bundle.name,
-            model_version=bundle.version,
-            input_data=clean,
-            output_data={
-                "prediction_id": prediction_id,
-                "score": result["score"],
-                "seuil": seuil,
-                "is_alert": is_alert,
-                "shap": result["shap"],
-                "regles": [f.regle_code for f in findings],
-                "codes_fraude": [f.code for f in fraud_findings],
-                "latence_ms": latence_ms,
-            },
-        )
+        with conn.transaction():
+            repo.insert_facture(conn, clean, today_mg(), calculation)
+            if calculation is not None:
+                repo.insert_calculation(conn, clean["facture_id"], calculation)
+            prediction_id = repo.insert_prediction(
+                conn,
+                facture_id=clean["facture_id"],
+                nom_modele=bundle.name,
+                version_modele=bundle.version,
+                score=result["score"],
+                seuil=seuil,
+                est_alerte=is_alert,
+                latence_ms=latence_ms,
+                variables=result["variables"],
+                soumis_par=user["user_id"],
+            )
+            repo.insert_shap(conn, prediction_id, clean["facture_id"], result["shap_complet"])
+            # Règles de prescription (P3-16) : stockées avec l'explication ; jamais bloquantes
+            findings = evaluate_rules(conn, clean)
+            repo.insert_alertes_regles(conn, prediction_id, clean["facture_id"], findings)
+            if is_alert:
+                repo.insert_alert(
+                    conn,
+                    facture_id=clean["facture_id"],
+                    codes=sorted(set(rule_alert_codes or ["SCORE_SUPERIEUR_SEUIL"])),
+                    priority="HAUTE" if result["score"] >= seuil else "MOYENNE",
+                )
+            write_audit(
+                conn,
+                event_type="prediction",
+                actor_id=user["user_id"],
+                entity_type="facture",
+                entity_id=clean["facture_id"],
+                model_name=bundle.name,
+                model_version=bundle.version,
+                input_data=clean,
+                output_data={
+                    "prediction_id": prediction_id,
+                    "score": result["score"],
+                    "seuil": seuil,
+                    "is_alert": is_alert,
+                    "shap": result["shap"],
+                    "regles": [f.regle_code for f in findings],
+                    "codes_fraude": [f.code for f in fraud_findings],
+                    "latence_ms": latence_ms,
+                },
+            )
     except psycopg.errors.UniqueViolation as exc:   # deux envois simultanés du même facture_id
         raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
 

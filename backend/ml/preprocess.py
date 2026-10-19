@@ -33,10 +33,14 @@ def _append_invoice(tables: dict[str, pd.DataFrame], payload: dict) -> None:
         "devise": payload["devise"],
         "nb_lignes": len(payload["lignes"]),
         "montant_total": payload["montant_total"],
-        "montant_eligible": payload["montant_total"],
+        "montant_eligible": payload.get("montant_eligible", payload["montant_total"]),
     }
     invoices = tables["factures"]
-    tables["factures"] = pd.concat([invoices, pd.DataFrame([invoice])], ignore_index=True)
+    tables["factures"] = invoices[invoices["facture_id"] != payload["facture_id"]].copy()
+    tables["factures"] = pd.concat([tables["factures"], pd.DataFrame([invoice])], ignore_index=True)
+    tables["lignes_facture"] = tables["lignes_facture"][
+        tables["lignes_facture"]["facture_id"] != payload["facture_id"]
+    ].copy()
     lines = [
         {"ligne_id": f"{payload['facture_id']}-L{line['num_ligne']:02d}",
          "facture_id": payload["facture_id"], **line}
@@ -47,8 +51,14 @@ def _append_invoice(tables: dict[str, pd.DataFrame], payload: dict) -> None:
     )
 
 
+def build_features_from_tables(tables: dict[str, pd.DataFrame], payload: dict) -> pd.DataFrame:
+    """Build one serving row from a snapshot, using the training implementation."""
+    snapshot = {name: frame.copy() for name, frame in tables.items()}
+    _append_invoice(snapshot, payload)
+    result = build_training_features(snapshot)
+    return result[0] if isinstance(result, tuple) else result
+
+
 def build_features(payload: dict, conn) -> pd.DataFrame:
     tables = {name: _table(conn, name) for name in TABLES}
-    _append_invoice(tables, payload)
-    result = build_training_features(tables)
-    return result[0] if isinstance(result, tuple) else result
+    return build_features_from_tables(tables, payload)
