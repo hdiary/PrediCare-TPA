@@ -69,6 +69,18 @@ class NoModelRegistry:
     def load_active(self, force=False):
         raise ModelUnavailableError("indisponible (test)")
 
+    def list_versions(self, conn):
+        return []
+
+    def current(self, conn):
+        raise ModelUnavailableError("indisponible (test)")
+
+    def metrics(self, conn):
+        raise ModelUnavailableError("indisponible (test)")
+
+    def activate_version(self, conn, version, user):
+        raise ModelUnavailableError("indisponible (test)")
+
 
 FID = "FAC-00000001"
 # (méthode, chemin, corps JSON, rôles autorisés)
@@ -78,11 +90,19 @@ ENDPOINTS = [
     ("GET", f"/alerts/{FID}", None, {"gestionnaire"}),
     ("POST", f"/alerts/{FID}/decision", {"decision": "faux_positif"}, {"gestionnaire"}),
     ("GET", f"/alerts/{FID}/identite", None, {"gestionnaire"}),
+    ("GET", f"/api/v1/alerts/{FID}", None, {"gestionnaire"}),
+    ("GET", "/api/v1/factures", None, {"professionnel_sante"}),
+    ("GET", f"/api/v1/factures/{FID}", None, {"professionnel_sante"}),
     ("POST", "/predict", {}, {"professionnel_sante", "gestionnaire"}),
     ("GET", "/admin/ping", None, {"administrateur"}),
     ("GET", "/api/v1/admin/ping", None, {"administrateur"}),
     ("GET", "/admin/model", None, {"administrateur"}),
     ("POST", "/admin/model/reload", None, {"administrateur"}),
+    ("GET", "/model/versions", None, {"administrateur"}),
+    ("GET", "/model/current", None, {"administrateur"}),
+    ("GET", "/model/metrics", None, {"administrateur"}),
+    ("POST", "/model/activate/v1", None, {"administrateur"}),
+    ("POST", "/model/rollback/v1", None, {"administrateur"}),
 ]
 
 

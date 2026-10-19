@@ -13,8 +13,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=app:app . .
+RUN mkdir -p /models && chown -R app:app /models /app
+RUN chmod +x /app/entrypoint.sh
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 HOME=/app
 USER app
+ENTRYPOINT ["/app/entrypoint.sh"]
 EXPOSE 8000
 
 # Santé : GET /health (503 si la base est injoignable)

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+# The compose service mounts models_data at /models; restore also restores it.
 umask 077
 
 PGHOST="${PGHOST:-db}"
@@ -94,12 +95,15 @@ trap cleanup EXIT HUP INT TERM
 
 key_file="$work_dir/passphrase"
 dump_file="$work_dir/predicare.dump"
+models_archive="$work_dir/models.tar"
+bundle_file="$work_dir/predicare.bundle.tar"
 printf '%s' "$BACKUP_ENCRYPTION_KEY" > "$key_file"
 chmod 0600 "$key_file"
 
 echo "Decrypting and validating '$archive'."
 gpg --homedir "$work_dir/gnupg" --batch --yes --pinentry-mode loopback \
-    --passphrase-file "$key_file" --decrypt --output "$dump_file" "$archive"
+    --passphrase-file "$key_file" --decrypt --output "$bundle_file" "$archive"
+tar -xf "$bundle_file" -C "$work_dir" predicare.dump models.tar
 pg_restore --list "$dump_file" > /dev/null
 
 echo "Restoring into new database '$target_db' (source '$PGDATABASE' is unchanged)."
@@ -110,6 +114,15 @@ pg_restore --exit-on-error --single-transaction \
     --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
     --dbname="$target_db" "$dump_file"
 restored=true
+
+if [ "$verify_only" = true ]; then
+    model_check_dir="$work_dir/models-check"
+    mkdir -m 0700 "$model_check_dir"
+    tar -xf "$models_archive" -C "$model_check_dir"
+    diff -qr "$model_check_dir" /models
+else
+    tar -xf "$models_archive" -C /models
+fi
 
 if [ "$verify_only" = true ]; then
     for table in factures predictions decisions_gestionnaires shap_explanations audit_log documents_vectorises; do

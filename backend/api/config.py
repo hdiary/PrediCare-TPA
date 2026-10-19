@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     mlflow_model_alias: str = "champion"   # alias de la version active
     shap_top_k: int = 5
     model_retry_interval_s: int = 10       # délai mini entre deux tentatives de chargement
+    model_store_path: str = "/models"
 
     # Dérive (P3-19)
     drift_features: str = ""            # variables suivies (séparées par des virgules) ; vide = top SHAP

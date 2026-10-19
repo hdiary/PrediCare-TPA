@@ -10,6 +10,7 @@ import pathlib
 from datetime import date
 
 import pytest
+from test_predict_flow import setup
 
 LOT = json.loads((pathlib.Path(__file__).parent / "data" / "lot_20_factures.json").read_text("utf-8"))
 IDS = [c["nom"] for c in LOT]

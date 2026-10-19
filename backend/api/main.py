@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users
 from api.config import get_settings
-from api.routers import admin, alerts, auth, chat, health, kpis, predict
+from api.routers import admin, alerts, auth, chat, factures, health, kpis, model, predict
 from api.services.metrics import http_metrics
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
@@ -27,8 +27,15 @@ logger = logging.getLogger("predicare")
 
 
 def _initial_model_load() -> None:
+    pool = db.get_pool()
+    if pool is None:
+        return
     try:
-        registry.load_active()
+        with pool.connection(timeout=5) as conn:
+            try:
+                registry.initialize(conn)
+            except (FileNotFoundError, ModelUnavailableError):
+                registry.load_active(conn)
     except ModelUnavailableError as exc:
         logger.warning("modèle non chargé au démarrage (nouvelle tentative à la demande): %s", exc)
 
@@ -134,6 +141,8 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(predict.router)
+app.include_router(factures.router)
+app.include_router(model.router)
 app.include_router(alerts.router)
 app.include_router(kpis.router)
 app.include_router(admin.router)

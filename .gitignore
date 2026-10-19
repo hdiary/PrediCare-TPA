@@ -15,3 +15,4 @@ __pycache__/
 *.sqlite3
 docker-compose.override.yml
 volumes/
+.venv-api311/

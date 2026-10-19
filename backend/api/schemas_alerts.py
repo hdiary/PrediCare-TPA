@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from api.schemas_predict import RegleItem, ShapItem
+
 DecisionValue = Literal["fraude_confirmee", "faux_positif", "a_investiguer"]
 
 
@@ -40,6 +42,17 @@ class AlertSummary(BaseModel):
     nb_regles: int = 0
     derniere_decision: DecisionValue | None = None
     date_decision: datetime | None = None
+
+
+class AlertDetailOut(BaseModel):
+    """Full manager view of an alert and its explainability data."""
+
+    model_config = ConfigDict(protected_namespaces=())
+
+    prediction: AlertSummary
+    shap: list[ShapItem] | dict | None = None
+    regles: list[RegleItem] = Field(default_factory=list)
+    decisions: list[DecisionOut] = Field(default_factory=list)
 
 
 class IdentiteOut(BaseModel):

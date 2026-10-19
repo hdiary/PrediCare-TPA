@@ -16,6 +16,9 @@ from api.services.features import (
     FeaturesUnavailableError,
     build_features,
 )
+from api.services.calculation_service import calculate_reimbursement
+from api.services.context_service import ContextUnavailableError, build_context
+from api.services.fraud_rules_v2 import evaluate_fraud_rules
 from api.services.model_registry import get_registry
 from api.services.rules import evaluate_rules
 from api.services.scoring import predict_with_explanation
@@ -25,7 +28,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["predict"])
 
 
-def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str):
+def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape: str,
+            record_rejection: bool = False):
     """Trace le rejet (commit immédiat) puis lève la réponse 422/409. Aucune valeur reçue n'est journalisée."""
     facture_id = raw.get("facture_id") if isinstance(raw.get("facture_id"), str) else None
     facture_id = facture_id[:64] if facture_id else None
@@ -38,6 +42,11 @@ def _reject(conn, user, raw: dict, erreurs: list[dict], http_status: int, etape:
         input_data={"facture_id": facture_id, "etape": etape},
         output_data={"codes": sorted({e["code"] for e in erreurs}), "erreurs": erreurs},
     )
+    if record_rejection:
+        try:
+            repo.insert_rejected_invoice(conn, raw, erreurs, user["user_id"])
+        except psycopg.errors.UndefinedTable:
+            logger.warning("table factures_rejetees indisponible")
     conn.commit()
     raise InvoiceRejected(erreurs, http_status)
 
@@ -54,23 +63,56 @@ def predict(
     user: dict = Depends(require_role("professionnel_sante", "gestionnaire")),
     conn=Depends(get_db),
     registry=Depends(get_registry),
+    record_rejection: bool = False,
+    pending_when_unavailable: bool = False,
 ):
     started = time.perf_counter()
     settings = get_settings()
 
+    payload = dict(payload)
+    if user["role"] == "professionnel_sante":
+        supplied = payload.get("prestataire_id")
+        if supplied is not None and supplied != user["prestataire_id"]:
+            raise HTTPException(status_code=403, detail="Prestataire différent du JWT")
+        payload["prestataire_id"] = user["prestataire_id"]
+
     # 1. Validation : les 10 codes du contrat (+ CHAMP_INTERDIT, VALEUR_INVALIDE)
     erreurs, clean = validate_invoice(payload, conn)
     if erreurs:
-        _reject(conn, user, payload, erreurs, 422, "validation")
+        _reject(conn, user, payload, erreurs, 422, "validation", record_rejection)
     if repo.facture_existe(conn, clean["facture_id"]):
         _reject(conn, user, payload,
                 [{"code": "FACTURE_DEJA_ENREGISTREE", "champ": "facture_id",
                   "message": "Cette facture a déjà été scorée"}], 409, "doublon")
 
+    calculation = None
+    fraud_findings = []
+    try:
+        context = build_context(conn, clean)
+        calculation = calculate_reimbursement(clean, context)
+        fraud_findings = evaluate_fraud_rules(clean, context)
+    except ContextUnavailableError:
+        logger.warning("contexte métier indisponible pour %s", clean["facture_id"])
+
     # 2. Modèle actif
     bundle = registry.ensure_loaded()
     if bundle is None:
-        raise HTTPException(status_code=503, detail="Modèle indisponible, réessayer plus tard")
+        if not pending_when_unavailable:
+            raise HTTPException(status_code=503, detail="Modèle indisponible, réessayer plus tard")
+        try:
+            repo.insert_facture(conn, clean, today_mg(), calculation, "EN_ATTENTE_GESTIONNAIRE")
+            if calculation is not None:
+                repo.insert_calculation(conn, clean["facture_id"], calculation)
+            write_audit(
+                conn, event_type="prediction_en_attente", actor_id=user["user_id"],
+                entity_type="facture", entity_id=clean["facture_id"],
+                input_data={"facture_id": clean["facture_id"]},
+                output_data={"scoring_indisponible": True},
+            )
+            conn.commit()
+        except psycopg.errors.UniqueViolation as exc:
+            raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
+        return PredictResponse(accepte=False, facture_id=clean["facture_id"], prediction_id=None)
 
     # 3. Variables (même code qu'à l'entraînement) puis score + SHAP
     try:
@@ -87,12 +129,17 @@ def predict(
         raise HTTPException(status_code=500, detail="Erreur de préparation des données") from exc
 
     seuil = repo.get_seuil_alerte(conn, settings.alert_threshold)
-    is_alert = result["score"] >= seuil
+    non_blocking = {"SPECIALITE_NON_DECLAREE", "TYPE_ORDONNANCE_INCOHERENT"}
+    is_alert = result["score"] >= seuil or any(
+        finding.code not in non_blocking for finding in fraud_findings
+    )
     latence_ms = int((time.perf_counter() - started) * 1000)
 
     # 4. Stockage + audit dans UNE transaction (validée à la sortie de la requête)
     try:
-        repo.insert_facture(conn, clean, today_mg())
+        repo.insert_facture(conn, clean, today_mg(), calculation)
+        if calculation is not None:
+            repo.insert_calculation(conn, clean["facture_id"], calculation)
         prediction_id = repo.insert_prediction(
             conn,
             facture_id=clean["facture_id"],
@@ -125,6 +172,7 @@ def predict(
                 "is_alert": is_alert,
                 "shap": result["shap"],
                 "regles": [f.regle_code for f in findings],
+                "codes_fraude": [f.code for f in fraud_findings],
                 "latence_ms": latence_ms,
             },
         )
@@ -144,4 +192,5 @@ def predict(
         shap=result["shap"],
         latence_ms=latence_ms,
         regles=[f.as_dict() for f in findings],
+        codes_fraude=[f.code for f in fraud_findings],
     )

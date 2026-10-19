@@ -12,7 +12,13 @@ from api import repositories as repo
 from api.audit import write_audit
 from api.db import get_db
 from api.deps import require_role
-from api.schemas_alerts import AlertSummary, DecisionOut, DecisionRequest, IdentiteOut
+from api.schemas_alerts import (
+    AlertDetailOut,
+    AlertSummary,
+    DecisionOut,
+    DecisionRequest,
+    IdentiteOut,
+)
 from api.services.identity import IdentityUnavailableError, decrypt_identity
 
 logger = logging.getLogger(__name__)
@@ -42,7 +48,7 @@ def list_alerts(
     return repo.list_alertes(conn, statut, limit, offset)
 
 
-@router.get("/{facture_id}", dependencies=[manager_only])
+@router.get("/{facture_id}", response_model=AlertDetailOut, dependencies=[manager_only])
 def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
     pred = _alerte_ou_404(conn, facture_id)
     shap = repo.get_shap(conn, pred["prediction_id"])

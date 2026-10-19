@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+# The compose service mounts the persistent models_data volume at /models.
+# The encrypted bundle below contains both PostgreSQL and that model volume.
 umask 077
 
 PGHOST="${PGHOST:-db}"
@@ -37,6 +39,8 @@ trap cleanup EXIT HUP INT TERM
 
 key_file="$work_dir/passphrase"
 dump_file="$work_dir/predicare.dump"
+models_archive="$work_dir/models.tar"
+bundle_file="$work_dir/predicare.bundle.tar"
 verified_file="$work_dir/verified.dump"
 printf '%s' "$BACKUP_ENCRYPTION_KEY" > "$key_file"
 chmod 0600 "$key_file"
@@ -52,17 +56,20 @@ pg_dump --format=custom \
     --host="$PGHOST" --port="$PGPORT" --username="$PGUSER" \
     --dbname="$PGDATABASE" --file="$dump_file"
 pg_restore --list "$dump_file" > /dev/null
+tar -C /models -cf "$models_archive" .
+tar -C "$work_dir" -cf "$bundle_file" "$(basename "$dump_file")" "$(basename "$models_archive")"
 
 gpg --homedir "$work_dir/gnupg" --batch --yes --pinentry-mode loopback \
     --passphrase-file "$key_file" --symmetric --cipher-algo AES256 \
-    --s2k-digest-algo SHA256 --output "$encrypted_tmp" "$dump_file"
+    --s2k-digest-algo SHA256 --output "$encrypted_tmp" "$bundle_file"
 chmod 0600 "$encrypted_tmp"
 
 gpg --homedir "$work_dir/gnupg" --batch --yes --pinentry-mode loopback \
     --passphrase-file "$key_file" --decrypt --output "$verified_file" \
     "$encrypted_tmp"
-cmp -s "$dump_file" "$verified_file"
-pg_restore --list "$verified_file" > /dev/null
+cmp -s "$bundle_file" "$verified_file"
+tar -tf "$verified_file" | grep -qx "predicare.dump"
+tar -tf "$verified_file" | grep -qx "models.tar"
 
 mv "$encrypted_tmp" "$backup_file"
 encrypted_tmp=

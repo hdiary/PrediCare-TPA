@@ -224,6 +224,8 @@ services:
         condition: service_started
     ports:
       - "8000:8000"
+    volumes:
+      - models_data:/models
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" ]
       interval: 30s
@@ -289,6 +291,7 @@ services:
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
     volumes:
       - ./backups:/backups
+      - models_data:/models
     depends_on:
       db:
         condition: service_healthy
@@ -301,3 +304,4 @@ volumes:
   pgdata:
   mlflow_data:
   n8n_data: # prepared_data:
+  models_data:

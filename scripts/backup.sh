@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+# db-backup mounts and archives the models_data Docker volume with PostgreSQL.
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT_DIR"

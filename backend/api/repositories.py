@@ -65,7 +65,8 @@ def get_seuil_alerte(conn, default: float) -> float:
 
 # ---------- écriture facture / prédiction ----------
 
-def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
+def insert_facture(conn, clean: dict, date_reception_defaut: date, calculation: dict | None = None,
+                   status: str = "EN_COURS") -> None:
     """Enregistre une facture reçue par l'API.
 
     DÉCISION À VALIDER AVEC P1 : les colonnes de décision historique sont NOT NULL dans le
@@ -74,6 +75,10 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
     date_traitement NULL. Canal et mode de règlement : valeurs par défaut si absents.
     """
     total = clean["montant_total"]
+    calculation = calculation or {}
+    eligible = calculation.get("montant_eligible", total)
+    covered = calculation.get("montant_rembourse", 0)
+    remaining = calculation.get("reste_a_charge", total)
     date_soin = date.fromisoformat(clean["date_soin"])
     date_facture = date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
     date_reception = (
@@ -86,8 +91,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
         "canal_reception, mode_reglement, attestation_pec_id, entente_prealable_id, devise, "
         "nb_lignes, montant_total, montant_eligible, montant_pris_en_charge, reste_a_charge, "
         "statut, motif_rejet, date_traitement) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-        "0, %s, 'EN_COURS', NULL, NULL)",
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "%s, %s, %s, %s, NULL, NULL)",
         (
             clean["facture_id"], clean["numero_facture"], clean["prestataire_id"],
             clean["assure_id"], clean["contrat_id"], clean.get("ordonnance_id"),
@@ -96,7 +101,7 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
             clean.get("canal_reception") or "PORTAIL_PRESTATAIRE",
             clean.get("mode_reglement") or "TIERS_PAYANT",
             clean.get("attestation_pec_id"), clean.get("entente_prealable_id"),
-            clean["devise"], len(clean["lignes"]), total, total, total,
+            clean["devise"], len(clean["lignes"]), total, eligible, covered, remaining, status,
         ),
     )
     with conn.cursor() as cur:
@@ -110,6 +115,25 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
                 for ln in clean["lignes"]
             ],
         )
+
+
+def insert_calculation(conn, facture_id: str, calculation: dict) -> None:
+    conn.execute(
+        "INSERT INTO calculs_remboursement (facture_id, montant_reclame, montant_calcule, "
+        "montant_rembourse, reste_a_charge, details) VALUES (%s, %s, %s, %s, %s, %s)",
+        (facture_id, calculation["montant_reclame"], calculation["montant_calcule"],
+         calculation["montant_rembourse"], calculation["reste_a_charge"],
+         Jsonb(calculation.get("details", {}))),
+    )
+
+
+def insert_rejected_invoice(conn, raw: dict, errors: list[dict], user_id: int | str) -> None:
+    conn.execute(
+        "INSERT INTO factures_rejetees (facture_id, assure_id, prestataire_id, codes, details, "
+        "utilisateur_id) VALUES (%s, %s, %s, %s, %s, %s)",
+        (raw.get("facture_id"), raw.get("assure_id"), raw.get("prestataire_id"),
+         Jsonb(sorted({e["code"] for e in errors})), Jsonb({"erreurs": errors}), user_id),
+    )
 
 
 def insert_prediction(conn, *, facture_id, nom_modele, version_modele, score, seuil,

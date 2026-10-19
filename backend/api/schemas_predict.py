@@ -22,13 +22,14 @@ class PredictResponse(BaseModel):
 
     accepte: bool = True
     facture_id: str
-    prediction_id: int
+    prediction_id: int | None
     score: float | None = None
     seuil: float | None = None
     is_alert: bool | None = None
     version_modele: str | None = None
     shap: list[ShapItem] | None = None
     latence_ms: int | None = None
+    codes_fraude: list[str] | None = None
     regles: list[RegleItem] | None = None   # alertes de règles de prescription (gestionnaire)
 
 

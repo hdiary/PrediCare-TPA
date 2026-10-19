@@ -119,7 +119,7 @@ class AdminRegistry:
     def load_active(self, force=False):
         return self.bundle
 
-    def list_versions(self):
+    def list_versions(self, conn):
         if self.fail:
             raise ModelUnavailableError("mlflow indisponible")
         return [dict(version="7", aliases=["champion"], statut="READY", run_id="r7",
@@ -127,7 +127,7 @@ class AdminRegistry:
                 dict(version="6", aliases=[], statut="READY", run_id="r6",
                      cree_le=None, charge=False)]
 
-    def activate_version(self, version):
+    def activate_version(self, conn, version, user):
         if self.fail:
             raise ModelUnavailableError("échec du chargement")
         self.bundle = ModelBundle("predicare-fraud", str(version), BUNDLE.model, BUNDLE.explainer,

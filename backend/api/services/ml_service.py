@@ -162,9 +162,17 @@ class ModelRegistry:
             logger.info("model_loaded version=%s sha256=%s", bundle.version, bundle.sha256)
             return bundle
 
-    def ensure_loaded(self, conn):
+    def ensure_loaded(self, conn=None):
         """Reload the active database version when another API worker changes it."""
-        return self.load_active(conn)
+        if conn is not None:
+            return self.load_active(conn)
+        from api import db
+
+        pool = db.get_pool()
+        if pool is None:
+            return self._bundle
+        with pool.connection(timeout=5) as pool_conn:
+            return self.load_active(pool_conn)
 
     def list_versions(self, conn) -> list[dict]:
         rows = conn.execute(

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+# db-backup restores the archived models_data volume at /models as well.
 
 if [ "$#" -lt 1 ]; then
     echo "Usage: restore.sh <backup-file-name> [--target-db NAME] [--verify-only]" >&2

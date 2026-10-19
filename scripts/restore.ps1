@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# The db-backup compose service restores models_data:/models with the database.
 $backupName = Split-Path -Leaf $BackupFile
 if ($backupName -notmatch '^predicare_.+\.dump\.gpg$') {
     throw "Provide the name of a predicare_*.dump.gpg file in .\backups."

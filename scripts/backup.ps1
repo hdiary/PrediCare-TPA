@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+# The db-backup compose service includes models_data:/models in its encrypted bundle.
 
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root

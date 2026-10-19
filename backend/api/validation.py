@@ -31,6 +31,13 @@ CHAMPS_OBLIGATOIRES = ("facture_id", "numero_facture", "prestataire_id", "assure
 TYPES_LIGNE = {"ACTE", "MEDICAMENT"}
 CANAUX = {"PAPIER_SCAN", "EMAIL", "PORTAIL_PRESTATAIRE"}
 MODES = {"TIERS_PAYANT", "REMBOURSEMENT_ASSURE"}
+ORDONNANCE_FACTURE_TYPES = {
+    "PHARMACIE": "MEDICAMENTS",
+    "LABORATOIRE": "EXAMENS",
+    "IMAGERIE": "EXAMENS",
+    "KINESITHERAPIE": "KINE",
+    "OPTIQUE": "OPTIQUE",
+}
 MAX_LIGNES = 100
 MAX_QUANTITE = 32767        # SMALLINT
 MAX_MONTANT = 10**12
@@ -257,6 +264,22 @@ def _db_checks(conn, parsed: dict, errors: list[dict]) -> None:
         _err(errors, "PRESTATAIRE_INCONNU", "prestataire_id", "Prestataire inconnu")
     if "type_facture" in parsed and not repo.categorie_existe(conn, parsed["type_facture"]):
         _err(errors, "VALEUR_INVALIDE", "type_facture", "Catégorie de facture inconnue")
+
+    # These are cross-table business checks from the mapping, kept after the
+    # existence checks so an absent row does not create a false mismatch.
+    if parsed.get("ordonnance_id") and parsed.get("type_facture") in ORDONNANCE_FACTURE_TYPES:
+        ordonnance = conn.execute(
+            "SELECT type_ordonnance FROM ordonnances WHERE ordonnance_id = %s",
+            (parsed["ordonnance_id"],),
+        ).fetchone()
+        expected = ORDONNANCE_FACTURE_TYPES[parsed["type_facture"]]
+        if ordonnance and ordonnance["type_ordonnance"] != expected:
+            parsed.setdefault("fraud_indicators", []).append({
+                "code": "TYPE_ORDONNANCE_INCOHERENT",
+                "champ": "ordonnance_id",
+                "message": f"type_ordonnance attendu : {expected}",
+            })
+
 
     lignes = parsed.get("lignes") or []
     if lignes:

@@ -85,3 +85,84 @@ def test_numero_facture_is_never_used_for_deduplication():
     import inspect
 
     assert "numero_facture" not in inspect.getsource(validation._db_checks)
+
+
+class _Row:
+    def __init__(self, row=None, rows=None):
+        self.row = row
+        self.rows = rows or []
+
+    def fetchone(self):
+        return self.row
+
+    def fetchall(self):
+        return self.rows
+
+
+class _ValidationDb:
+    def __init__(self, *, ordonnance_type="MEDICAMENTS", provider_type="PHARMACIE",
+                 known_code=True):
+        self.ordonnance_type = ordonnance_type
+        self.provider_type = provider_type
+        self.known_code = known_code
+
+    def execute(self, query, params=()):
+        normalized = " ".join(query.split()).upper()
+        if "FROM ASSURES" in normalized:
+            return _Row({"x": 1})
+        if "SELECT TYPE_PRESTATAIRE" in normalized:
+            return _Row({"type_prestataire": self.provider_type})
+        if "FROM PRESTATAIRES WHERE PRESTATAIRE_ID" in normalized:
+            return _Row({"x": 1})
+        if "FROM GARANTIES" in normalized:
+            return _Row({"x": 1})
+        if "FROM ORDONNANCES" in normalized:
+            return _Row({"type_ordonnance": self.ordonnance_type})
+        if "FROM REFERENTIEL_ACTES" in normalized:
+            rows = [{"code": params[0][0], "type_ligne": "ACTE", "libelle": "Acte"}]
+            return _Row(rows=rows if self.known_code else [])
+        if "FROM REFERENTIEL_MEDICAMENTS" in normalized:
+            return _Row(rows=[])
+        raise AssertionError(f"requête inattendue: {query}")
+
+
+def test_code_acte_inconnu_is_checked_against_reference_tables():
+    payload = fresh()
+    errors, _ = validation.validate_invoice(payload, _ValidationDb(known_code=False))
+    assert "CODE_ACTE_INCONNU" in {error["code"] for error in errors}
+
+
+def test_ordonnance_type_must_match_invoice_type():
+    payload = fresh()
+    payload.update(ordonnance_id="ORD-0000001", type_facture="PHARMACIE")
+    errors, clean = validation.validate_invoice(
+        payload, _ValidationDb(ordonnance_type="EXAMENS", provider_type="PHARMACIE")
+    )
+    assert errors == []
+    assert clean["fraud_indicators"][0]["code"] == "TYPE_ORDONNANCE_INCOHERENT"
+
+
+def test_ordonnance_type_matching_invoice_type_is_accepted():
+    payload = fresh()
+    payload.update(ordonnance_id="ORD-0000001", type_facture="PHARMACIE")
+    errors, clean = validation.validate_invoice(payload, _ValidationDb())
+    assert errors == []
+    assert "fraud_indicators" not in clean
+
+
+def test_provider_type_is_not_an_invoice_validation_rejection():
+    payload = fresh()
+    errors, clean = validation.validate_invoice(
+        payload, _ValidationDb(provider_type="LABORATOIRE")
+    )
+    assert errors == []
+    assert "fraud_indicators" not in clean
+
+
+def test_provider_type_does_not_block_a_valid_invoice():
+    payload = fresh()
+    errors, clean = validation.validate_invoice(
+        payload, _ValidationDb(provider_type="CABINET_GENERALISTE")
+    )
+    assert errors == []
+    assert "fraud_indicators" not in clean

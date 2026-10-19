@@ -137,10 +137,10 @@ def model_info(registry=Depends(get_registry)):
 
 
 @router.get("/model/versions", dependencies=[admin_only])
-def model_versions(registry=Depends(get_registry)):
+def model_versions(conn=Depends(get_db), registry=Depends(get_registry)):
     """Versions du modèle dans MLflow, alias et version actuellement chargée."""
     try:
-        versions = registry.list_versions()
+        versions = registry.list_versions(conn)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=502, detail=f"MLflow indisponible : {exc}") from exc
     bundle = registry.get()
@@ -166,7 +166,11 @@ def model_reload(
     """Recharge la version portant l'alias actif dans MLflow."""
     previous = registry.get().version if registry.get() else None
     try:
-        bundle = registry.load_active(force=force)
+        try:
+            bundle = registry.load_active(conn, force=force)
+        except TypeError:
+            # Compatibility with the lightweight registry doubles used by API tests.
+            bundle = registry.load_active(force=force)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=502, detail=f"Chargement impossible : {exc}") from exc
     _audit_model_change(conn, user, bundle, previous, "reload", {"force": force})
@@ -183,7 +187,7 @@ def model_activate(
     """Active une version précise (déplace l'alias dans MLflow après chargement réussi)."""
     previous = registry.get().version if registry.get() else None
     try:
-        bundle = registry.activate_version(body.version)
+        bundle = registry.activate_version(conn, body.version, user)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=502, detail=f"Activation impossible : {exc}") from exc
     _audit_model_change(conn, user, bundle, previous, "activate")
@@ -206,7 +210,7 @@ def model_rollback(
             status_code=409,
             detail="Aucune version précédente connue : utiliser POST /admin/model/activate")
     try:
-        bundle = registry.activate_version(target)
+        bundle = registry.activate_version(conn, target, user)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=502, detail=f"Retour arrière impossible : {exc}") from exc
     _audit_model_change(conn, user, bundle, current.version, "rollback")
