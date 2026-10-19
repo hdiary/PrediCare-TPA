@@ -1,15 +1,28 @@
-"""Routes d'administration : seuil et canaux modifiables en direct, journal d'audit, modèle.
+"""Routes d'administration : seuil et canaux modifiables en direct, journal d'audit, modèle,
+gestion des comptes utilisateurs.
 
 À compléter : supervision détaillée et dérive.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 
 from api import repositories as repo
-from api.audit import write_audit
+from api.audit import write_audit, write_audit_compte
 from api.config import get_settings
 from api.db import get_db
 from api.deps import require_role
-from api.schemas_admin import AuditEntryOut, SettingsModel, UserRowOut
+from api.schemas import Role
+from api.schemas_admin import (
+    AuditEntryOut,
+    MessageOut,
+    SettingsModel,
+    StatutCompte,
+    UserCreate,
+    UserRowOut,
+    UserUpdate,
+    _controle_rattachement,
+)
+from api.security import generate_reset_token, hash_password
+from api.services.mailer import send_reset_email
 from api.services.model_registry import ModelUnavailableError, get_registry
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -129,15 +142,196 @@ def get_audit_log(
     return out
 
 
+# ---------- gestion des comptes utilisateurs ----------
+
+UserId = Path(ge=1, le=2_147_483_647, description="Identifiant du compte")
+
+
+def _user_out(r: dict) -> dict:
+    """Compte vu par l'API (jamais le hachage du mot de passe)."""
+    return {
+        "user_id": r["utilisateur_id"], "email": r["email"], "role": r["role"],
+        "assure_id": r["assure_id"], "prestataire_id": r["prestataire_id"],
+        "is_active": r["actif"],
+        "last_login": r["derniere_connexion"].isoformat() if r["derniere_connexion"] else None,
+    }
+
+
+def _compte_ou_404(conn, user_id: int) -> dict:
+    cible = repo.get_utilisateur(conn, user_id)
+    if not cible:
+        raise HTTPException(status_code=404, detail="Compte introuvable")
+    return cible
+
+
+def _verifier_references(conn, assure_id: str | None, prestataire_id: str | None) -> None:
+    if assure_id and not repo.assure_existe(conn, assure_id):
+        raise HTTPException(status_code=422, detail="assure_id inconnu")
+    if prestataire_id and not repo.prestataire_existe(conn, prestataire_id):
+        raise HTTPException(status_code=422, detail="prestataire_id inconnu")
+
+
+def _garde_fou_auto_blocage(admin: dict, cible: dict, *, role_final: str,
+                            actif_final: bool) -> None:
+    """Un administrateur ne peut ni se désactiver ni se rétrograder lui-même.
+
+    Un autre administrateur peut toujours le faire : l'appelant est forcément actif."""
+    if (cible["utilisateur_id"] == admin["user_id"]
+            and (role_final != "administrateur" or not actif_final)):
+        raise HTTPException(
+            status_code=409,
+            detail="Vous ne pouvez ni désactiver ni rétrograder votre propre compte",
+        )
+
+
 @router.get("/users", response_model=list[UserRowOut], dependencies=[admin_only])
-def list_users(conn=Depends(get_db)):
-    """Comptes de la plateforme (jamais le hachage du mot de passe)."""
-    return [
-        {
-            "user_id": r["utilisateur_id"], "email": r["email"], "role": r["role"],
-            "assure_id": r["assure_id"], "prestataire_id": r["prestataire_id"],
-            "is_active": r["actif"],
-            "last_login": r["derniere_connexion"].isoformat() if r["derniere_connexion"] else None,
-        }
-        for r in repo.list_utilisateurs(conn)
-    ]
+def list_users(
+    role: Role | None = None,
+    statut: StatutCompte = "tous",
+    q: str | None = Query(None, max_length=100, description="Recherche dans l'adresse e-mail"),
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    conn=Depends(get_db),
+):
+    """Comptes de la plateforme (jamais le hachage du mot de passe).
+
+    `statut=inactifs` liste notamment les inscriptions en attente de validation.
+    """
+    actif = {"actifs": True, "inactifs": False, "tous": None}[statut]
+    rows = repo.list_utilisateurs(conn, role=role, actif=actif, q=q, limit=limit, offset=offset)
+    return [_user_out(r) for r in rows]
+
+
+@router.get("/users/{user_id}", response_model=UserRowOut, dependencies=[admin_only])
+def get_user(user_id: int = UserId, conn=Depends(get_db)):
+    return _user_out(_compte_ou_404(conn, user_id))
+
+
+@router.post("/users", response_model=UserRowOut, status_code=201)
+def create_user(
+    body: UserCreate,
+    admin: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    """Crée un compte (tout rôle). L'administrateur choisit le mot de passe initial."""
+    _verifier_references(conn, body.assure_id, body.prestataire_id)
+    created = repo.create_utilisateur(
+        conn, email=body.email, password_hash=hash_password(body.password), role=body.role,
+        assure_id=body.assure_id, prestataire_id=body.prestataire_id, actif=body.is_active,
+    )
+    if created is None:
+        raise HTTPException(status_code=409, detail="Un compte existe déjà avec cette adresse")
+    write_audit_compte(conn, event_type="compte_cree", actor_id=admin["user_id"],
+                       entity_id=created["utilisateur_id"],
+                       output_data={"role": body.role, "is_active": body.is_active})
+    return _user_out(created)
+
+
+@router.patch("/users/{user_id}", response_model=UserRowOut)
+def update_user(
+    body: UserUpdate,
+    user_id: int = UserId,
+    admin: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    """Modifie le rôle, le rattachement ou l'état d'un compte (seuls les champs envoyés).
+
+    Valider une inscription = PATCH `{"is_active": true, "assure_id": "ASS-..."}` (ou
+    `prestataire_id`). Changer de rôle efface les rattachements non renvoyés.
+    """
+    cible = _compte_ou_404(conn, user_id)
+    sent = body.model_fields_set
+    role_final = body.role or cible["role"]
+    role_change = role_final != cible["role"]
+    assure_final = body.assure_id if "assure_id" in sent else (
+        None if role_change else cible["assure_id"])
+    presta_final = body.prestataire_id if "prestataire_id" in sent else (
+        None if role_change else cible["prestataire_id"])
+    actif_final = cible["actif"] if body.is_active is None else body.is_active
+
+    if actif_final:   # un compte inactif (refusé, désactivé) peut rester non rattaché
+        try:
+            _controle_rattachement(role_final, assure_final, presta_final)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _garde_fou_auto_blocage(admin, cible, role_final=role_final, actif_final=actif_final)
+    _verifier_references(
+        conn,
+        assure_final if assure_final != cible["assure_id"] else None,
+        presta_final if presta_final != cible["prestataire_id"] else None,
+    )
+
+    voulu = {"role": role_final, "assure_id": assure_final, "prestataire_id": presta_final,
+             "actif": actif_final}
+    champs = {k: v for k, v in voulu.items() if v != cible[k]}
+    if not champs:
+        return _user_out(cible)
+    maj = repo.update_utilisateur(conn, user_id, champs)
+    write_audit_compte(
+        conn, event_type="compte_modifie", actor_id=admin["user_id"], entity_id=user_id,
+        input_data={"champs": sorted(champs)},
+        output_data={"role": maj["role"], "is_active": maj["actif"]},
+    )
+    return _user_out(maj)
+
+
+@router.delete("/users/{user_id}", response_model=UserRowOut)
+def deactivate_user(
+    user_id: int = UserId,
+    admin: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    """Désactive un compte (aucune suppression : l'historique et l'audit restent cohérents).
+
+    Effet immédiat : le rôle et l'état du compte sont relus en base à chaque requête.
+    """
+    cible = _compte_ou_404(conn, user_id)
+    if not cible["actif"]:
+        return _user_out(cible)
+    _garde_fou_auto_blocage(admin, cible, role_final=cible["role"], actif_final=False)
+    maj = repo.update_utilisateur(conn, user_id, {"actif": False})
+    write_audit_compte(conn, event_type="compte_desactive", actor_id=admin["user_id"],
+                       entity_id=user_id)
+    return _user_out(maj)
+
+
+@router.post("/users/{user_id}/unlock", response_model=UserRowOut)
+def unlock_user(
+    user_id: int = UserId,
+    admin: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    """Lève le verrouillage temporaire après trop d'échecs de connexion."""
+    _compte_ou_404(conn, user_id)
+    repo.deverrouiller_utilisateur(conn, user_id)
+    write_audit_compte(conn, event_type="compte_deverrouille", actor_id=admin["user_id"],
+                       entity_id=user_id)
+    return _user_out(repo.get_utilisateur(conn, user_id))
+
+
+@router.post("/users/{user_id}/reset-password", response_model=MessageOut, status_code=202)
+def send_user_reset_link(
+    background: BackgroundTasks,
+    user_id: int = UserId,
+    admin: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    """Envoie à l'utilisateur un lien de réinitialisation.
+
+    L'administrateur ne voit jamais le jeton ni le mot de passe."""
+    settings = get_settings()
+    cible = _compte_ou_404(conn, user_id)
+    if not cible["actif"]:
+        raise HTTPException(status_code=409, detail="Compte inactif")
+    recentes = repo.compter_demandes_reinitialisation(conn, user_id)
+    if recentes >= settings.password_reset_max_per_hour:
+        raise HTTPException(status_code=429,
+                            detail="Trop de demandes de réinitialisation récentes")
+    token, token_hash = generate_reset_token()
+    repo.creer_jeton_reinitialisation(
+        conn, user_id, token_hash, settings.password_reset_ttl_minutes)
+    write_audit_compte(conn, event_type="mdp_reinitialisation_demandee",
+                       actor_id=admin["user_id"], entity_id=user_id)
+    conn.commit()   # le jeton doit exister avant que le lien soit envoyé
+    background.add_task(send_reset_email, user_id, cible["email"], token)
+    return MessageOut(detail="Lien de réinitialisation envoyé à l'utilisateur")

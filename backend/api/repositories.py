@@ -302,11 +302,207 @@ def list_audit(conn, *, event_type: str | None, limit: int) -> list[dict]:
     ).fetchall()
 
 
-def list_utilisateurs(conn) -> list[dict]:
+# ---------- comptes utilisateurs ----------
+
+_COLS_UTILISATEUR = (
+    "utilisateur_id, email, role, assure_id, prestataire_id, actif, derniere_connexion"
+)
+_CHAMPS_MODIFIABLES = {"role", "assure_id", "prestataire_id", "actif"}
+
+
+def list_utilisateurs(conn, *, role: str | None = None, actif: bool | None = None,
+                      q: str | None = None, limit: int | None = None,
+                      offset: int = 0) -> list[dict]:
+    where, params = [], []
+    if role is not None:
+        where.append("role = %s")
+        params.append(role)
+    if actif is not None:
+        where.append("actif = %s")
+        params.append(actif)
+    if q:
+        # les jokers LIKE saisis par l'appelant sont neutralisés
+        motif = q.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        where.append("lower(email) LIKE %s")
+        params.append(f"%{motif}%")
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+    pagination = ""
+    if limit is not None:
+        pagination = " LIMIT %s OFFSET %s"
+        params += [limit, offset]
     return conn.execute(
-        "SELECT utilisateur_id, email, role, assure_id, prestataire_id, actif, derniere_connexion "
-        "FROM utilisateurs ORDER BY utilisateur_id"
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs {clause} "
+        f"ORDER BY utilisateur_id{pagination}",
+        params,
     ).fetchall()
+
+
+def get_utilisateur(conn, user_id: int) -> dict | None:
+    return conn.execute(
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+    ).fetchone()
+
+
+def get_utilisateur_par_email(conn, email: str) -> dict | None:
+    return conn.execute(
+        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE email = %s", (email,)
+    ).fetchone()
+
+
+def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT mot_de_passe_hash FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+    ).fetchone()
+    return row["mot_de_passe_hash"] if row else None
+
+
+def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
+                       assure_id: str | None, prestataire_id: str | None,
+                       actif: bool) -> dict | None:
+    """Crée un compte ; retourne None si l'adresse existe déjà (aucune erreur levée)."""
+    return conn.execute(
+        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, prestataire_id, "
+        "actif) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING "
+        f"RETURNING {_COLS_UTILISATEUR}",
+        (email, password_hash, role, assure_id, prestataire_id, actif),
+    ).fetchone()
+
+
+def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
+    """Met à jour les seuls champs autorisés (noms de colonnes jamais issus du client)."""
+    inconnus = set(champs) - _CHAMPS_MODIFIABLES
+    if inconnus:
+        raise ValueError(f"Champs non modifiables : {sorted(inconnus)}")
+    if not champs:
+        return get_utilisateur(conn, user_id)
+    sets = ", ".join(f"{k} = %s" for k in champs)
+    return conn.execute(
+        f"UPDATE utilisateurs SET {sets} WHERE utilisateur_id = %s RETURNING {_COLS_UTILISATEUR}",
+        [*champs.values(), user_id],
+    ).fetchone()
+
+
+def set_mot_de_passe(conn, user_id: int, password_hash: str) -> None:
+    """Change le mot de passe et lève un éventuel verrouillage de connexion."""
+    conn.execute(
+        "UPDATE utilisateurs SET mot_de_passe_hash = %s, tentatives_echouees = 0, "
+        "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
+        (password_hash, user_id),
+    )
+
+
+def deverrouiller_utilisateur(conn, user_id: int) -> bool:
+    cur = conn.execute(
+        "UPDATE utilisateurs SET tentatives_echouees = 0, verrouille_jusqua = NULL "
+        "WHERE utilisateur_id = %s",
+        (user_id,),
+    )
+    return cur.rowcount > 0
+
+
+def est_verrouille(conn, user_id: int) -> bool:
+    row = conn.execute(
+        "SELECT (verrouille_jusqua IS NOT NULL AND verrouille_jusqua > now()) AS v "
+        "FROM utilisateurs WHERE utilisateur_id = %s",
+        (user_id,),
+    ).fetchone()
+    return bool(row and row["v"])
+
+
+def enregistrer_echec_mot_de_passe(conn, user_id: int, max_tentatives: int,
+                                   minutes_verrou: int) -> None:
+    """Même compteur que la connexion : après N échecs, le compte est verrouillé."""
+    conn.execute(
+        "UPDATE utilisateurs SET "
+        "tentatives_echouees = CASE WHEN tentatives_echouees + 1 >= %s "
+        "THEN 0 ELSE tentatives_echouees + 1 END, "
+        "verrouille_jusqua = CASE WHEN tentatives_echouees + 1 >= %s "
+        "THEN now() + make_interval(mins => %s) ELSE verrouille_jusqua END "
+        "WHERE utilisateur_id = %s",
+        (max_tentatives, max_tentatives, minutes_verrou, user_id),
+    )
+
+
+# ---------- jetons de réinitialisation de mot de passe ----------
+# Seul le hachage SHA-256 du jeton est stocké : une fuite de la base ne donne aucun lien valide.
+# La table est créée à la première utilisation si les migrations ne l'ont pas déjà fait
+# (voir aussi api/sql/001_reinitialisations_mdp.sql).
+
+_reset_table_ready = False
+
+
+def ensure_reset_table(conn) -> None:
+    global _reset_table_ready
+    if _reset_table_ready:
+        return
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS reinitialisations_mdp ("
+            "reset_id BIGSERIAL PRIMARY KEY, "
+            "utilisateur_id INTEGER NOT NULL REFERENCES utilisateurs(utilisateur_id) "
+            "ON DELETE CASCADE, "
+            "token_hash TEXT NOT NULL UNIQUE, "
+            "cree_le TIMESTAMPTZ NOT NULL DEFAULT now(), "
+            "expire_le TIMESTAMPTZ NOT NULL, "
+            "utilise_le TIMESTAMPTZ)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_reinitialisations_mdp_utilisateur "
+            "ON reinitialisations_mdp (utilisateur_id)"
+        )
+        conn.commit()   # le DDL ne doit pas être annulé par un échec ultérieur de la requête
+    except (psycopg.errors.DuplicateTable, psycopg.errors.UniqueViolation,
+            psycopg.errors.DuplicateObject):
+        conn.rollback()   # un autre processus l'a créée en même temps
+    _reset_table_ready = True
+
+
+def compter_demandes_reinitialisation(conn, user_id: int, minutes: int = 60) -> int:
+    ensure_reset_table(conn)
+    return conn.execute(
+        "SELECT count(*) AS n FROM reinitialisations_mdp "
+        "WHERE utilisateur_id = %s AND cree_le > now() - make_interval(mins => %s)",
+        (user_id, minutes),
+    ).fetchone()["n"]
+
+
+def creer_jeton_reinitialisation(conn, user_id: int, token_hash: str, ttl_minutes: int) -> None:
+    """Enregistre un nouveau jeton et invalide les précédents du même compte."""
+    ensure_reset_table(conn)
+    conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE utilisateur_id = %s AND utilise_le IS NULL",
+        (user_id,),
+    )
+    conn.execute(
+        "DELETE FROM reinitialisations_mdp WHERE expire_le < now() - interval '7 days'"
+    )
+    conn.execute(
+        "INSERT INTO reinitialisations_mdp (utilisateur_id, token_hash, expire_le) "
+        "VALUES (%s, %s, now() + make_interval(mins => %s))",
+        (user_id, token_hash, ttl_minutes),
+    )
+
+
+def consommer_jeton_reinitialisation(conn, token_hash: str) -> int | None:
+    """Usage unique et atomique : retourne l'utilisateur si le jeton est valide, sinon None."""
+    ensure_reset_table(conn)
+    row = conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE token_hash = %s AND utilise_le IS NULL AND expire_le > now() "
+        "RETURNING utilisateur_id",
+        (token_hash,),
+    ).fetchone()
+    return row["utilisateur_id"] if row else None
+
+
+def invalider_jetons_reinitialisation(conn, user_id: int) -> None:
+    ensure_reset_table(conn)
+    conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE utilisateur_id = %s AND utilise_le IS NULL",
+        (user_id,),
+    )
 
 
 def historique_prestataire(conn, prestataire_id: str, hors_facture_id: str,

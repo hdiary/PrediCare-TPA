@@ -1,4 +1,6 @@
-"""Hachage des mots de passe (bcrypt) et jetons JWT."""
+"""Hachage des mots de passe (bcrypt), jetons JWT et jetons de réinitialisation."""
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
@@ -56,3 +58,17 @@ def decode_token(token: str) -> dict:
         algorithms=[settings.jwt_algorithm],
         options={"require": ["exp", "sub"]},
     )
+
+
+def generate_reset_token() -> tuple[str, str]:
+    """Retourne (jeton à envoyer à l'utilisateur, empreinte SHA-256 à stocker).
+
+    Le jeton est aléatoire (256 bits) : une empreinte simple suffit, contrairement à un mot
+    de passe choisi par un humain.
+    """
+    token = secrets.token_urlsafe(32)
+    return token, hash_reset_token(token)
+
+
+def hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

@@ -35,6 +35,10 @@ backend/api/
 | `GET /health` | public | État (base, modèle) |
 | `POST /auth/login`, `POST /auth/token` | public | Connexion, retourne un JWT |
 | `GET /auth/me` | connecté | Profil |
+| `POST /auth/register` | public | Demande de compte (assuré ou professionnel de santé), créé **inactif** |
+| `POST /auth/forgot-password` | public | Envoie un lien de réinitialisation par e-mail (réponse toujours identique) |
+| `POST /auth/reset-password` | public (jeton) | Nouveau mot de passe à partir du lien (usage unique) |
+| `POST /auth/change-password` | connecté | Changement du mot de passe (ancien requis) |
 | `POST /predict` | professionnel_sante, gestionnaire | Scorer une facture |
 | `GET /alerts` | gestionnaire | Liste (`statut=en_attente`, `traitees`, `toutes`) |
 | `GET /alerts/{facture_id}` | gestionnaire | Détail avec SHAP et décisions |
@@ -42,6 +46,13 @@ backend/api/
 | `GET /alerts/{facture_id}/identite` | gestionnaire | Identité déchiffrée de l'assuré (tracée) |
 | `GET /admin/model`, `POST /admin/model/reload` | administrateur | Version du modèle, rechargement |
 | `GET /admin/ping` | administrateur | Test du contrôle d'accès |
+| `GET /admin/users` | administrateur | Liste des comptes (`role`, `statut=actifs\|inactifs\|tous`, `q`, `limit`, `offset`) |
+| `GET /admin/users/{id}` | administrateur | Détail d'un compte |
+| `POST /admin/users` | administrateur | Crée un compte, tout rôle |
+| `PATCH /admin/users/{id}` | administrateur | Rôle, rattachement, activation (valide une inscription) |
+| `DELETE /admin/users/{id}` | administrateur | Désactive le compte (jamais supprimé) |
+| `POST /admin/users/{id}/unlock` | administrateur | Lève le verrouillage après échecs de connexion |
+| `POST /admin/users/{id}/reset-password` | administrateur | Envoie un lien de réinitialisation à l'utilisateur |
 
 L'identifiant d'une alerte est le `facture_id` (une prédiction par facture).
 
@@ -62,6 +73,20 @@ Protéger un endpoint : `dependencies=[Depends(require_role("gestionnaire"))]`.
 - limite connue : le compteur est par compte, pas par adresse IP ; un email inconnu n'est pas suivi.
 
 **Contrôle d'accès (S1)** : le rôle est relu en base à chaque requête, donc un jeton falsifié ou un rôle modifié n'ouvre aucun droit. Un rôle non autorisé reçoit **403**, l'absence de jeton **401**.
+
+### Comptes : inscription, mot de passe, gestion
+
+**Inscription** (`POST /auth/register`, `{"email", "password", "role"}`) : seuls `assure` et `professionnel_sante` sont demandables. Le compte est créé **inactif et non rattaché** (le rattachement n'est jamais pris dans la requête, cf. règle ci-dessus). Tant qu'un administrateur ne l'a pas validé, la connexion avec le bon mot de passe renvoie **403** (« Compte inactif ou en attente de validation »). Réponse 202 identique si l'adresse existe déjà. `REGISTRATION_ENABLED=false` ferme l'inscription.
+
+Valider : `GET /admin/users?statut=inactifs`, puis `PATCH /admin/users/{id}` avec `{"is_active": true, "assure_id": "ASS-..."}` (ou `prestataire_id`). Un compte actif `assure` ou `professionnel_sante` doit être rattaché à un assuré ou à un prestataire existant ; `gestionnaire` et `administrateur` ne le sont à rien. Changer de rôle efface les rattachements non renvoyés. Un administrateur ne peut ni se désactiver ni se rétrograder.
+
+**Mot de passe** : 10 à 128 caractères, au moins une lettre et un chiffre.
+
+**Mot de passe oublié** : `POST /auth/forgot-password` (réponse 202 identique que le compte existe ou non, aucun e-mail pour un compte inactif) génère un jeton aléatoire de 256 bits, **dont seul le hachage SHA-256 est stocké** (table `reinitialisations_mdp`, `api/sql/001_reinitialisations_mdp.sql`, créée à la première utilisation si absente). Le lien `APP_PUBLIC_URL + PASSWORD_RESET_PATH + ?token=...` est valable `PASSWORD_RESET_TTL_MINUTES` (30), à usage unique ; une nouvelle demande invalide les précédentes ; limite de `PASSWORD_RESET_MAX_PER_HOUR` (3) demandes par compte et par heure. `POST /auth/reset-password` (`{"token", "new_password"}`) lève aussi un éventuel verrouillage. Le **frontend** doit fournir la page `/reset-password` qui lit `?token=` et appelle cette route.
+
+**E-mails** : SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS`). Sans `SMTP_HOST`, aucun e-mail n'est envoyé ; en développement, `DEV_LOG_RESET_LINK=true` écrit le lien dans les journaux (à ne jamais activer en production).
+
+**Changement de mot de passe** : `POST /auth/change-password` ; les échecs alimentent le même verrouillage que la connexion.
 
 ## 4. `POST /predict`
 
@@ -118,6 +143,8 @@ Table `journal_audit`, en ajout seul (triggers contre UPDATE / DELETE / TRUNCATE
 | `erreur_prediction` | Échec du prétraitement |
 | `modele_charge` | Rechargement du modèle |
 | `acces_identite` | Déchiffrement d'une identité |
+| `compte_demande`, `compte_cree`, `compte_modifie`, `compte_desactive`, `compte_deverrouille` | Inscription et gestion des comptes (ni e-mail ni mot de passe dans le journal) |
+| `mdp_reinitialisation_demandee`, `mdp_reinitialise`, `mdp_modifie` | Cycle du mot de passe |
 
 Vérification S8 : `tests/s8_audit_check.sh`.
 
@@ -139,6 +166,11 @@ Mise à jour ou retour arrière : déplacer l'alias dans MLflow, puis `POST /adm
 | `IDENTITY_ENCRYPTION_KEY` | Clé Fernet (ou 64 caractères hex) | requise pour `/identite` |
 | `MLFLOW_TRACKING_URI`, `MLFLOW_MODEL_NAME`, `MLFLOW_MODEL_ALIAS` | MLflow | voir `config.py` |
 | `DEMO_PASSWORD` | Mot de passe des 4 comptes démo (désactivé si vide) | vide |
+| `REGISTRATION_ENABLED` | Inscription publique ouverte | true |
+| `PASSWORD_RESET_TTL_MINUTES`, `PASSWORD_RESET_MAX_PER_HOUR` | Validité du lien, demandes par compte et par heure | 30 / 3 |
+| `APP_PUBLIC_URL`, `PASSWORD_RESET_PATH` | Base du lien envoyé par e-mail (page du frontend) | `http://localhost:3000`, `/reset-password` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS` | Envoi des e-mails | vide, 587, vide, vide, `no-reply@predicare.local`, true |
+| `DEV_LOG_RESET_LINK` | Développement : lien de réinitialisation dans les journaux si pas de SMTP | false |
 
 Comptes démo : `pro@`, `assure@`, `gestionnaire@`, `admin@predicare.local`. Le compte assuré est lié à un assuré principal ayant des factures, le compte pro à un prestataire actif ayant des factures.
 
@@ -149,7 +181,9 @@ pip install -r backend/requirements.txt
 pytest tests -q
 ```
 
-Couverture : authentification et rôles, un test par code de rejet, audit (S8), absence de décision automatique, identités, et les tests de sécurité **S1** et **S12** (`tests/test_security_s1_s12.py`).
+Les tests des comptes (`tests/test_comptes.py`) et ceux du frontend s'exécutent contre un vrai PostgreSQL si `TEST_DATABASE_URL` est défini (sinon ignorés).
+
+Couverture : authentification et rôles, inscription, mot de passe oublié et changé, gestion des comptes, un test par code de rejet, audit (S8), absence de décision automatique, identités, et les tests de sécurité **S1** et **S12** (`tests/test_security_s1_s12.py`).
 
 
 
@@ -158,3 +192,5 @@ Couverture : authentification et rôles, un test par code de rejet, audit (S8), 
 - Notification n8n quand une alerte est créée (fin de `predict.py`) ; import de factures en lot ; `/metrics` et dérive ; seuil modifiable depuis l'écran d'administration.
 - Lecture des identités avec le rôle SQL `identity_reader` (le contrat le prévoit) plutôt qu'avec le compte propriétaire.
 - Connexion de l'API avec un rôle à droits limités.
+- Comptes : un jeton JWT déjà émis reste valide jusqu'à son expiration après un changement de mot de passe (réduire `JWT_EXPIRE_MINUTES` ou ajouter un identifiant de session) ; pas de `logout` ni de `refresh` ; pas de limite par adresse IP sur `/auth/register` ni `/auth/forgot-password` (à poser au reverse proxy).
+- Si `journal_audit.type_evenement` porte une contrainte CHECK dans vos migrations, y ajouter les nouveaux types (l'échec est journalisé sans bloquer l'opération sur le compte).

@@ -134,6 +134,10 @@ services:
       AGENT_DATABASE_URL: postgresql://agent_ro:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
+      # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD-123465789}
+      SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD-12346798}
+      SEED_PDS_PASSWORD: ${SEED_PDS_PASSWORD-123456789}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}

@@ -27,8 +27,30 @@ class Settings(BaseSettings):
     # Comptes de démonstration (créés au démarrage si DEMO_PASSWORD est défini)
     demo_password: str | None = None
 
+    # Comptes créés au démarrage (idempotent). Un mot de passe vide désactive le compte.
+    seed_admin_password: str | None = None    # admin@predicare.com    (administrateur)
+    seed_gestion_password: str | None = None  # gestion@predicare.com  (gestionnaire)
+    seed_pds_password: str | None = None      # pds@predicare.com      (professionnel de santé)
+
     # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
     identity_encryption_key: str | None = None
+
+    # Création de compte et mot de passe oublié
+    registration_enabled: bool = True          # POST /auth/register ouvert au public
+    password_reset_ttl_minutes: int = 30       # durée de validité du lien de réinitialisation
+    password_reset_max_per_hour: int = 3       # demandes max par compte et par heure
+    app_public_url: str = "http://localhost:3000"   # base du lien envoyé par e-mail
+    password_reset_path: str = "/reset-password"    # page du frontend (reçoit ?token=...)
+
+    # Envoi d'e-mails (SMTP). Sans SMTP_HOST, aucun e-mail n'est envoyé (voir mailer.py).
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "no-reply@predicare.local"
+    smtp_starttls: bool = True
+    # DÉVELOPPEMENT UNIQUEMENT : sans SMTP, écrit le lien de réinitialisation dans les journaux.
+    dev_log_reset_link: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

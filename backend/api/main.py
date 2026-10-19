@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api import db
-from api.bootstrap import ensure_demo_users
+from api.bootstrap import ensure_demo_users, ensure_seed_users
 from api.config import get_settings
 from api.logging_config import configure_logging
 from api.middleware import BodySizeLimitMiddleware
@@ -35,6 +35,7 @@ async def lifespan(_: FastAPI):
         logger.warning("JWT_SECRET faible ou par défaut : générer avec `openssl rand -hex 32`")
     db.init_pool()
     ensure_demo_users()
+    ensure_seed_users()
     # En arrière-plan : un MLflow lent ou absent ne doit pas retarder le démarrage de l'API
     threading.Thread(target=_initial_model_load, daemon=True).start()
     yield
