@@ -1,8 +1,9 @@
 # Liaison frontend ↔ backend (PrediCare TPA)
 
-Le frontend n'appelle que `/api/...`. Vite (développement) et nginx (production) redirigent vers
-le backend FastAPI en retirant le préfixe : `/api/auth/login` → `http://api:8000/auth/login`.
-Toute la traduction (rôles, noms de champs, statuts, erreurs) est dans **`src/lib/api.ts`**.
+Le frontend n'appelle que `/api/...`. Vite et nginx conservent `/api/v1/...` pour les routes
+versionnées et retirent le préfixe `/api` pour les routes historiques (par exemple
+`/api/auth/login` → `http://api:8000/auth/login`). Toute la traduction (rôles, noms de champs,
+statuts, erreurs) est dans **`src/lib/api.ts`**.
 
 ## Démarrer en développement
 
@@ -24,7 +25,7 @@ Pour avoir des comptes de démonstration, définir `DEMO_PASSWORD` côté backen
     build:
       context: ./frontend
       args:
-        VITE_MOCKS: "kpis,metrics,models,chat"   # "none" quand tout est branché
+        VITE_MOCKS: "models,chat"   # fonctions non encore branchées
     ports: ["3000:80"]
     depends_on: [api]
 ```
@@ -42,8 +43,8 @@ Le service du backend doit s'appeler `api` et écouter sur le port 8000 (voir `n
 | Journal d'audit | `GET /admin/audit-log` | **réel** |
 | Utilisateurs | `GET /admin/users` | **réel** |
 | Supervision : état des services | `GET /health` | **réel** pour API, base, modèle ; n8n et base vectorielle affichés « Non surveillé » |
-| Tableau de bord (KPI) | `/kpis` | **simulé** (à faire : P3-15) |
-| Supervision : métriques, dérive | `/admin/metrics` | **simulé** (P3-18, P3-19) |
+| Tableau de bord manager (KPI) | `/bi/kpis` | **réel**, snapshot partagé rafraîchi toutes les 5 min |
+| Supervision : métriques, dérive | `/admin/metrics` | **réel** pour latence de scoring et métriques HTTP ; PSI `N/A` sans référence d'entraînement |
 | Versions du modèle | `/admin/models` | **simulé** |
 | Assistant conversationnel | `/chat`, `/chat/history` | **simulé** (P4) |
 | Inscription, mot de passe oublié, réinitialisation | `/auth/register`, `/auth/forgot-password`, `/auth/reset-password` | **simulé** : aucun compte créé, aucun e-mail envoyé (avertissement affiché) |
@@ -52,6 +53,11 @@ Le service du backend doit s'appeler `api` et écouter sur le port 8000 (voir `n
 
 Tant que des fonctions sont simulées, un bandeau jaune « Données de démonstration » les liste.
 `VITE_MOCKS=all` rend tout le frontend autonome (démo sans backend).
+
+Les KPI BI et les métriques système ne sont pas simulés : ils utilisent l'API,
+et le dashboard indique l'horodatage du snapshot. Le coût FinOps RAG est `N/A`
+tant qu'une tarification n'est pas configurée; la dérive du modèle est `N/A`
+tant qu'une distribution de référence n'est pas disponible.
 
 ## Choix à valider par l'équipe
 

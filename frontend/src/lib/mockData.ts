@@ -3,16 +3,13 @@ import type {
   Alert,
   PrescriptionAlert,
   AlertDetail,
-  ChatMessage,
   Conversation,
   Invoice,
   InvoiceSubmissionResult,
-  KPIData,
   ModelVersion,
   AuditLogEntry,
   AdminSettings,
   ServiceStatus,
-  SystemMetrics,
   User,
   Role,
 } from './types';
@@ -121,42 +118,12 @@ export const mockConversations: Conversation[] = [
   },
 ];
 
-export const mockKPIData: KPIData = {
-  invoices_processed: 2847,
-  amount_saved: 142300,
-  detection_rate: 0.127,
-  alerts_pending: 34,
-  series: [
-    { date: 'S1', invoices: 412, alerts: 38, saved: 18200 },
-    { date: 'S2', invoices: 389, alerts: 41, saved: 21500 },
-    { date: 'S3', invoices: 445, alerts: 52, saved: 28100 },
-    { date: 'S4', invoices: 401, alerts: 35, saved: 19800 },
-    { date: 'S5', invoices: 468, alerts: 48, saved: 26200 },
-    { date: 'S6', invoices: 432, alerts: 44, saved: 28500 },
-    { date: 'S7', invoices: 300, alerts: 34, saved: 0 },
-  ],
-};
-
 export const mockServiceStatus: ServiceStatus = {
   api: 'ok',
   database: 'ok',
   model: 'degraded',
   n8n: 'ok',
   vector_db: 'ok',
-};
-
-export const mockSystemMetrics: SystemMetrics = {
-  latency_p95_ms: 142,
-  requests_per_min: 38,
-  error_rate: 0.012,
-  drift_psi: 0.083,
-  series: Array.from({ length: 24 }, (_, i) => ({
-    date: `${String(i).padStart(2, '0')}:00`,
-    latency: 100 + Math.random() * 80,
-    requests: 20 + Math.random() * 40,
-    errors: Math.random() * 3,
-    psi: 0.05 + Math.random() * 0.06,
-  })),
 };
 
 export const mockModelVersions: ModelVersion[] = [

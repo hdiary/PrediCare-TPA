@@ -15,12 +15,16 @@ recréer. Les exécutions répétées d'une même version sont idempotentes.
 - La connexion Metabase à PostgreSQL utilise le rôle `metabase_ro`, en lecture
   seule sur la vue matérialisée `mv_bi_factures`; ne pas utiliser le
   superutilisateur pour les questions BI.
+- L'API FastAPI et Metabase lisent le même instantané. Les routes BI
+  `/api/v1/bi/kpis`, `/api/v1/bi/model` et `/api/v1/bi/refresh-status`
+  acceptent les rôles `gestionnaire` et `administrateur`.
 - `mv_bi_factures` est rafraîchie exclusivement par `bi-refresh` toutes les
   cinq minutes avec `REFRESH MATERIALIZED VIEW CONCURRENTLY`. Aucun trigger
   BI n'est installé sur les tables métier.
 - Le dashboard manager consomme aussi `GET /api/v1/bi/kpis?jours=30`.
-  Le champ `stale=true` signale que l'API sert la dernière valeur connue
-  lorsqu'une source BI est temporairement indisponible.
+  Le bandeau `Données au ...` reflète l'heure du dernier rafraîchissement
+  réussi, et `stale=true` apparaît après dix minutes ou à l'échec du
+  rafraîchissement. Le statut et l'erreur sont également exposés à l'admin.
 - Les vues exposent, par facture, la dernière prédiction enregistrée et la
   dernière décision associée à cette prédiction. En cas d'égalité
   d'horodatage, l'identifiant de ligne le plus élevé départage les versions.
@@ -40,6 +44,9 @@ recréer. Les exécutions répétées d'une même version sont idempotentes.
 | Volume journalier | Factures et alertes groupées par `date_facture`. |
 | Distribution des scores | Histogramme en dix tranches sur `[0, 1]`. |
 | Top prestataires à risque | Prestataires ayant le plus d'alertes. |
+| Latence du scoring | p50 et p95 des prédictions, issus de `latence_ms`. |
+| Notifications | États de livraison réellement enregistrés dans `alertes`. |
+| FinOps RAG | Jetons, cache hit et latence issus de `rag_query_log`. Le coût reste `N/A` tant qu'une grille tarifaire n'est pas configurée. |
 
 Le jeu fourni est en MGA. Si d'autres devises sont introduites, adapter les
 cartes monétaires pour ne jamais additionner des devises différentes. Pour
@@ -49,8 +56,10 @@ facturé à lui seul ne prouve pas cette économie.
 
 Le rappel est calculé uniquement sur les fraudes valides labellisées pour
 lesquelles une prédiction existe; les factures sans score sont exclues du
-dénominateur. Sans décision finale, les cartes monétaires des rejets et le
-taux de rejet restent vides plutôt que de laisser croire à un montant nul.
+dénominateur. La dérive PSI n'est pas calculée tant qu'une référence de
+distribution d'entraînement n'est pas fournie; l'interface affiche `N/A`
+plutôt qu'une valeur fictive. Les coûts RAG sont également `N/A` sans
+tarification configurée.
 
 ## Création ou mise à jour
 

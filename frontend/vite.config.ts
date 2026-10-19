@@ -18,13 +18,12 @@ export default defineConfig(({ mode }) => {
       exclude: ['lucide-react'],
     },
     server: {
-      // Le navigateur appelle /api/... ; Vite redirige vers le backend en retirant le préfixe /api
-      // (le backend expose /auth/login, /alerts, ... sans préfixe). Aucun CORS à configurer en dev.
+      // Les routes historiques retirent /api ; /api/v1 est conservé pour l'API versionnée.
       proxy: {
         '/api': {
-          target: 'http://api:8000',
+          target: backend,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
+          rewrite: (path) => path.startsWith('/api/v1/') ? path : path.replace(/^\/api/, ''),
         },
       },
     },

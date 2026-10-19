@@ -8,8 +8,8 @@ import { mockedFeatureList, type Feature } from '@/lib/api';
 
 const FEATURE_LABELS: Record<Feature, string> = {
   auth: 'connexion', alerts: 'alertes', invoices: 'factures', settings: 'configuration', audit: "journal d'audit",
-  users: 'utilisateurs', health: 'état des services', kpis: 'tableau de bord (indicateurs)',
-  metrics: 'métriques système', models: 'versions du modèle', chat: 'assistant conversationnel',
+  users: 'utilisateurs', health: 'état des services',
+  models: 'versions du modèle', chat: 'assistant conversationnel',
   prescriptions: 'ordonnances et alertes de prescription', register: 'inscription', password: 'mot de passe oublié',
 };
 import type { Role } from '@/lib/types';

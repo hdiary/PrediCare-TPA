@@ -279,7 +279,11 @@ services:
       - |
         until pg_isready; do sleep 2; done
         while true; do
-          psql --set ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_bi_factures"
+          if psql --set ON_ERROR_STOP=1 -c "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_bi_factures"; then
+            psql --set ON_ERROR_STOP=1 -c "UPDATE bi_refresh_status SET last_success_at = now(), last_error = NULL WHERE singleton"
+          else
+            psql --set ON_ERROR_STOP=1 -c "UPDATE bi_refresh_status SET last_error = 'Échec du rafraîchissement ; consulter les logs bi-refresh' WHERE singleton"
+          fi
           sleep 300
         done
     depends_on:

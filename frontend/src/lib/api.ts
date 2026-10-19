@@ -5,19 +5,19 @@
  *   traduction est faite ICI, pour que les pages n'aient pas à la connaître.
  * - Les fonctions pas encore disponibles côté backend restent simulées (mockData.ts). La liste est
  *   réglée par VITE_MOCKS : "all" (tout simulé, démo hors-ligne), "none" (rien de simulé), ou une
- *   liste de fonctions séparées par des virgules. Par défaut : kpis,metrics,models,chat.
+ *   liste de fonctions séparées par des virgules.
  */
 import type {
   AuthResponse,
   Role,
   Invoice,
   Alert,
-  AlertDetail,
   AlertApiDetail,
   AlertStatus,
   AlertType,
   KPIData,
   BIKpiData,
+  BIModelData,
   ServiceStatus,
   ServiceState,
   SystemMetrics,
@@ -37,9 +37,7 @@ import {
   mockInvoices,
   mockAlerts,
   mockAlertDetail,
-  mockKPIData,
   mockServiceStatus,
-  mockSystemMetrics,
   mockModelVersions,
   mockAuditLog,
   mockAdminSettings,
@@ -60,9 +58,9 @@ export const BASE_URL: string = import.meta.env.VITE_API_URL || "/api";
 
 export type Feature =
   | "auth" | "alerts" | "invoices" | "settings" | "audit" | "users"
-  | "health" | "kpis" | "metrics" | "models" | "chat" | "prescriptions" | "register" | "password";
+  | "health" | "models" | "chat" | "prescriptions" | "register" | "password";
 
-const DEFAULT_MOCKS = "kpis,metrics,models,chat,prescriptions,register,password";
+const DEFAULT_MOCKS = "models,chat,prescriptions,register,password";
 const mockedFeatures = new Set(
   String(import.meta.env.VITE_MOCKS || DEFAULT_MOCKS)
     .split(",")
@@ -78,7 +76,7 @@ export function isMock(feature: Feature): boolean {
 /** Fonctions simulées en ce moment (affichées dans le bandeau « données de démonstration »). */
 export function mockedFeatureList(): Feature[] {
   const all: Feature[] = ["auth", "alerts", "invoices", "settings", "audit", "users", "health",
-    "kpis", "metrics", "models", "chat", "prescriptions", "register", "password"];
+    "models", "chat", "prescriptions", "register", "password"];
   return all.filter(isMock);
 }
 
@@ -642,16 +640,15 @@ export const api = {
   },
 
   async getKPIs(period?: string): Promise<KPIData> {
-    if (isMock("kpis")) {
-      await delay(500);
-      return mockKPIData;
-    }
     return request(`/kpis${period ? `?period=${period}` : ""}`);
   },
 
   async getBIKPIs(): Promise<BIKpiData> {
-    if (isMock("kpis")) return mockKPIData as unknown as BIKpiData;
-    return request("/bi/kpis");
+    return request("/v1/bi/kpis");
+  },
+
+  async getBIModel(): Promise<BIModelData> {
+    return request("/v1/bi/model");
   },
 
   async logout(): Promise<void> {
@@ -682,10 +679,6 @@ export const api = {
   },
 
   async getSystemMetrics(period?: string): Promise<SystemMetrics> {
-    if (isMock("metrics")) {
-      await delay(500);
-      return mockSystemMetrics;
-    }
     return request(`/admin/metrics${period ? `?period=${period}` : ""}`);
   },
 

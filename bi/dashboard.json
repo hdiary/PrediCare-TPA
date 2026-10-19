@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "PrediCare - Pilotage BI",
   "description": "Vues Metabase basees sur le snapshot BI rafraichi toutes les cinq minutes.",
   "cards": [
@@ -7,7 +7,7 @@
       "key": "factures_traitees",
       "name": "Factures traitees",
       "display": "scalar",
-      "sql": "SELECT COUNT(*) AS factures_traitees FROM mv_bi_factures"
+      "sql": "SELECT COUNT(*) FILTER (WHERE score IS NOT NULL) AS factures_traitees FROM mv_bi_factures"
     },
     {
       "key": "montant_reclame",
@@ -16,34 +16,40 @@
       "sql": "SELECT COALESCE(SUM(montant_total), 0) AS montant_reclame FROM mv_bi_factures"
     },
     {
+      "key": "montant_rembourse",
+      "name": "Montant total rembourse",
+      "display": "scalar",
+      "sql": "SELECT COALESCE(SUM(montant_pris_en_charge), 0) AS montant_rembourse FROM mv_bi_factures"
+    },
+    {
       "key": "montant_a_risque",
       "name": "Montant a risque",
       "display": "scalar",
-      "sql": "SELECT COALESCE(SUM(montant_total) FILTER (WHERE is_alert AND decision IS NULL), 0) AS montant_a_risque FROM mv_bi_factures"
+      "sql": "SELECT COALESCE(SUM(montant_total) FILTER (WHERE is_alert), 0) AS montant_a_risque FROM mv_bi_factures"
     },
     {
       "key": "montant_economise",
       "name": "Montant economise",
       "display": "scalar",
-      "sql": "SELECT COALESCE(SUM(c.montant_reclame - c.montant_calcule), 0) AS montant_economise FROM mv_bi_factures v JOIN calculs_remboursement c USING (facture_id) WHERE v.decision IN ('REJETER', 'CONFIRMER_FRAUDE', 'rejete', 'fraude_confirmee')"
+      "sql": "SELECT COALESCE(SUM(montant_reclame - montant_calcule) FILTER (WHERE decision IN ('REJETER', 'CONFIRMER_FRAUDE', 'rejete', 'fraude_confirmee')), 0) AS montant_economise FROM mv_bi_factures"
     },
     {
       "key": "taux_alerte",
       "name": "Taux d'alerte",
       "display": "scalar",
-      "sql": "SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE is_alert) / NULLIF(COUNT(*), 0), 0) AS taux_alerte_pct FROM mv_bi_factures"
+      "sql": "SELECT 100.0 * COUNT(*) FILTER (WHERE is_alert) / NULLIF(COUNT(*) FILTER (WHERE score IS NOT NULL), 0) AS taux_alerte_pct FROM mv_bi_factures"
     },
     {
       "key": "precision_operationnelle",
       "name": "Precision operationnelle",
       "display": "scalar",
-      "sql": "SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE decision IN ('CONFIRMER_FRAUDE', 'fraude_confirmee')) / NULLIF(COUNT(*) FILTER (WHERE decision IS NOT NULL), 0), 0) AS precision_pct FROM mv_bi_factures WHERE is_alert"
+      "sql": "SELECT 100.0 * COUNT(*) FILTER (WHERE decision IN ('CONFIRMER_FRAUDE', 'fraude_confirmee')) / NULLIF(COUNT(*) FILTER (WHERE is_alert AND decision IS NOT NULL), 0) AS precision_pct FROM mv_bi_factures WHERE is_alert"
     },
     {
       "key": "volumes_journaliers",
       "name": "Factures et alertes par jour",
       "display": "line",
-      "sql": "SELECT date_facture AS jour, COUNT(*) AS factures, COUNT(*) FILTER (WHERE is_alert) AS alertes FROM mv_bi_factures GROUP BY date_facture ORDER BY date_facture"
+      "sql": "SELECT date_facture AS jour, COUNT(*) FILTER (WHERE score IS NOT NULL) AS factures, COUNT(*) FILTER (WHERE is_alert) AS alertes FROM mv_bi_factures GROUP BY date_facture ORDER BY date_facture"
     },
     {
       "key": "scores",

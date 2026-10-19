@@ -4,13 +4,13 @@ import {
   AlertTriangle, Zap, Timer, TrendingDown,
 } from 'lucide-react';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { Card, Skeleton, ErrorState, Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { serviceStateColor, SERVICE_LABELS, formatNumber } from '@/lib/format';
-import type { ServiceStatus, SystemMetrics } from '@/lib/types';
+import type { BIKpiData, ServiceStatus, SystemMetrics } from '@/lib/types';
 
 const TIME_RANGES = [
   { value: '24h', label: '24h' },
@@ -36,6 +36,7 @@ const STATE_LABELS: Record<string, string> = {
 export function AdminSupervision() {
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
+  const [biKpis, setBiKpis] = useState<BIKpiData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [timeRange, setTimeRange] = useState('24h');
@@ -43,8 +44,8 @@ export function AdminSupervision() {
   const load = () => {
     setLoading(true);
     setError(false);
-    Promise.all([api.getServiceStatus(), api.getSystemMetrics(timeRange)])
-      .then(([s, m]) => { setStatus(s); setMetrics(m); setLoading(false); })
+    Promise.all([api.getServiceStatus(), api.getSystemMetrics(timeRange), api.getBIKPIs()])
+      .then(([s, m, bi]) => { setStatus(s); setMetrics(m); setBiKpis(bi); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   };
 
@@ -61,11 +62,11 @@ export function AdminSupervision() {
     );
   }
 
-  if (error || !status || !metrics) {
+  if (error || !status || !metrics || !biKpis) {
     return <ErrorState message="Impossible de charger les données de supervision." onRetry={load} />;
   }
 
-  const driftHigh = metrics.drift_psi > 0.1;
+  const driftHigh = metrics.drift_psi !== null && metrics.drift_psi > 0.1;
 
   return (
     <div className="space-y-6">
@@ -92,14 +93,36 @@ export function AdminSupervision() {
       </div>
 
       {/* Drift alert banner */}
+      {biKpis.stale && (
+        <div role="status" className="rounded-xl border border-warning-300 bg-warning-50 px-4 py-3 text-sm text-warning-800 dark:border-warning-800 dark:bg-warning-900/30 dark:text-warning-200">
+          Données BI potentiellement anciennes
+          {biKpis.date_rafraichissement && ` — dernière mise à jour : ${new Date(biKpis.date_rafraichissement).toLocaleString('fr-FR')}`}
+          {biKpis.erreur_rafraichissement && ` — ${biKpis.erreur_rafraichissement}`}
+        </div>
+      )}
+
       {driftHigh && (
         <div className="flex items-center gap-3 px-[18px] py-4 rounded-xl bg-danger-50 dark:bg-danger-900/30 border border-danger-200 dark:border-danger-800 animate-fade-in">
           <AlertTriangle className="w-5 h-5 text-danger-600 flex-shrink-0" />
           <p className="text-sm text-danger-700 dark:text-danger-300">
-            <strong>Dérive du modèle détectée.</strong> Le PSI ({metrics.drift_psi.toFixed(3)}) dépasse le seuil de 0,10. Une réévaluation du modèle est recommandée.
+            <strong>Dérive du modèle détectée.</strong> Le PSI ({metrics.drift_psi?.toFixed(3)}) dépasse le seuil de 0,10. Une réévaluation du modèle est recommandée.
           </p>
         </div>
       )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {[
+          { label: 'Factures traitées', value: formatNumber(biKpis.factures_traitees) },
+          { label: 'Montant à risque', value: `${formatNumber(biKpis.montant_a_risque)} MGA` },
+          { label: 'Montant économisé', value: `${formatNumber(biKpis.montant_economise)} MGA` },
+          { label: 'Précision opérationnelle', value: biKpis.precision_operationnelle === null ? 'N/A' : `${(biKpis.precision_operationnelle * 100).toFixed(1)}%` },
+        ].map((stat) => (
+          <Card key={stat.label} className="p-4">
+            <p className="text-xs text-surface-400">{stat.label}</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-surface-800 dark:text-surface-100">{stat.value}</p>
+          </Card>
+        ))}
+      </div>
 
       {/* Service status cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -146,39 +169,21 @@ export function AdminSupervision() {
         <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-surface-400" />
-            <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Requêtes / min</h3>
+            <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Requêtes / min depuis le démarrage</h3>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={metrics.series}>
-              <defs>
-                <linearGradient id="reqGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#D9622B" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="#D9622B" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
-              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
-              <Area type="monotone" dataKey="requests" stroke="#D9622B" strokeWidth={2} fill="url(#reqGrad)" name="Requêtes/min" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <p className="text-4xl font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatNumber(metrics.requests_per_min)}</p>
+          <p className="mt-3 text-xs text-surface-400">Compteur HTTP en mémoire, remis à zéro au redémarrage de l'API.</p>
         </Card>
 
         <Card className="p-8">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4 h-4 text-surface-400" />
-            <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Taux d'erreur (%)</h3>
+            <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200">Taux d'erreur HTTP 5xx</h3>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={metrics.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
-              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
-              <Line type="monotone" dataKey="errors" stroke="#C62828" strokeWidth={2} dot={false} name="Erreurs" />
-            </LineChart>
-          </ResponsiveContainer>
+          <p className="text-4xl font-bold tabular-nums text-surface-800 dark:text-surface-100">
+            {metrics.error_rate === null ? 'N/A' : `${(metrics.error_rate * 100).toFixed(2)}%`}
+          </p>
+          <p className="mt-3 text-xs text-surface-400">Erreurs 5xx depuis le démarrage de l'API.</p>
         </Card>
 
         {/* Drift card */}
@@ -190,7 +195,7 @@ export function AdminSupervision() {
           <div className="flex items-center gap-6 mb-4">
             <div className="flex flex-col items-center">
               <span className={`text-4xl font-bold tabular-nums ${driftHigh ? 'text-danger-600' : 'text-success-600'}`}>
-                {metrics.drift_psi.toFixed(3)}
+                {metrics.drift_psi === null ? 'N/A' : metrics.drift_psi.toFixed(3)}
               </span>
               <span className="text-xs text-surface-400 mt-1">PSI actuel</span>
             </div>
@@ -198,7 +203,7 @@ export function AdminSupervision() {
               <div className="relative h-3 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden">
                 <div
                   className={`absolute h-full rounded-full transition-all ${driftHigh ? 'bg-danger-500' : 'bg-success-500'}`}
-                  style={{ width: `${Math.min(metrics.drift_psi / 0.2 * 100, 100)}%` }}
+                  style={{ width: `${Math.min((metrics.drift_psi ?? 0) / 0.2 * 100, 100)}%` }}
                 />
                 <div className="absolute h-full w-px bg-surface-500" style={{ left: '50%' }} />
               </div>
@@ -209,25 +214,19 @@ export function AdminSupervision() {
               </div>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={120}>
-            <LineChart data={metrics.series}>
-              <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#86A8A4' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#86A8A4' }} axisLine={false} tickLine={false} domain={[0, 0.2]} />
-              <Tooltip labelStyle={{ color: '#E8F1F0' }} itemStyle={{ color: '#C9D8D6' }} contentStyle={{ borderRadius: '12px', border: '1px solid #1D4A4D', boxShadow: 'none', backgroundColor: '#0F2A2E', color: '#E8F1F0', fontSize: '12px', padding: '10px 14px' }} />
-              <Line type="monotone" dataKey="psi" stroke={driftHigh ? '#C62828' : '#2E7D32'} strokeWidth={2} dot={false} name="PSI" />
-            </LineChart>
-          </ResponsiveContainer>
+          {metrics.drift_psi === null && (
+            <p className="text-sm text-surface-500">N/A — la distribution de référence d'entraînement n'est pas configurée.</p>
+          )}
         </Card>
       </div>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Latence p95', value: `${metrics.latency_p95_ms} ms`, icon: <Timer className="w-4 h-4" /> },
+          { label: 'Latence p95', value: metrics.latency_p95_ms === null ? 'N/A' : `${metrics.latency_p95_ms} ms`, icon: <Timer className="w-4 h-4" /> },
           { label: 'Requêtes/min', value: formatNumber(metrics.requests_per_min), icon: <Zap className="w-4 h-4" /> },
-          { label: 'Taux d\'erreur', value: `${(metrics.error_rate * 100).toFixed(2)}%`, icon: <Activity className="w-4 h-4" /> },
-          { label: 'Dérive PSI', value: metrics.drift_psi.toFixed(3), icon: <TrendingDown className="w-4 h-4" />, badge: driftHigh },
+          { label: 'Taux d\'erreur', value: metrics.error_rate === null ? 'N/A' : `${(metrics.error_rate * 100).toFixed(2)}%`, icon: <Activity className="w-4 h-4" /> },
+          { label: 'Dérive PSI', value: metrics.drift_psi === null ? 'N/A' : metrics.drift_psi.toFixed(3), icon: <TrendingDown className="w-4 h-4" />, badge: driftHigh },
         ].map((stat) => (
           <Card key={stat.label} className="p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-500">

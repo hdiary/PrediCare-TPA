@@ -133,18 +133,41 @@ export interface BIKpiData {
   alertes_traitees: number;
   alertes_escaladees: number;
   montant_reclame: number;
+  montant_rembourse: number;
   montant_a_risque: number;
   montant_economise: number;
   fraudes_confirmees: number;
   alertes_decidees: number;
-  taux_alerte: number;
+  taux_alerte: number | null;
   precision_operationnelle: number | null;
-  date_rafraichissement: string;
+  latence_p50_ms: number | null;
+  latence_p95_ms: number | null;
+  date_rafraichissement: string | null;
   stale: boolean;
-  par_jour: { jour: string; factures: number; alertes: number }[];
+  erreur_rafraichissement: string | null;
+  par_jour: { jour: string; factures: number; alertes: number; montant_economise: number }[];
   top_prestataires: { prestataire_id: string; prestataire_nom: string; alertes: number }[];
   distribution_scores: { bucket: number; count: number }[];
+  seuil_alerte: number | null;
+  factures_rejetees: { code: string; count: number }[];
   notifications: { etat: string; count: number }[];
+  rag_finops: {
+    tokens_entree: number;
+    tokens_sortie: number;
+    taux_cache_hit: number | null;
+    latence_p50_ms: number | null;
+    latence_p95_ms: number | null;
+    cout_estime: number | null;
+  };
+}
+
+export interface BIModelData {
+  version_active: string | null;
+  activee_le: string | null;
+  rappel_hors_ligne: number | null;
+  auc_pr: number | null;
+  derive_psi: number | null;
+  derive_disponible: boolean;
 }
 
 export interface ServiceStatus {
@@ -158,11 +181,11 @@ export interface ServiceStatus {
 export type ServiceState = 'ok' | 'degraded' | 'down' | 'unknown';
 
 export interface SystemMetrics {
-  latency_p95_ms: number;
+  latency_p95_ms: number | null;
   requests_per_min: number;
-  error_rate: number;
-  drift_psi: number;
-  series: { date: string; latency: number; requests: number; errors: number; psi: number }[];
+  error_rate: number | null;
+  drift_psi: number | null;
+  series: { date: string; latency: number | null }[];
 }
 
 export interface ModelVersion {

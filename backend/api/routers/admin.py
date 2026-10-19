@@ -47,6 +47,51 @@ def ping():
     return {"pong": True}
 
 
+@router.get("/metrics", dependencies=[admin_only])
+def get_admin_metrics(
+    period: str = Query("24h", pattern="^(24h|7d|30d)$"),
+    conn=Depends(get_db),
+):
+    interval = {"24h": "1 day", "7d": "7 days", "30d": "30 days"}[period]
+    summary = conn.execute(
+        """
+        SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY latence_ms)
+                 FILTER (WHERE latence_ms IS NOT NULL) AS latency_p95_ms
+        FROM mv_bi_factures
+        WHERE date_facture >= current_date - %s::interval
+        """,
+        (interval,),
+    ).fetchone()
+    series = conn.execute(
+        """
+        SELECT date_trunc('day', date_facture)::date AS day,
+               percentile_cont(0.95) WITHIN GROUP (ORDER BY latence_ms)
+                 FILTER (WHERE latence_ms IS NOT NULL) AS latency
+        FROM mv_bi_factures
+        WHERE date_facture >= current_date - %s::interval
+        GROUP BY day ORDER BY day
+        """,
+        (interval,),
+    ).fetchall()
+    http = http_metrics.snapshot()
+    uptime_minutes = max(http["uptime_s"] / 60, 1)
+    return {
+        "latency_p95_ms": summary["latency_p95_ms"],
+        "requests_per_min": round(http["requetes_total"] / uptime_minutes, 2),
+        "error_rate": (
+            http["taux_erreur_5xx"] if http["requetes_total"] else None
+        ),
+        "drift_psi": None,
+        "series": [
+            {
+                "date": row["day"].isoformat(),
+                "latency": row["latency"],
+            }
+            for row in series
+        ],
+    }
+
+
 # ---------- application configuration ----------
 
 @router.get("/settings", response_model=AdminSettings, dependencies=[admin_only])
