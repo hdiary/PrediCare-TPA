@@ -204,6 +204,8 @@ services:
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/predicare-alert}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
@@ -220,8 +222,6 @@ services:
         condition: service_healthy
       loader:
         condition: service_completed_successfully
-      mlflow:
-        condition: service_started
     ports:
       - "8000:8000"
     volumes:
@@ -237,9 +237,20 @@ services:
   n8n:
     profiles: [ "full" ] # a decommenter pour activer n8n dans le container
     image: n8nio/n8n:latest # à épingler sur une version précise
+    command:
+      - sh
+      - -c
+      - >-
+        if [ ! -f /home/node/.n8n/.predicare-workflows-imported ]; then
+          n8n import:workflow --separate --input=/workflows &&
+          touch /home/node/.n8n/.predicare-workflows-imported;
+        fi;
+        exec n8n start
     restart: unless-stopped
     environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-37019a45a5fd1b69caa80af583acd83d}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
+      N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     volumes:
