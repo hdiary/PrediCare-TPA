@@ -1,5 +1,6 @@
 """POST /predict : validation (codes du contrat) -> score + SHAP -> stockage -> audit."""
 import logging
+import secrets
 import time
 
 import psycopg
@@ -7,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, File, Form, UploadF
 
 import json as _json
 
-from api.services.pdf_extract import extract_document
+from api.services.pdf_extract import build_reference, extract_document
 from api.repositories import load_reference_tables
 
 from api import repositories as repo
@@ -168,6 +169,7 @@ def predict(
 def _pdf_to_payload(extracted: dict, prestataire_id: str | None) -> dict:
     """Transforme les champs extraits du PDF en payload accepté par /predict."""
     return {
+        "facture_id": f"FAC-{secrets.randbelow(100_000_000):08d}",
         "numero_facture": extracted.get("numero_facture"),
         "assure_id": extracted.get("assure_id"),
         "contrat_id": extracted.get("contrat_id") or extracted.get("attestation_pec_id"),
@@ -210,7 +212,7 @@ async def predict_pdf(
         raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 10 Mo.")
 
     # 2. Extraire le PDF
-    ref = load_reference_tables(conn)  # ⚠️ VOIR ÉTAPE 2
+    ref = build_reference(load_reference_tables(conn))
     extraction = extract_document(content, ref=ref)
 
     if not extraction.ok:
