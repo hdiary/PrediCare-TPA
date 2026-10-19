@@ -1,0 +1,219 @@
+{
+  "name": "PrediCare TPA - Alerte fraude",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "predicare-fraud-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Webhook facture scorée",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "predicare-fraud-alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst b = raw.body !== undefined ? raw.body : raw;\nconst errors = [];\nif (b.invoice_id === undefined || b.invoice_id === null || b.invoice_id === '') errors.push('invoice_id manquant');\nconst score = Number(b.fraud_score);\nif (!Number.isFinite(score) || score < 0 || score > 1) errors.push('fraud_score doit etre un nombre entre 0 et 1');\nreturn [{ json: {\n  valid: errors.length === 0,\n  errors: errors,\n  invoice_id: b.invoice_id,\n  fraud_score: score,\n  provider: b.provider || b.prestataire || 'inconnu',\n  amount: b.amount !== undefined ? b.amount : (b.montant !== undefined ? b.montant : null),\n  currency: b.currency || '',\n  model_version: b.model_version || 'n/d',\n  shap_top_features: Array.isArray(b.shap_top_features) ? b.shap_top_features : [],\n  report_url: b.report_url || ''\n} }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Valider le payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Payload valide ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'rejected', errors: $json.errors } }}",
+        "options": { "responseCode": 400 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Répondre 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 480]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.API_URL || 'http://api:8000') + '/config/alert-threshold' }}",
+        "options": { "timeout": 5000 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Lire le seuil (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 220],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const NL = '\\n';\nconst inv = $('Valider le payload').first().json;\nconst r = $input.first().json;\nlet threshold = Number(r.threshold);\nlet source = 'api';\nif (!Number.isFinite(threshold)) { threshold = Number($env.ALERT_THRESHOLD); source = 'env'; }\nif (!Number.isFinite(threshold)) { threshold = 0.8; source = 'defaut'; }\nconst alert = inv.fraud_score > threshold;\nconst lines = inv.shap_top_features.slice(0, 5).map(function (f) {\n  const v = Number(f.shap_value);\n  return '- ' + f.feature + ' : ' + (v >= 0 ? '+' : '') + v.toFixed(3);\n});\nconst shap = lines.length ? lines.join(NL) : 'Non fourni';\nconst plain = 'Alerte fraude PrediCare TPA' + NL +\n  'Facture : ' + inv.invoice_id + NL +\n  'Prestataire : ' + inv.provider + NL +\n  'Montant : ' + (inv.amount === null ? 'n/d' : inv.amount + ' ' + inv.currency) + NL +\n  'Score de fraude : ' + (inv.fraud_score * 100).toFixed(1) + ' % (seuil ' + threshold + ', source ' + source + ')' + NL +\n  'Modele : ' + inv.model_version + NL +\n  'Facteurs SHAP principaux :' + NL + shap +\n  (inv.report_url ? NL + 'Rapport SHAP : ' + inv.report_url : '');\nconst slack = ':rotating_light: *Alerte fraude PrediCare TPA*' + NL + plain.split(NL).slice(1).join(NL);\nreturn [{ json: Object.assign({}, inv, { threshold: threshold, threshold_source: source, alert: alert, message_plain: plain, message_slack: slack }) }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Appliquer le seuil et rédiger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.alert }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Score > seuil ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1200, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.message_slack }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Notifier Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL_FROM || 'predicare@localhost' }}",
+        "toEmail": "={{ $env.ALERT_EMAIL_TO || 'gestionnaire@localhost' }}",
+        "subject": "={{ '[PrediCare] Alerte fraude - facture ' + $('Appliquer le seuil et rédiger').first().json.invoice_id }}",
+        "emailFormat": "text",
+        "text": "={{ $('Appliquer le seuil et rédiger').first().json.message_plain }}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "name": "Notifier Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1680, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.API_URL || 'http://api:8000') + '/alerts/' + $('Appliquer le seuil et rédiger').first().json.invoice_id + '/notified' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ invoice_id: $('Appliquer le seuil et rédiger').first().json.invoice_id, fraud_score: $('Appliquer le seuil et rédiger').first().json.fraud_score, threshold: $('Appliquer le seuil et rédiger').first().json.threshold, channels: ['slack', 'email'] }) }}",
+        "options": { "timeout": 5000 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "name": "Journaliser l'alerte (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 120],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'alert_sent', invoice_id: $('Appliquer le seuil et rédiger').first().json.invoice_id, fraud_score: $('Appliquer le seuil et rédiger').first().json.fraud_score, threshold: $('Appliquer le seuil et rédiger').first().json.threshold } }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "name": "Répondre alerte envoyée",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2160, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'no_alert', invoice_id: $json.invoice_id, fraud_score: $json.fraud_score, threshold: $json.threshold } }}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "name": "Répondre sans alerte",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 340]
+    }
+  ],
+  "connections": {
+    "Webhook facture scorée": {
+      "main": [[{ "node": "Valider le payload", "type": "main", "index": 0 }]]
+    },
+    "Valider le payload": {
+      "main": [[{ "node": "Payload valide ?", "type": "main", "index": 0 }]]
+    },
+    "Payload valide ?": {
+      "main": [
+        [{ "node": "Lire le seuil (API)", "type": "main", "index": 0 }],
+        [{ "node": "Répondre 400", "type": "main", "index": 0 }]
+      ]
+    },
+    "Lire le seuil (API)": {
+      "main": [[{ "node": "Appliquer le seuil et rédiger", "type": "main", "index": 0 }]]
+    },
+    "Appliquer le seuil et rédiger": {
+      "main": [[{ "node": "Score > seuil ?", "type": "main", "index": 0 }]]
+    },
+    "Score > seuil ?": {
+      "main": [
+        [{ "node": "Notifier Slack", "type": "main", "index": 0 }],
+        [{ "node": "Répondre sans alerte", "type": "main", "index": 0 }]
+      ]
+    },
+    "Notifier Slack": {
+      "main": [[{ "node": "Notifier Email", "type": "main", "index": 0 }]]
+    },
+    "Notifier Email": {
+      "main": [[{ "node": "Journaliser l'alerte (API)", "type": "main", "index": 0 }]]
+    },
+    "Journaliser l'alerte (API)": {
+      "main": [[{ "node": "Répondre alerte envoyée", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "tags": []
+}
