@@ -62,6 +62,25 @@ export interface AlertDetail extends Alert {
   provider_history: DecisionHistoryItem[];
 }
 
+export type AlertDecisionValue = 'VALIDER' | 'REJETER' | 'CONFIRMER_FRAUDE' | 'ESCALADER';
+export interface AlertApiSummary {
+  facture_id: string; score: number; version_modele: string | null; date: string;
+  montant_total: number; nb_regles: number; derniere_decision: AlertDecisionValue | null;
+  date_decision: string | null; type: string; priorite: string; statut: string;
+  codes: string[]; etat_notification: string | null; tentatives_notification: number;
+  prestataire_id?: string | null; assure_id?: string | null;
+}
+export interface AlertApiDetail {
+  prediction: AlertApiSummary; facture: Record<string, unknown>;
+  shap: { top?: Array<{ variable: string; valeur?: number | null; contribution: number }>; [key: string]: unknown } | null;
+  codes_fraude: string[]; regles: Array<Record<string, unknown>>; decisions: Array<Record<string, unknown>>;
+}
+export interface AlertDecisionResult {
+  decision_id: number; facture_id: string; gestionnaire_id: string;
+  decision: AlertDecisionValue; commentaire: string | null;
+  montant_economise: number; date_decision: string;
+}
+
 export interface SHAPFactor {
   feature: string;
   label_fr: string;

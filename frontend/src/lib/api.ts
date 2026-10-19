@@ -5,6 +5,10 @@ import type {
   Invoice,
   Alert,
   AlertDetail,
+  AlertApiSummary,
+  AlertApiDetail,
+  AlertDecisionResult,
+  AlertDecisionValue,
   PrescriptionAlert,
   KPIData,
   ServiceStatus,
@@ -102,7 +106,9 @@ function refreshAccessToken(): Promise<boolean> {
   return refreshInFlight;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
+
+async function request<T>(path: string, options: RequestInit = {}, onResponse?: (response: Response) => void): Promise<T> {
   const send = () => fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -138,13 +144,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     window.location.href = "/login";
     throw new Error("Session expirée");
   }
+  onResponse?.(res);
   if (res.status === 403) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || "Accès refusé");
+    throw new ApiError(body.detail || "Accès refusé", res.status);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Erreur ${res.status}`);
+    throw new ApiError(body.detail || `Erreur ${res.status}`, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -253,26 +260,29 @@ export const api = {
   },
 
   async getAlerts(filters?: {
-    status?: string;
-    minScore?: number;
+    status?: string; priority?: string; type?: string;
     page?: number;
-  }): Promise<{ items: Alert[]; total: number }> {
+    pageSize?: number;
+  }): Promise<{ items: AlertApiSummary[]; total: number }> {
     if (USE_MOCKS) {
       await delay(400);
-      let items = [...mockAlerts];
-      if (filters?.status && filters.status !== "all") {
-        items = items.filter((a) => a.status === filters.status);
-      }
-      if (filters?.minScore) {
-        items = items.filter((a) => a.score >= (filters.minScore || 0));
-      }
-      return { items, total: items.length };
+      let items = mockAlerts.map(a => ({ facture_id: a.invoice_id, score: a.score, version_modele: null, date: a.created_at, montant_total: a.amount, nb_regles: 0, derniere_decision: a.status === 'validated' ? 'CONFIRMER_FRAUDE' as const : a.status === 'rejected' ? 'REJETER' as const : null, date_decision: null, type: 'FRAUDE', priorite: a.score >= .8 ? 'HAUTE' : 'MOYENNE', statut: a.status === 'pending' ? 'EN_ATTENTE' : a.status === 'validated' ? 'CONFIRMEE_FRAUDE' : 'REJETEE', codes: [], etat_notification: null, tentatives_notification: 0, prestataire_id: a.provider_pseudo, assure_id: a.insured_pseudo }));
+      if (filters?.status && filters.status !== "all") items = items.filter(a => a.statut === filters.status);
+      if (filters?.priority && filters.priority !== "all") items = items.filter(a => a.priorite === filters.priority);
+      if (filters?.type && filters.type !== "all") items = items.filter(a => a.type === filters.type);
+      const total = items.length; const size = filters?.pageSize || 12;
+      return { items: items.slice(((filters?.page || 1) - 1) * size, (filters?.page || 1) * size), total };
     }
     const params = new URLSearchParams();
-    if (filters?.status && filters.status !== "all")
-      params.set("status", filters.status);
-    if (filters?.minScore) params.set("min_score", String(filters.minScore));
-    return request(`/alerts?${params}`);
+    if (filters?.status && filters.status !== "all") params.set("statut", filters.status);
+    if (filters?.priority && filters.priority !== "all") params.set("priorite", filters.priority);
+    if (filters?.type && filters.type !== "all") params.set("type", filters.type);
+    params.set("limit", String(filters?.pageSize || 12));
+    params.set("offset", String(((filters?.page || 1) - 1) * (filters?.pageSize || 12)));
+    params.set("tri", "priorite");
+    let total = 0;
+    const items = await request<AlertApiSummary[]>(`/api/v1/alertes?${params}`, {}, r => { total = Number(r.headers.get("X-Total-Count") || 0); });
+    return { items, total };
   },
 
   async uploadPrescriptionScan(invoiceId: string, scan: File): Promise<void> {
@@ -338,30 +348,30 @@ export const api = {
     return request(`/prescription-alerts?${params}`);
   },
 
-  async getAlertDetail(id: string): Promise<AlertDetail> {
+  async getAlertDetail(id: string): Promise<AlertApiDetail> {
     if (USE_MOCKS) {
       await delay(500);
-      return { ...mockAlertDetail, id };
+      const a = mockAlertDetail;
+      return { prediction: { facture_id: id, score: a.score, version_modele: null, date: a.created_at, montant_total: a.amount, nb_regles: a.prescription_flags.length, derniere_decision: null, date_decision: null, type: 'FRAUDE', priorite: a.score >= .8 ? 'HAUTE' : 'MOYENNE', statut: 'EN_ATTENTE', codes: a.prescription_flags, etat_notification: null, tentatives_notification: 0, prestataire_id: a.provider_pseudo, assure_id: a.insured_pseudo }, facture: { lignes: a.invoice_lines }, shap: { top: a.top_factors.map(f => ({ variable: f.label_fr, contribution: f.impact })) }, codes_fraude: a.prescription_flags, regles: [], decisions: [] };
     }
-    return request(`/alerts/${id}`);
+    return request(`/api/v1/alertes/${encodeURIComponent(id)}`);
   },
 
   async decideAlert(
     id: string,
-    decision: "validate" | "reject",
+    decision: AlertDecisionValue,
     comment: string,
-  ): Promise<{ id: string; status: string; decided_at: string }> {
+  ): Promise<AlertDecisionResult> {
     if (USE_MOCKS) {
       await delay(800);
       return {
         id,
-        status: decision === "validate" ? "validated" : "rejected",
-        decided_at: new Date().toISOString(),
+        decision_id: 1, facture_id: id, gestionnaire_id: 'demo', decision, commentaire: comment, montant_economise: 0, date_decision: new Date().toISOString(),
       };
     }
-    return request(`/alerts/${id}/decision`, {
-      method: "POST",
-      body: JSON.stringify({ decision, comment }),
+    return request(`/api/v1/alertes/${encodeURIComponent(id)}/decision`, {
+      method: "PATCH",
+      body: JSON.stringify({ decision, commentaire: comment }),
     });
   },
 

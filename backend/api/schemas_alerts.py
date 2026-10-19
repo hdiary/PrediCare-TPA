@@ -51,6 +51,8 @@ class AlertSummary(BaseModel):
     codes: list[str] = Field(default_factory=list)
     etat_notification: Literal["NON_REQUISE", "EN_ATTENTE", "ENVOYEE", "ECHEC"] = "NON_REQUISE"
     tentatives_notification: int = 0
+    prestataire_id: str | None = None
+    assure_id: str | None = None
 
 
 class AlertDetailOut(BaseModel):

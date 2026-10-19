@@ -53,12 +53,22 @@ export const INVOICE_STATUS_COLORS: Record<string, string> = {
 };
 
 export const ALERT_STATUS_LABELS: Record<string, string> = {
+  EN_ATTENTE: 'En attente',
+  VALIDEE: 'Validée',
+  REJETEE: 'Rejetée',
+  CONFIRMEE_FRAUDE: 'Fraude confirmée',
+  ESCALADEE: 'Escaladée',
   pending: 'En attente',
   validated: 'Fraude validée',
   rejected: 'Rejetée',
 };
 
 export const ALERT_STATUS_COLORS: Record<string, string> = {
+  EN_ATTENTE: 'bg-warning-100 text-warning-700 dark:bg-warning-800 dark:text-warning-200',
+  VALIDEE: 'bg-success-100 text-success-700 dark:bg-success-800 dark:text-success-200',
+  REJETEE: 'bg-surface-100 text-surface-600 dark:bg-surface-700 dark:text-surface-300',
+  CONFIRMEE_FRAUDE: 'bg-danger-100 text-danger-700 dark:bg-danger-800 dark:text-danger-200',
+  ESCALADEE: 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200',
   pending: 'bg-warning-100 text-warning-700 dark:bg-warning-800 dark:text-warning-200',
   validated: 'bg-danger-100 text-danger-700 dark:bg-danger-800 dark:text-danger-200',
   rejected: 'bg-success-100 text-success-700 dark:bg-success-800 dark:text-success-200',

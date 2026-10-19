@@ -11,7 +11,7 @@ import {
 import { Card, Skeleton, ErrorState, Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatEUR, formatPercent, formatDate, riskColor, ALERT_TYPE_LABELS } from '@/lib/format';
-import type { KPIData, Alert } from '@/lib/types';
+import type { KPIData, AlertApiSummary } from '@/lib/types';
 
 const ICON_TONES: Record<string, string> = {
   primary: 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300',
@@ -22,12 +22,12 @@ const ICON_TONES: Record<string, string> = {
 
 export function ManagerDashboard() {
   const [kpis, setKpis] = useState<KPIData | null>(null);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<AlertApiSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.getKPIs(), api.getAlerts({ status: 'pending' })])
+    Promise.all([api.getKPIs(), api.getAlerts({ status: 'EN_ATTENTE' })])
       .then(([k, a]) => { setKpis(k); setAlerts(a.items.slice(0, 5)); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -117,21 +117,21 @@ export function ManagerDashboard() {
         <div className="space-y-2">
           {alerts.map((alert) => (
             <Link
-              key={alert.id}
-              to={`/gestionnaire/alertes/${alert.id}`}
+              key={alert.facture_id}
+              to={`/gestionnaire/alertes/${alert.facture_id}`}
               className="flex items-center gap-4 p-3 rounded-[12px] border border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 transition-all"
             >
               <div className={`px-2.5 py-1 rounded-md text-xs font-semibold tabular-nums border ${riskColor(alert.score)}`}>
                 {alert.score.toFixed(2)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-200">{ALERT_TYPE_LABELS[alert.type]}</p>
-                <p className="text-xs text-surface-400 font-mono">{alert.provider_pseudo} · {alert.insured_pseudo}</p>
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-200">{ALERT_TYPE_LABELS[alert.type] || alert.type}</p>
+                <p className="text-xs text-surface-400 font-mono">{alert.prestataire_id} · {alert.assure_id}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold tabular-nums text-surface-700 dark:text-surface-200">{formatEUR(alert.amount)}</p>
+                <p className="text-sm font-semibold tabular-nums text-surface-700 dark:text-surface-200">{formatEUR(alert.montant_total)}</p>
                 <p className="text-xs text-surface-400 flex items-center gap-1 justify-end">
-                  <Clock className="w-3 h-3" /> {formatDate(alert.created_at)}
+                  <Clock className="w-3 h-3" /> {formatDate(alert.date)}
                 </p>
               </div>
             </Link>

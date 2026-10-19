@@ -204,6 +204,7 @@ def list_alertes(conn, statut: str = "EN_ATTENTE", limit: int = 50, offset: int 
         raise ValueError("Tri d'alerte invalide")
     return conn.execute(
         "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "f.prestataire_id, f.assure_id, "
         "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
         "CASE WHEN d.decision IS NULL THEN 'EN_ATTENTE' "
         "WHEN d.decision IN ('VALIDER', 'valide') THEN 'VALIDEE' "
@@ -267,6 +268,7 @@ def insert_decision(conn, *, prediction_id, facture_id, gestionnaire_id, decisio
 def get_alert_summary(conn, facture_id: str) -> dict | None:
     return conn.execute(
         "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "f.prestataire_id, f.assure_id, "
         "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
         "(SELECT count(*) FROM alertes_prescription ar WHERE ar.prediction_id = p.prediction_id) AS nb_regles, "
         "CASE WHEN d.decision IS NULL THEN 'EN_ATTENTE' "
