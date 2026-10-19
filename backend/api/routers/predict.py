@@ -109,12 +109,24 @@ def predict(
                 conn, event_type="prediction_en_attente", actor_id=user["user_id"],
                 entity_type="facture", entity_id=clean["facture_id"],
                 input_data={"facture_id": clean["facture_id"]},
-                output_data={"scoring_indisponible": True},
+                output_data={
+                    "scoring_indisponible": True,
+                    "codes_fraude": [finding.code for finding in fraud_findings],
+                    "montant_calcule": calculation.get("montant_calcule") if calculation else None,
+                },
             )
             conn.commit()
         except psycopg.errors.UniqueViolation as exc:
             raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
-        return PredictResponse(accepte=False, facture_id=clean["facture_id"], prediction_id=None)
+        return PredictResponse(
+            accepte=False,
+            facture_id=clean["facture_id"],
+            transaction_id=clean["facture_id"],
+            prediction_id=None,
+            montant_calcule=calculation.get("montant_calcule") if calculation else None,
+            statut="EN_ATTENTE_GESTIONNAIRE",
+            scoring_indisponible=True,
+        )
 
     # 3. Variables (même code qu'à l'entraînement) puis score + SHAP
     try:
@@ -144,7 +156,13 @@ def predict(
     # 4. Stockage + audit dans UNE transaction (validée à la sortie de la requête)
     try:
         with conn.transaction():
-            repo.insert_facture(conn, clean, today_mg(), calculation)
+            repo.insert_facture(
+                conn,
+                clean,
+                today_mg(),
+                calculation,
+                "EN_ATTENTE_GESTIONNAIRE" if is_alert else "EN_COURS",
+            )
             if calculation is not None:
                 repo.insert_calculation(conn, clean["facture_id"], calculation)
             prediction_id = repo.insert_prediction(
@@ -237,10 +255,19 @@ def predict(
         conn.commit()
 
     if user["role"] == "professionnel_sante":
-        return PredictResponse(facture_id=clean["facture_id"], prediction_id=prediction_id)
+        return PredictResponse(
+            facture_id=clean["facture_id"],
+            transaction_id=clean["facture_id"],
+            prediction_id=prediction_id,
+            montant_calcule=calculation.get("montant_calcule") if calculation else None,
+            statut="EN_ATTENTE_GESTIONNAIRE" if is_alert else "EN_COURS",
+        )
     return PredictResponse(
         facture_id=clean["facture_id"],
+        transaction_id=clean["facture_id"],
         prediction_id=prediction_id,
+        montant_calcule=calculation.get("montant_calcule") if calculation else None,
+        statut="EN_ATTENTE_GESTIONNAIRE" if is_alert else "EN_COURS",
         score=result["score"],
         seuil=seuil,
         is_alert=is_alert,

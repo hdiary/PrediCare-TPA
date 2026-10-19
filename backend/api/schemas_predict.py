@@ -22,7 +22,11 @@ class PredictResponse(BaseModel):
 
     accepte: bool = True
     facture_id: str
+    transaction_id: str | None = None
     prediction_id: int | None
+    montant_calcule: int | None = None
+    statut: str | None = None
+    scoring_indisponible: bool = False
     score: float | None = None
     seuil: float | None = None
     is_alert: bool | None = None

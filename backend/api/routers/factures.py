@@ -23,7 +23,8 @@ def create_invoice(
     registry=Depends(get_registry),
 ):
     payload = body.model_dump(mode="json")
-    payload["prestataire_id"] = user["prestataire_id"]
+    if payload.get("prestataire_id") is None:
+        payload["prestataire_id"] = user["prestataire_id"]
     return predict(payload=payload, user=user, conn=conn, registry=registry,
                    record_rejection=True, pending_when_unavailable=True)
 
