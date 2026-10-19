@@ -16,6 +16,7 @@ from encrypt_identities import (IdentityError, decrypt_identity,
                                 encrypt_identity, load_keyring)
 
 HERE = Path(__file__).parent
+SOURCE_ROOT = HERE.parent
 K1 = Fernet.generate_key().decode()
 K2 = Fernet.generate_key().decode()
 
@@ -201,7 +202,7 @@ def test_missing_columns_rejected(tmp_path, ring):
 
 # --- CLI ------------------------------------------------------------------- #
 def run_cli(args, env, cwd):
-    return subprocess.run([sys.executable, str(HERE / "encrypt_identities.py"),
+    return subprocess.run([sys.executable, str(SOURCE_ROOT / "encrypt_identities.py"),
                            *args], cwd=cwd, capture_output=True, text=True,
                           env={"PATH": "/usr/bin:/bin", **env})
 

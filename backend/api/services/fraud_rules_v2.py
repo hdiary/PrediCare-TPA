@@ -124,10 +124,13 @@ def rule_upcoding(clean, ctx):
 
 
 def rule_prestataire_radie(clean, ctx):
-    """is_prestataire_radie: status RADIE or convention ended before care."""
+    """is_prestataire_radie: care occurred after a recorded end date."""
     provider = ctx.get("provider") or {}
-    end = provider.get("date_fin_convention")
-    if provider.get("statut") == "RADIE" or (end and date.fromisoformat(clean["date_soin"]) > _d(end)):
+    if "date_soin" not in clean:
+        return
+    soin = date.fromisoformat(clean["date_soin"])
+    end = provider.get("date_radiation") or provider.get("date_fin_convention")
+    if end and soin > _d(end):
         return _f("PRESTATAIRE_RADIE", "is_prestataire_radie", "Prestataire radié", severity="HAUTE")
 
 

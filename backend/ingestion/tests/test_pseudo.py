@@ -16,6 +16,7 @@ import pseudo
 from pseudo import PseudoError, pseudonymise, pseudonymise_many
 
 HERE = Path(__file__).parent
+SOURCE_ROOT = HERE.parent
 KEY = "test-key-for-unit-tests-only-0123456789abcdef"
 OTHER_KEY = "another-test-key-for-unit-tests-9876543210zyxw"
 CONTRACT_RX = re.compile(r"^ASS-[0-9A-F]{10}$")  # contract section 3
@@ -36,7 +37,8 @@ def test_deterministic_across_processes_and_hash_seeds():
         out = subprocess.run(
             [sys.executable, "-c", code], cwd=HERE, capture_output=True,
             text=True, check=True, env={"PYTHONHASHSEED": seed,
-                                        "PATH": "/usr/bin:/bin"})
+                                        "PATH": "/usr/bin:/bin",
+                                        "PYTHONPATH": str(SOURCE_ROOT)})
         results.add(out.stdout.strip())
     assert len(results) == 1
 
@@ -165,7 +167,7 @@ def test_gen_key_is_long_and_random():
 
 
 def test_cli_without_key_fails_cleanly(tmp_path):
-    r = subprocess.run([sys.executable, str(HERE / "pseudo.py"), "ASS", "x"],
+    r = subprocess.run([sys.executable, str(SOURCE_ROOT / "pseudo.py"), "ASS", "x"],
                        cwd=tmp_path, capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin"})
     assert r.returncode == 1 and "PSEUDO_KEY" in r.stderr

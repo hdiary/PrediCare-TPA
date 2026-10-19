@@ -64,7 +64,8 @@ Réception facture (HTTP POST /api/v1/factures)   [rôle : professionnel_sante]
     │
     ├──► [6] Inférence ML (XGBoost/LightGBM)
     │       │
-    │       ├── Entrée : features du prétraitement + flags binaires des codes
+    │       ├── Entrée : features du prétraitement exactement dans feature_schema.json
+    │       │             (les flags is_* des règles ne sont pas des features du modèle)
     │       ├── Modèle Dockerisé, exposé via FastAPI (POST /predict)
     │       ├── Sortie : score ∈ [0, 1] + version_modele
     │       ├── [NOUVEAU] Versioning : la version du modèle est stockée avec la prédiction
@@ -147,7 +148,7 @@ Sortie :
 
 | Sujet           | Argument à préparer                                                                                                                                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Fuite de labels | Les 14 flags de règles sont des features du modèle. Si les labels synthétiques viennent de ces règles, le modèle les réapprend. Fournir une **ablation** : modèle avec flags vs sans flags, rappel et AUC-PR comparés. |
+| Fuite de labels | `feature_schema.json` ne contient aucun flag `is_*`. Les règles restent des libellés d'explicabilité ; elles ne sont pas ajoutées au vecteur ML. |
 | Déséquilibre  | SMOTE/seuils appliqués uniquement sur le jeu d'entraînement ; seuil de décision choisi pour maximiser le rappel (Module 2).                                                                                                       |
 
 ---

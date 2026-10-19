@@ -119,8 +119,14 @@ def test_sha_helper_is_deterministic(tmp_path: Path):
 
 def test_0012_role_order_and_optional_readonly_roles_are_guarded():
     root = Path(__file__).parents[1]
-    migration = (root / "backend/ingestion/migrations/versions/0012_phase4_model_registry.py").read_text()
-    roles_migration = (root / "backend/ingestion/migrations/versions/p1_0003_identites_et_roles.py").read_text()
+    migration_root = next(
+        candidate for candidate in (
+            root / "backend/ingestion/migrations/versions",
+            root / "ingestion/migrations/versions",
+        ) if (candidate / "0012_phase4_model_registry.py").exists()
+    )
+    migration = (migration_root / "0012_phase4_model_registry.py").read_text()
+    roles_migration = (migration_root / "p1_0003_identites_et_roles.py").read_text()
     assert "down_revision = \"0011_auth_sessions\"" in migration
     assert "rolname = 'app_rw'" in migration
     assert "rolname = 'agent_ro'" in migration

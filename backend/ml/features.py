@@ -157,7 +157,12 @@ def build_features(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     # rang dans le groupe : seul l'exemplaire renvoyé est la fraude, pas l'original
     f = f.sort_values(["date_soin", "facture_id"])
     f["dup_cle_rang"] = f.groupby(k).cumcount()
-    f["dup_numero_rang"] = f.groupby("numero_facture").cumcount()
+    # Keep the first occurrence by invoice identifier.  Creation dates can be
+    # equal or corrected later, while facture_id is stable and deterministic.
+    f["dup_numero_rang"] = (
+        f.sort_values(["numero_facture", "facture_id"])
+        .groupby("numero_facture").cumcount().reindex(f.index)
+    )
     f["meme_jour_rang"] = f.groupby(k2).cumcount()
     f["meme_jour_montant_cumule"] = f.groupby(k2)["montant_total"].cumsum() - f["montant_total"]
     f["ordo_rang_usage"] = f.groupby("ordonnance_id").cumcount()

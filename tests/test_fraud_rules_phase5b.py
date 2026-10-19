@@ -5,6 +5,7 @@ from api.services.fraud_rules_v2 import (
     rule_incoherence_profil,
     rule_lignes_non_prescrites,
     rule_ordonnance_expiree,
+    rule_prestataire_radie,
     rule_quantite_excessive,
     rule_soins_jour_ferme,
     rule_substitution_produit,
@@ -105,3 +106,25 @@ def test_incoherence_profil_positive_and_negative():
     assert rule_incoherence_profil(clean, ctx).code == "INCOHERENCE_PROFIL"
     ctx["references"]["A"]["sexe_requis"] = "M"
     assert rule_incoherence_profil(clean, ctx) is None
+
+
+def test_prestataire_radie_requires_post_dated_end():
+    clean, ctx = base()
+    ctx["provider"].update({"statut": "RADIE", "date_fin_convention": "2026-10-20"})
+    assert rule_prestataire_radie(clean, ctx) is None
+    ctx["provider"]["date_fin_convention"] = "2026-10-18"
+    assert rule_prestataire_radie(clean, ctx).code == "PRESTATAIRE_RADIE"
+import json
+from pathlib import Path
+
+
+def test_model_feature_schema_contains_no_is_flags():
+    root = Path(__file__).parents[1]
+    schema_path = next(
+        candidate for candidate in (
+            root / "backend/ml/models_seed/vlightgbm-20261018-1157-078e86/feature_schema.json",
+            root / "ml/models_seed/vlightgbm-20261018-1157-078e86/feature_schema.json",
+        ) if candidate.exists()
+    )
+    features = json.loads(schema_path.read_text(encoding="utf-8"))["features"]
+    assert not [name for name in features if name.startswith("is_")]
