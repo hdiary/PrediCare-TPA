@@ -6,7 +6,7 @@ from api import repositories_domain as repo
 from api.db import get_db
 from api.deps import require_role
 from api.schemas_domain import FacturePrestataireOut
-from api.schemas_domain import InvoiceCreate
+from api.schemas_domain import InvoiceCreateSubmission
 from api.schemas_predict import PredictResponse
 from api.routers.predict import predict
 from api.services.model_registry import get_registry
@@ -17,7 +17,7 @@ provider_only = Depends(require_role("professionnel_sante"))
 
 @router.post("", response_model=PredictResponse, response_model_exclude_none=True, status_code=201)
 def create_invoice(
-    body: InvoiceCreate = Body(...),
+    body: InvoiceCreateSubmission = Body(...),
     user: dict = Depends(require_role("professionnel_sante")),
     conn=Depends(get_db),
     registry=Depends(get_registry),

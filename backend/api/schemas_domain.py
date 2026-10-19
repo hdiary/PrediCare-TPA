@@ -51,7 +51,6 @@ class InvoiceCreate(BaseModel):
 
     facture_id: str = Field(pattern=r"^FAC-[0-9]{8}$")
     numero_facture: str = Field(min_length=1, max_length=120)
-    prestataire_id: str | None = Field(default=None, pattern=r"^PRE-[0-9]{5}$")
     assure_id: str = Field(pattern=r"^ASS-[0-9A-F]{10}$")
     contrat_id: str = Field(pattern=r"^CTR-[0-9]{6}$")
     ordonnance_id: str | None = Field(default=None, pattern=r"^ORD-[0-9]{7}$")
@@ -74,6 +73,12 @@ class InvoiceCreate(BaseModel):
         if len({line.num_ligne for line in self.lignes}) != len(self.lignes):
             raise ValueError("Les numéros de ligne doivent être uniques")
         return self
+
+
+class InvoiceCreateSubmission(InvoiceCreate):
+    """Provider submission contract, including the optional ownership claim."""
+
+    prestataire_id: str | None = Field(default=None, pattern=r"^PRE-[0-9]{5}$")
 
 
 class InvoiceOut(BaseModel):
