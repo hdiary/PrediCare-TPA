@@ -7,16 +7,16 @@
 - `backend/api/model_seed.py`, `backend/entrypoint.sh`, `backend/ml/models_seed/` : deux artefacts seed suivis par Git, avec schéma, échantillon et métadonnées ; génération de secours depuis l’ancien registre seulement pour les installations historiques.
 - `backend/Dockerfile`, `docker-compose.yml` : `libgomp1`, entrypoint, volume persistant `models_data:/models`.
 - `backend/api/routers/model.py`, `backend/api/config.py`, `backend/api/main.py`, `backend/api/routers/admin.py` : routes et initialisation du registre.
-- `backend/ingestion/migrations/versions/0012_phase4_model_registry.py` : registre des versions et tables manquantes reportées depuis les SQL historiques.
+- `database/migrations/versions/0012_phase4_model_registry.py` : registre des versions et tables manquantes reportées depuis les SQL historiques.
 - `tests/test_model_registry_phase4.py`, `tests/test_security_s1_s12.py` : droits `/model/*`, activation/rollback, SHA corrompu et conservation de l’ancienne version.
-- `db/backup/scripts/backup.sh`, `db/backup/scripts/restore.sh`, `scripts/backup.sh`, `scripts/restore.sh`, `scripts/backup.ps1`, `scripts/restore.ps1` : sauvegarde et restauration du bundle `models_data` avec PostgreSQL.
+- `database/backup/scripts/backup.sh`, `database/backup/scripts/restore.sh`, `scripts/backup.sh`, `scripts/restore.sh`, `scripts/backup.ps1`, `scripts/restore.ps1` : sauvegarde et restauration du bundle `models_data` avec PostgreSQL.
 
 ## Décisions et écarts
 
 1. `model_versions` est la source de vérité à l’exécution. `registry.json` sert uniquement à fabriquer le seed.
 2. `ml_service` est le seul module qui possède `_bundle`, `_lock` et `last_error`. Le module `model_registry` ne fait que réexporter ces objets pour préserver les imports existants.
 3. La génération binaire des seeds se fait au démarrage de l’image, car le chargement de LightGBM/SHAP est dépendant de l’environnement Linux de l’image Docker. Le seed contient la version active et la version précédente la plus récente.
-4. Les définitions déjà présentes dans Alembic ne sont pas recréées : `predictions` et `decisions_gestionnaires` viennent de `0002_app_tables`. `0012` porte `model_versions`, `factures_rejetees`, `alertes`, `alertes_prescription`, `explications_shap`, `calculs_remboursement` et `journal_audit`. Les fichiers `db/migrations/*.sql` restent historiques et ne sont pas exécutés en parallèle.
+4. Les définitions déjà présentes dans Alembic ne sont pas recréées : `predictions` et `decisions_gestionnaires` viennent de `0002_app_tables`. `0012` porte `model_versions`, `factures_rejetees`, `alertes`, `alertes_prescription`, `explications_shap`, `calculs_remboursement` et `journal_audit`. Les fichiers `database/sql/*.sql` restent historiques et ne sont pas exécutés en parallèle.
 5. `0012` donne les droits lecture/écriture aux tables et séquences nouvelles à `app_rw`, retire les droits PUBLIC et révoque explicitement tout accès nouveau à `agent_ro` et `ml_ro`.
 
 ## Tables des routes existantes

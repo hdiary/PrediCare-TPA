@@ -41,7 +41,7 @@ SPECIALITE_NON_DECLAREE compare la spécialité de l'acte de la grille tarifaire
 
 ## Tests et clôture
 
-Le point de départ phase 4 était 281 tests. Les phases 5a/5b ont ajouté ou activé 106 tests, soit 387 ; la vérification de date de radiation ajoutée pour cette clôture porte la suite API à 388. La modification de `test_model_registry_phase4.py` ne change aucune assertion : elle cherche la migration sous `backend/ingestion/...` dans le dépôt et sous `ingestion/...` dans l'image API, dont `/app` est déjà le dossier backend.
+Le point de départ phase 4 était 281 tests. Les phases 5a/5b ont ajouté ou activé 106 tests, soit 387 ; la vérification de date de radiation ajoutée pour cette clôture porte la suite API à 388. La migration est désormais centralisée sous `database/migrations/`; l'image API ne contient pas ce dossier car les migrations sont exécutées par le service `loader`.
 
 Suite API dans le conteneur : **388 passed, 1 skipped**. Suite ingestion dans l'image loader : **55 passed, 17 skipped**. Total exécutable : **443 passed, 18 skipped, 0 échec**. L'ancien échec loader était `pytest: not found`, puis, après installation du runner, `ModuleNotFoundError: No module named 'encrypt_identities'` et `No module named 'pseudo'`; le montage et les chemins de tests ont été corrigés.
 

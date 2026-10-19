@@ -121,8 +121,7 @@ def test_0012_role_order_and_optional_readonly_roles_are_guarded():
     root = Path(__file__).parents[1]
     migration_root = next(
         candidate for candidate in (
-            root / "backend/ingestion/migrations/versions",
-            root / "ingestion/migrations/versions",
+            root / "database/migrations/versions",
         ) if (candidate / "0012_phase4_model_registry.py").exists()
     )
     migration = (migration_root / "0012_phase4_model_registry.py").read_text()

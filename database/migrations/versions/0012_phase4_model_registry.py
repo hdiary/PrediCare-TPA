@@ -1,6 +1,6 @@
 """Phase 4 registry and missing persistence tables.
 
-The legacy SQL files under db/migrations are not executed by Alembic. This
+The legacy SQL files under database/sql are not executed by Alembic. This
 migration carries forward only their missing API tables. Existing business
 tables and the existing predictions table are left untouched.
 """

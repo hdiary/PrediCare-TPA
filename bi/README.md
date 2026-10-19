@@ -4,7 +4,7 @@ Le dashboard **PrediCare : Pilotage** est généré dans Metabase depuis
 [`dashboard.json`](./dashboard.json). Ce JSON versionné est l'export déclaratif
 portable du dashboard : les cartes, leurs requêtes SQL, les filtres de date et
 la disposition peuvent être relus, révisés et recréés par
-`db/metabase/setup.sh`. Il est monté par Docker Compose et importé au premier
+`database/metabase/setup.sh`. Il est monté par Docker Compose et importé au premier
 démarrage de Metabase. Augmenter le champ `version` dans le JSON quand une
 définition change permet au script d'archiver le dashboard précédent et de le
 recréer. Les exécutions répétées d'une même version sont idempotentes.

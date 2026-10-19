@@ -21,7 +21,7 @@
    Le statut `EN_ATTENTE_GESTIONNAIRE` est disponible pour l’affichage « en cours
    d’examen ».
 3. Les migrations Alembic `p1_0001` à `p1_0004`, `0010` et `0011` sont la source de
-   vérité. Les fichiers `db/migrations/*.sql` sont des scripts historiques ou de
+   vérité. Les fichiers `database/sql/*.sql` sont des scripts historiques ou de
    transition : ils ne sont pas exécutés par le service `loader` et ne seront pas
    maintenus en parallèle. Leurs définitions seront reportées, après comparaison,
    dans Alembic `0012`.
@@ -45,7 +45,7 @@
 | `calculs_remboursement` | 5, 7 | Oui, `0012` | Créée |
 | `factures_rejetees` | 5, 7 | Oui, `0012` | Créée |
 | `alertes` | 6, 7 | Oui, `0012` | Créée |
-| `alertes_prescription` | 5, 6 | Oui, `0012` (anciennement seulement `db/migrations/040`) | Créée |
+| `alertes_prescription` | 5, 6 | Oui, `0012` (anciennement seulement `database/sql/040`) | Créée |
 | `decisions_gestionnaires` | 6, 7 | Oui, mais ancienne structure `0002` incompatible | Aligner |
 | `journal_audit` | 4, 5, 6, 7 | Oui, `0012` (`0002` avait `audit_log`) | Créée |
 

@@ -269,9 +269,11 @@ predicare-tpa/
 │   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
-├── db/
-│   ├── migrations/           # scripts SQL versionnés (001_*.sql, ...)
-│   └── seed/                 # données de chargement initial
+├── database/
+│   ├── migrations/           # migrations Alembic, y compris les migrations P1
+│   ├── ingestion/            # données et pipeline d'ingestion
+│   ├── backup/               # sauvegarde et restauration PostgreSQL
+│   └── metabase/             # initialisation de Metabase
 ├── n8n/workflows/            # workflows importables (.json)
 ├── bi/                       # export du tableau de bord
 ├── scripts/                  # backup.sh, restore.sh

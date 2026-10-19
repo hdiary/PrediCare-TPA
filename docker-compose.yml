@@ -10,7 +10,7 @@
 # de ce fichier. Épinglez les versions d'images avant la livraison.
 #
 # Avant le premier démarrage (sur la machine de P1), produire les Parquet :
-#   cd backend/ingestion
+#   cd database
 #   python clean.py && python encrypt_identities.py --delete-source
 # =============================================================
 
@@ -103,7 +103,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-predicare}
       METABASE_RO_PASSWORD: ${METABASE_RO_PASSWORD:-dev_metabase_ro_pwd}
     volumes:
-      - ./db/metabase/setup.sh:/setup.sh:ro
+      - ./database/metabase/setup.sh:/setup.sh:ro
       - ./bi/dashboard.json:/dashboard.json:ro
     command: sh -c "apk add --no-cache curl jq && tr -d '\\r' < /setup.sh > /tmp/setup.sh && sh /tmp/setup.sh"
     restart: "no"
@@ -180,8 +180,8 @@ services:
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000 # utilisé seulement si mlflow tourne
     volumes:
-      - ./backend/ingestion/dataset:/data/dataset:ro
-      - ./backend/ingestion/labels:/data/labels:ro
+      - ./database/ingestion/dataset:/data/dataset:ro
+      - ./database/ingestion/labels:/data/labels:ro
       - ./backend/ml/models:/app/models
     depends_on:
       mlflow:
