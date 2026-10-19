@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-import pseudo
-from pseudo import PseudoError, pseudonymise, pseudonymise_many
+import database.pseudo as pseudo
+from database.pseudo import PseudoError, pseudonymise, pseudonymise_many
 
 HERE = Path(__file__).parent
 SOURCE_ROOT = HERE.parent

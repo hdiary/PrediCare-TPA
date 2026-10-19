@@ -8,12 +8,8 @@ import logging
 from datetime import datetime
 from uuid import UUID, uuid4
 
-<<<<<<< HEAD
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
-=======
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
->>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
 from fastapi.security import OAuth2PasswordRequestForm
 
 from api import repositories as repo
@@ -21,36 +17,16 @@ from api.audit import write_audit_compte
 from api.config import get_settings
 from api.db import get_db
 from api.deps import get_current_user
-<<<<<<< HEAD
-from api.schemas import LoginRequest, LogoutRequest, RefreshRequest, TokenResponse, UserOut
-from api.security import (
-    DUMMY_HASH,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    verify_password,
-)
-=======
 from api.schemas import (
-    ChangePasswordRequest,
-    ForgotPasswordRequest,
-    LoginRequest,
-    MessageResponse,
-    RegisterRequest,
-    ResetPasswordRequest,
-    TokenResponse,
-    UserOut,
+    ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, LogoutRequest,
+    MessageResponse, RefreshRequest, RegisterRequest, ResetPasswordRequest,
+    TokenResponse, UserOut,
 )
 from api.security import (
-    DUMMY_HASH,
-    create_access_token,
-    generate_reset_token,
-    hash_password,
-    hash_reset_token,
-    verify_password,
+    DUMMY_HASH, create_access_token, create_refresh_token, decode_token,
+    generate_reset_token, hash_password, hash_reset_token, verify_password,
 )
 from api.services.mailer import send_reset_email
->>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -178,7 +154,6 @@ def login(body: LoginRequest, conn=Depends(get_db)):
 @router.post("/token", response_model=TokenResponse, include_in_schema=True)
 def token(form: OAuth2PasswordRequestForm = Depends(), conn=Depends(get_db)):
     """Même chose en formulaire : fait fonctionner le bouton « Authorize » de /docs."""
-<<<<<<< HEAD
     return _token_response(_authenticate(conn, form.username, form.password), conn)
 
 
@@ -251,15 +226,6 @@ def logout(
             (user["user_id"],),
         )
     return None
-=======
-    if len(form.username) > 254 or len(form.password) > 128:   # mêmes bornes que LoginRequest
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Identifiants invalides",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return _token_response(_authenticate(conn, form.username, form.password))
->>>>>>> 267f47592c0e953b7f9bf5d1f51cddae4ce4ddc3
 
 
 @router.get("/me", response_model=UserOut)

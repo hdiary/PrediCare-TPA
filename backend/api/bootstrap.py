@@ -1,6 +1,8 @@
 """Création des comptes de démonstration au démarrage (idempotent)."""
 import logging
 
+import psycopg
+
 from api.config import get_settings
 from api.db import get_pool
 from api.security import hash_password
@@ -44,61 +46,62 @@ def ensure_demo_users() -> None:
         )
         return
 
-    with pool.connection(timeout=10) as conn:
-        if admin_password:
-            inserted = conn.execute(
-                "INSERT INTO utilisateurs (email, mot_de_passe_hash, role) "
-                "VALUES (%s, %s, 'administrateur') ON CONFLICT (email) DO NOTHING "
-                "RETURNING utilisateur_id",
-                (admin_email, hash_password(admin_password)),
-            ).fetchone()
-            if inserted is None:
-                existing = conn.execute(
-                    "SELECT role FROM utilisateurs WHERE email = %s",
-                    (admin_email,),
+    try:
+        with pool.connection(timeout=10) as conn:
+            if admin_password:
+                inserted = conn.execute(
+                    "INSERT INTO utilisateurs (email, mot_de_passe_hash, role) "
+                    "VALUES (%s, %s, 'administrateur') ON CONFLICT (email) DO NOTHING "
+                    "RETURNING utilisateur_id",
+                    (admin_email, hash_password(admin_password)),
                 ).fetchone()
-                if not existing or existing["role"] != "administrateur":
-                    raise RuntimeError(
-                        "ADMIN_EMAIL already belongs to a non-administrator account"
-                    )
-            logger.info("initial_admin_ready")
-        else:
-            logger.warning(
-                "initial_admin_skipped",
-                extra={"reason": "ADMIN_INITIAL_PASSWORD is not configured"},
-            )
+                if inserted is None:
+                    existing = conn.execute(
+                        "SELECT role FROM utilisateurs WHERE email = %s",
+                        (admin_email,),
+                    ).fetchone()
+                    if not existing or existing["role"] != "administrateur":
+                        raise RuntimeError(
+                            "ADMIN_EMAIL already belongs to a non-administrator account"
+                        )
+                logger.info("initial_admin_ready")
+            else:
+                logger.warning(
+                    "initial_admin_skipped",
+                    extra={"reason": "ADMIN_INITIAL_PASSWORD is not configured"},
+                )
 
-        if demo_password:
-            demo_hash = hash_password(demo_password)
-            assure_id = _pick(
-                conn,
-                "SELECT a.assure_id FROM assures a WHERE a.rang_beneficiaire = 'ASSURE_PRINCIPAL' "
-                "AND EXISTS (SELECT 1 FROM factures f WHERE f.assure_id = a.assure_id) "
-                "ORDER BY a.assure_id LIMIT 1",
-            )
-            prestataire_id = _pick(
-                conn,
-                "SELECT p.prestataire_id FROM prestataires p WHERE p.statut = 'ACTIF' "
-                "AND EXISTS (SELECT 1 FROM factures f WHERE f.prestataire_id = p.prestataire_id) "
-                "ORDER BY p.prestataire_id LIMIT 1",
-            )
-            if assure_id is None or prestataire_id is None:
-                raise RuntimeError(
-                    "Demo users require an existing insured person and active provider with invoices"
+            if demo_password:
+                demo_hash = hash_password(demo_password)
+                assure_id = _pick(
+                    conn,
+                    "SELECT a.assure_id FROM assures a WHERE a.rang_beneficiaire = 'ASSURE_PRINCIPAL' "
+                    "AND EXISTS (SELECT 1 FROM factures f WHERE f.assure_id = a.assure_id) "
+                    "ORDER BY a.assure_id LIMIT 1",
                 )
-            for email, role in DEMO_USERS:
-                conn.execute(
-                    "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, "
-                    "prestataire_id) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-                    (
-                        email,
-                        demo_hash,
-                        role,
-                        assure_id if role == "assure" else None,
-                        prestataire_id if role == "professionnel_sante" else None,
-                    ),
+                prestataire_id = _pick(
+                    conn,
+                    "SELECT p.prestataire_id FROM prestataires p WHERE p.statut = 'ACTIF' "
+                    "AND EXISTS (SELECT 1 FROM factures f WHERE f.prestataire_id = p.prestataire_id) "
+                    "ORDER BY p.prestataire_id LIMIT 1",
                 )
-        logger.info("demo_users_ready")
+                if assure_id is None or prestataire_id is None:
+                    raise RuntimeError(
+                        "Demo users require an existing insured person and active provider with invoices"
+                    )
+                for email, role in DEMO_USERS:
+                    conn.execute(
+                        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, "
+                        "prestataire_id) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
+                        (
+                            email,
+                            demo_hash,
+                            role,
+                            assure_id if role == "assure" else None,
+                            prestataire_id if role == "professionnel_sante" else None,
+                        ),
+                    )
+            logger.info("demo_users_ready")
     except psycopg.errors.UndefinedTable:
         logger.error("tables manquantes : appliquer les migrations (assures, utilisateurs...)")
     except Exception:  # noqa: BLE001

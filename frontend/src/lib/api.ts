@@ -13,9 +13,11 @@ import type {
   Invoice,
   Alert,
   AlertDetail,
+  AlertApiDetail,
   AlertStatus,
   AlertType,
   KPIData,
+  BIKpiData,
   ServiceStatus,
   ServiceState,
   SystemMetrics,
@@ -27,6 +29,7 @@ import type {
   UserRow,
   PrescriptionAlert,
   RegisterPayload,
+  AlertDecisionValue,
 } from "./types";
 
 import {
@@ -66,6 +69,7 @@ const mockedFeatures = new Set(
     .map((s) => s.trim())
     .filter((s) => s && s !== "none"),
 );
+export const USE_MOCK_AUTH = isMock("auth");
 
 export function isMock(feature: Feature): boolean {
   return mockedFeatures.has("all") || mockedFeatures.has(feature);
@@ -270,7 +274,7 @@ export const api = {
         { auth: false },
       );
       const u = mapUser(data.user);
-      cachedMe = { pseudonym: u.pseudonym, role: u.role };
+      cachedMe = { pseudonym: u.pseudonym, role: u.role, prestataireId: null };
       return { access_token: data.access_token, role: u.role, display_name: u.display_name, pseudonym: u.pseudonym };
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) throw new Error("Email ou mot de passe incorrect");
@@ -569,7 +573,7 @@ export const api = {
     return { items, total: items.length };
   },
 
-  async getAlertDetail(id: string): Promise<AlertDetail> {
+  async getAlertDetail(id: string): Promise<AlertApiDetail> {
     if (isMock("alerts")) {
       await delay(500);
       const a = mockAlertDetail;
@@ -608,7 +612,7 @@ export const api = {
         actor_pseudo: `GST-${String(h.gestionnaire_id).padStart(4, "0")}`,
         score: h.score,
       })),
-    };
+    } as unknown as AlertApiDetail;
   },
 
   /** `amount` : montant de la facture ; une fraude confirmée est comptée comme montant économisé. */
@@ -620,9 +624,9 @@ export const api = {
   ): Promise<{ id: string; status: string; decided_at: string }> {
     if (isMock("alerts")) {
       await delay(800);
-      return { id, status: decision === "validate" ? "validated" : "rejected", decided_at: new Date().toISOString() };
+      return { id, status: decision === "VALIDER" || decision === "CONFIRMER_FRAUDE" ? "validated" : "rejected", decided_at: new Date().toISOString() };
     }
-    const fraude = decision === "validate";
+    const fraude = decision === "VALIDER" || decision === "CONFIRMER_FRAUDE";
     const r = await request<{ facture_id: string; decision: string; date_decision: string }>(
       `/alerts/${encodeURIComponent(id)}/decision`,
       {
@@ -643,6 +647,15 @@ export const api = {
       return mockKPIData;
     }
     return request(`/kpis${period ? `?period=${period}` : ""}`);
+  },
+
+  async getBIKPIs(): Promise<BIKpiData> {
+    if (isMock("kpis")) return mockKPIData as unknown as BIKpiData;
+    return request("/bi/kpis");
+  },
+
+  async logout(): Promise<void> {
+    if (!isMock("auth")) await request("/auth/logout", { method: "POST" });
   },
 
   /** États des services : l'API et la base viennent de /health ; n8n et la base vectorielle ne sont pas encore sondés. */
@@ -681,7 +694,8 @@ export const api = {
       await delay(400);
       return { active: "v2.3.0", versions: mockModelVersions };
     }
-    return request("/admin/models");
+    const result = await request<{ actuelle: string | null; versions: ModelVersion[] }>("/model/versions");
+    return { active: result.actuelle ?? "", versions: result.versions };
   },
 
   async activateModel(version: string): Promise<{ active: string }> {
@@ -689,7 +703,8 @@ export const api = {
       await delay(800);
       return { active: version };
     }
-    return request(`/admin/models/${version}/activate`, { method: "POST" });
+    const result = await request<{ version: string }>(`/model/activate/${encodeURIComponent(version)}`, { method: "POST" });
+    return { active: result.version };
   },
 
   async getAuditLog(filters?: { action?: string; actor?: string }): Promise<{ items: AuditLogEntry[] }> {
@@ -717,17 +732,7 @@ export const api = {
       await delay(300);
       return mockAdminSettings;
     }
-    const s = await request<{
-      alert_threshold: number; slack_enabled: boolean; slack_channel: string;
-      email_enabled: boolean; email_recipients: string;
-    }>("/admin/settings");
-    return {
-      alert_threshold: s.alert_threshold,
-      channels: {
-        slack: { enabled: s.slack_enabled, webhook: s.slack_channel },
-        email: { enabled: s.email_enabled, address: s.email_recipients },
-      },
-    };
+    return request<AdminSettings>("/admin/config");
   },
 
   async updateAdminSettings(settings: AdminSettings): Promise<AdminSettings> {
@@ -736,15 +741,9 @@ export const api = {
       return settings;
     }
     try {
-      await request("/admin/settings", {
-        method: "PUT",
-        body: JSON.stringify({
-          alert_threshold: settings.alert_threshold,
-          slack_enabled: settings.channels.slack.enabled,
-          slack_channel: settings.channels.slack.webhook,
-          email_enabled: settings.channels.email.enabled,
-          email_recipients: settings.channels.email.address,
-        }),
+      await request("/admin/config", {
+        method: "PATCH",
+        body: JSON.stringify(settings),
       });
     } catch (e) {
       // 422 : afficher le motif précis (ex. adresse e-mail invalide) plutôt qu'un message générique

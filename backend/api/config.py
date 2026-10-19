@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 15      # durée du verrouillage
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
+    max_body_bytes: int = 10 * 1024 * 1024
 
     # Registre de modèles (MLflow)
     mlflow_tracking_uri: str = "http://mlflow:5000"
@@ -38,6 +39,9 @@ class Settings(BaseSettings):
 
     # Optional demonstration accounts (created when DEMO_PASSWORD is configured).
     demo_password: str | None = None
+    seed_admin_password: str | None = None
+    seed_gestion_password: str | None = None
+    seed_pds_password: str | None = None
 
     # Initial administrator account. Existing accounts are never overwritten.
     admin_email: str = "admin@predicare.local"

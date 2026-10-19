@@ -13,7 +13,8 @@ from api.deps import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
-_CHAT_ROLES = {"assure", "professionnel_sante"}
+assistant_router = APIRouter(prefix="/assistant", tags=["assistant"])
+_CHAT_ROLES = {"assure"}
 _HISTORY_LIMIT = 30
 _MESSAGES_PER_CONVERSATION = 100
 
@@ -36,7 +37,7 @@ def _require_chat_role(user: dict) -> None:
     if user["role"] not in _CHAT_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Le chat est réservé aux assurés et professionnels de santé",
+            detail="L'assistant est réservé aux assurés",
         )
 
 
@@ -145,6 +146,7 @@ def _resolve_agent_scope(conn, user: dict) -> tuple[str | None, str | None, str]
     return None, None, prestataire_id
 
 
+@assistant_router.post("/ask")
 @router.post("")
 def send_message(
     body: ChatRequest,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  TrendingUp, TrendingDown, FileText, Banknote, Target, AlertTriangle,
+  TrendingUp, TrendingDown, FileText, Banknote, Target, AlertTriangle, Euro,
   ArrowRight, Clock,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -10,8 +10,8 @@ import {
 } from 'recharts';
 import { Card, Skeleton, ErrorState, Badge } from '@/components/ui';
 import { api } from '@/lib/api';
-import { formatEUR, formatPercent, formatDate, riskColor, ALERT_TYPE_LABELS } from '@/lib/format';
-import type { BIKpiData, AlertApiSummary } from '@/lib/types';
+import { formatMGA, formatPercent, formatDate, riskColor, ALERT_TYPE_LABELS } from '@/lib/format';
+import type { Alert, BIKpiData } from '@/lib/types';
 
 const ICON_TONES: Record<string, string> = {
   primary: 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300',
@@ -22,12 +22,12 @@ const ICON_TONES: Record<string, string> = {
 
 export function ManagerDashboard() {
   const [kpis, setKpis] = useState<BIKpiData | null>(null);
-  const [alerts, setAlerts] = useState<AlertApiSummary[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.getBIKPIs(), api.getAlerts({ status: 'EN_ATTENTE' })])
+    Promise.all([api.getBIKPIs(), api.getAlerts({ status: 'pending' })])
       .then(([k, a]) => { setKpis(k); setAlerts(a.items.slice(0, 5)); setLoading(false); })
       .catch(() => { setError(true); setLoading(false); });
   }, []);
@@ -37,7 +37,7 @@ export function ManagerDashboard() {
 
   const kpiCards = [
     { label: 'Factures traitées', value: kpis.factures_traitees.toLocaleString('fr-FR'), icon: <FileText className="w-5 h-5" />, trend: '', trendUp: true, color: 'primary' },
-    { label: 'Montant à risque', value: formatEUR(kpis.montant_a_risque), icon: <Euro className="w-5 h-5" />, trend: '', trendUp: true, color: 'warning' },
+    { label: 'Montant à risque', value: formatMGA(kpis.montant_a_risque), icon: <Euro className="w-5 h-5" />, trend: '', trendUp: true, color: 'warning' },
     { label: 'Taux d’alerte', value: formatPercent(kpis.taux_alerte), icon: <Target className="w-5 h-5" />, trend: '', trendUp: true, color: 'kraft' },
     { label: 'Alertes en attente', value: kpis.alertes_en_attente.toString(), icon: <AlertTriangle className="w-5 h-5" />, trend: '', trendUp: false, color: 'warning' },
   ];
@@ -117,8 +117,8 @@ export function ManagerDashboard() {
         <div className="space-y-2">
           {alerts.map((alert) => (
             <Link
-              key={alert.facture_id}
-              to={`/gestionnaire/alertes/${alert.facture_id}`}
+              key={alert.id}
+              to={`/gestionnaire/alertes/${alert.id}`}
               className="flex items-center gap-4 p-3 rounded-[12px] border border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 transition-all"
             >
               <div className={`px-2.5 py-1 rounded-md text-xs font-semibold tabular-nums border ${riskColor(alert.score)}`}>
@@ -126,12 +126,12 @@ export function ManagerDashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-200">{ALERT_TYPE_LABELS[alert.type] || alert.type}</p>
-                <p className="text-xs text-surface-400 font-mono">{alert.prestataire_id} · {alert.assure_id}</p>
+                <p className="text-xs text-surface-400 font-mono">{alert.provider_pseudo} · {alert.insured_pseudo}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold tabular-nums text-surface-700 dark:text-surface-200">{formatEUR(alert.montant_total)}</p>
+                <p className="text-sm font-semibold tabular-nums text-surface-700 dark:text-surface-200">{formatMGA(alert.amount)}</p>
                 <p className="text-xs text-surface-400 flex items-center gap-1 justify-end">
-                  <Clock className="w-3 h-3" /> {formatDate(alert.date)}
+                  <Clock className="w-3 h-3" /> {formatDate(alert.created_at)}
                 </p>
               </div>
             </Link>

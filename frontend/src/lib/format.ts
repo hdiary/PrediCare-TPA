@@ -7,6 +7,8 @@ export function formatMGA(amount: number): string {
   }).format(amount);
 }
 
+export const formatEUR = formatMGA;
+
 export function formatDate(date: string): string {
   const d = new Date(date);
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });

@@ -8,6 +8,13 @@ class ShapItem(BaseModel):
     contribution: float
 
 
+class RegleItem(BaseModel):
+    regle_code: str
+    severite: str | None = None
+    message: str | None = None
+    details: dict | None = None
+
+
 class PredictResponse(BaseModel):
     """Gestionnaire : réponse complète. Professionnel de santé : accusé de réception seul."""
 

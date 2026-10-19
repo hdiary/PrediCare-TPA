@@ -1,8 +1,69 @@
 """Schémas de l'écran d'administration (seuil d'alerte et canaux de notification)."""
 import re
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class AuditEntryOut(BaseModel):
+    ts: str
+    event_type: str
+    actor: str
+    entity: str
+    model_version: str | None = None
+
+
+class MessageOut(BaseModel):
+    detail: str
+
+
+class SettingsModel(BaseModel):
+    alert_threshold: float = Field(gt=0, lt=1)
+    slack_enabled: bool
+    slack_channel: str
+    email_enabled: bool
+    email_recipients: str
+
+
+StatutCompte = Literal["actifs", "inactifs", "tous"]
+
+
+class UserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=8, max_length=256)
+    role: Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"]
+    assure_id: str | None = None
+    prestataire_id: str | None = None
+    is_active: bool = True
+
+
+class UserUpdate(BaseModel):
+    role: Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"] | None = None
+    assure_id: str | None = None
+    prestataire_id: str | None = None
+    is_active: bool | None = None
+
+
+class UserRowOut(BaseModel):
+    user_id: int
+    email: str
+    role: str
+    assure_id: str | None = None
+    prestataire_id: str | None = None
+    is_active: bool
+    last_login: str | None = None
+
+
+def _controle_rattachement(role: str, assure_id: str | None, prestataire_id: str | None) -> None:
+    if role == "assure" and not assure_id:
+        raise ValueError("Un compte assure doit être rattaché à un assuré")
+    if role == "professionnel_sante" and not prestataire_id:
+        raise ValueError("Un compte professionnel_sante doit être rattaché à un prestataire")
+    if role != "assure" and assure_id:
+        raise ValueError("Seul un compte assure peut être rattaché à un assuré")
+    if role != "professionnel_sante" and prestataire_id:
+        raise ValueError("Seul un compte professionnel_sante peut être rattaché à un prestataire")
 
 
 class ThresholdUpdate(BaseModel):

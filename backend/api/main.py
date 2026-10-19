@@ -11,11 +11,11 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users, ensure_seed_users
 from api.config import get_settings
-from api.routers import admin, alerts, auth, chat, factures, health, kpis, model, predict, ordonnances
+from api.routers import admin, alerts, auth, chat, factures, health, model, predict, ordonnances
 from api.services.metrics import http_metrics
 from api.logging_config import configure_logging
 from api.middleware import BodySizeLimitMiddleware
-from api.routers import admin, alerts, auth, health, invoices, predict
+from api.routers import invoices
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
 from api.v1.router import router as api_v1_router
@@ -99,6 +99,7 @@ async def validation_error_handler(_: Request, exc: RequestValidationError):
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(chat.assistant_router)
 app.include_router(predict.router)
 app.include_router(factures.router)
 app.include_router(ordonnances.router)

@@ -110,7 +110,7 @@ services:
   loader:
     build:
       context: .
-      dockerfile: backend/ingestion/db_init/Dockerfile
+      dockerfile: database/db_init/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
       DATASET_DIR: /data/dataset
@@ -124,8 +124,8 @@ services:
       DB_BI_RO_PASSWORD: ${DB_BI_RO_PASSWORD:-dev_bi_ro_pwd}
       DB_ML_RO_PASSWORD: ${DB_ML_RO_PASSWORD:-dev_ml_ro_pwd}
     volumes:
-      - ./backend/ingestion/dataset:/data/dataset:ro
-      - ./backend/ingestion/labels:/data/labels:ro
+      - ./database/ingestion/dataset:/data/dataset:ro
+      - ./database/ingestion/labels:/data/labels:ro
     depends_on:
       db:
         condition: service_healthy
@@ -199,16 +199,15 @@ services:
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
       # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD-123465789}
-      SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD-12346798}
-      SEED_PDS_PASSWORD: ${SEED_PDS_PASSWORD-123456789}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD:-}
+      SEED_PDS_PASSWORD: ${SEED_PDS_PASSWORD:-}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-30}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@predicare.local}
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
-      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}
+      ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.8}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/predicare-alert}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -242,15 +241,7 @@ services:
   n8n:
     image: n8nio/n8n:latest # à épingler sur une version précise
     restart: unless-stopped
-    command:
-      - sh
-      - -c
-      - >-
-        if [ ! -f /home/node/.n8n/.predicare-workflows-imported ]; then
-          n8n import:workflow --separate --input=/workflows &&
-          touch /home/node/.n8n/.predicare-workflows-imported;
-        fi;
-        exec n8n start
+    command: [ "start" ]
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
@@ -306,15 +297,14 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
-        VITE_USE_MOCKS: ${VITE_USE_MOCKS:-true}
-        VITE_USE_MOCK_AUTH: ${VITE_USE_MOCK_AUTH:-false}
-        VITE_USE_MOCK_CHAT: ${VITE_USE_MOCK_CHAT:-false}
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_MOCKS: ${VITE_MOCKS:-none}
+        VITE_SHOW_DEMO_ACCOUNTS: ${VITE_SHOW_DEMO_ACCOUNTS:-false}
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "5173:80"
   # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
   # Se connecter avec le rôle bi_ro (lecture seule sur les vues), jamais avec POSTGRES_USER.
   # superset:

@@ -5,7 +5,6 @@ import { api } from './api';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<Role>;
   login: (email: string, password: string) => Promise<User>;
   logout: () => void;
 }
@@ -49,7 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('predicare_refresh_token', res.refresh_token);
     }
     setUser({ role: res.role, display_name: res.display_name, pseudonym: res.pseudonym, email });
-    return res.role;
     const loggedIn: User = { role: res.role, display_name: res.display_name, pseudonym: res.pseudonym, email };
     setUser(loggedIn);
     return loggedIn;

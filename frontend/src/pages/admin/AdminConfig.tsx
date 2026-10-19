@@ -150,7 +150,6 @@ export function AdminConfig() {
           </div>
           {settings.channels.slack.enabled && (
             <div className="ml-12">
-              <label className="text-xs text-surface-400 mb-1 block">Canal Slack</label>
               <label className="text-xs text-surface-400 mb-1 block">Canal Slack (ex. #predicare-alertes)</label>
               <input
                 type="text"
@@ -159,7 +158,6 @@ export function AdminConfig() {
                   ...settings,
                   channels: { ...settings.channels, slack: { ...settings.channels.slack, channel: e.target.value } },
                 })}
-                placeholder="#alertes-fraude"
                 placeholder="#predicare-alertes"
                 className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3 py-2 text-sm focus:border-primary-500"
               />

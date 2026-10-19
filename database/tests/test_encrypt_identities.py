@@ -11,8 +11,8 @@ import pyarrow.parquet as pq
 import pytest
 from cryptography.fernet import Fernet
 
-import encrypt_identities as ei
-from encrypt_identities import (IdentityError, decrypt_identity,
+import database.encrypt_identities as ei
+from database.encrypt_identities import (IdentityError, decrypt_identity,
                                 encrypt_identity, load_keyring)
 
 HERE = Path(__file__).parent

@@ -1,7 +1,0 @@
-services:
-  api:
-    volumes:
-      - ./tests:/app/tests:ro
-  loader:
-    volumes:
-      - ./backend/ingestion:/app:ro
