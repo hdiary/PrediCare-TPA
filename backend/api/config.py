@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     n8n_webhook_url: str | None = None      # ex. http://n8n:5678/webhook/predicare-alert
     n8n_webhook_secret: str | None = None   # openssl rand -hex 32
     n8n_timeout_s: float = 3.0              # jamais bloquant pour /predict
+    n8n_retry_delay_s: float = 0.2
 
     @property
     def drift_feature_list(self) -> list[str]:

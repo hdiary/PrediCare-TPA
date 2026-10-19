@@ -2,6 +2,7 @@
 import logging
 import time
 
+import httpx
 import psycopg
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -20,7 +21,7 @@ from api.services.calculation_service import calculate_reimbursement
 from api.services.context_service import ContextUnavailableError, build_context
 from api.services.fraud_rules_v2 import evaluate_fraud_rules
 from api.services.model_registry import get_registry
-from api.services.notify import notification_service
+from api.services.notification_service import notify_alert
 from api.services.rules import evaluate_rules
 from api.services.scoring import predict_with_explanation
 from api.validation import InvoiceRejected, today_mg, validate_invoice
@@ -194,10 +195,25 @@ def predict(
 
     # Un professionnel de santé ne reçoit pas le score (éviter d'aider un fraudeur à l'ajuster)
     if score_alert and alerte_id:
-        notification_service(
-            conn,
-            user,
+        notification_events = []
+
+        def audit_notification(event: dict) -> None:
+            notification_events.append(event)
+            write_audit(
+                conn,
+                event_type="notification_n8n_tentative",
+                actor_id=user["user_id"],
+                entity_type="facture",
+                entity_id=clean["facture_id"],
+                model_name=bundle.name,
+                model_version=bundle.version,
+                input_data={"tentative": event["attempt"]},
+                output_data={"reussie": event["success"], "resultat": event["result"]},
+            )
+
+        notification_status = notify_alert(
             {
+                "alert_id": alerte_id,
                 "prediction_id": prediction_id,
                 "facture_id": clean["facture_id"],
                 "assure_id": clean["assure_id"],
@@ -207,11 +223,18 @@ def predict(
                 "version_modele": bundle.version,
                 "nom_modele": bundle.name,
                 "montant_total": clean["montant_total"],
+                "montant_reclame": calculation.get("montant_reclame") if calculation else None,
+                "montant_calcule": calculation.get("montant_calcule") if calculation else None,
             },
-            result["shap"],
-            [finding.code for finding in fraud_findings],
-            findings,
+            client=httpx,
+            settings=settings,
+            audit=audit_notification,
         )
+        repo.update_alert_notification(
+            conn, clean["facture_id"], "ENVOYEE" if notification_status == "SENT" else "ECHEC",
+            len(notification_events),
+        )
+        conn.commit()
 
     if user["role"] == "professionnel_sante":
         return PredictResponse(facture_id=clean["facture_id"], prediction_id=prediction_id)
