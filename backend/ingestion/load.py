@@ -50,7 +50,8 @@ import pyarrow.parquet as pq
 
 PII_COLS = {"nom", "prenoms", "date_naissance", "telephone", "email",
             "adresse", "numero_cin"}
-PII_ALLOWED_TABLES = {"identites_chiffrees", "prestataires"}
+# utilisateurs : adresses de connexion des comptes applicatifs (pas des assurés)
+PII_ALLOWED_TABLES = {"identites_chiffrees", "prestataires", "utilisateurs"}
 BATCH = 20_000
 
 

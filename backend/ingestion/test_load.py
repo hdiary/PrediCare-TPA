@@ -25,6 +25,7 @@ import pyarrow.parquet as pq
 import pytest
 
 HERE = Path(__file__).parent
+ALEMBIC_DIR = HERE.parent.parent / "database"   # alembic.ini + migrations/
 URL = os.environ.get("PREDICARE_TEST_DATABASE_URL")
 DATASET = os.environ.get("PREDICARE_DATASET")
 
@@ -37,9 +38,9 @@ LEAK = {"montant_pris_en_charge", "reste_a_charge", "statut", "motif_rejet",
         "date_traitement"}
 
 
-def run(cmd, env_extra=None, check=True):
+def run(cmd, env_extra=None, check=True, cwd=None):
     env = {**os.environ, "DATABASE_URL": URL, **(env_extra or {})}
-    r = subprocess.run(cmd, cwd=HERE, env=env, capture_output=True, text=True)
+    r = subprocess.run(cmd, cwd=cwd or HERE, env=env, capture_output=True, text=True)
     if check and r.returncode != 0:
         raise AssertionError(f"{cmd} failed:\n{r.stdout}\n{r.stderr}")
     return r
@@ -71,7 +72,7 @@ def db(pipeline):
     with psycopg.connect(URL, autocommit=True) as c:
         c.execute("DROP SCHEMA public CASCADE")
         c.execute("CREATE SCHEMA public")
-    run(["alembic", "upgrade", "head"])
+    run(["alembic", "upgrade", "head"], cwd=ALEMBIC_DIR)
     clean, sec = pipeline
     load(clean, sec)
     conn = psycopg.connect(URL, autocommit=True)
@@ -184,7 +185,7 @@ def test_no_personal_column_outside_identity_table(db):
     bad = db.execute(
         "SELECT table_name, column_name FROM information_schema.columns "
         "WHERE table_schema='public' AND column_name = ANY(%s) AND "
-        "table_name NOT IN ('identites_chiffrees','prestataires')",
+        "table_name NOT IN ('identites_chiffrees','prestataires','utilisateurs')",
         (["nom", "prenoms", "date_naissance", "telephone", "email", "adresse",
           "numero_cin"],)).fetchall()
     assert bad == []
@@ -266,12 +267,12 @@ def test_invoice_lines_sum_to_invoice_total(db):
 
 # --- 8. migrations are reversible (LAST: destroys the data) ---------------- #
 def test_zzz_downgrade_to_base_then_upgrade(db):
-    run(["alembic", "downgrade", "base"])
+    run(["alembic", "downgrade", "base"], cwd=ALEMBIC_DIR)
     left = db.execute("SELECT count(*) FROM information_schema.tables WHERE "
                       "table_schema='public' AND table_name <> "
                       "'alembic_version'").fetchone()[0]
     assert left == 0
-    run(["alembic", "upgrade", "head"])
+    run(["alembic", "upgrade", "head"], cwd=ALEMBIC_DIR)
     assert count(db, "ingestion_log") == 0
     r = run([sys.executable, "load.py", "--is-initialised"], check=False)
     assert r.returncode == 2
