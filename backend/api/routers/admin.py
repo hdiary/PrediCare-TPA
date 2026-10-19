@@ -1,10 +1,6 @@
-"""Routes d'administration (rôle administrateur uniquement).
+"""Routes d'administration : seuil et canaux modifiables en direct, journal d'audit, modèle.
 
-- Seuil d'alerte modifiable en direct (P3-17) ; effet dès la prédiction suivante.
-- Versions du modèle, activation et retour arrière (P3-17).
-- Journal d'audit en lecture (P3-17).
-- Métriques de supervision (P3-18) et dérive PSI (P3-19).
-Toute modification est écrite dans le journal d'audit.
+À compléter : supervision détaillée et dérive.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -13,9 +9,7 @@ from api.audit import write_audit
 from api.config import get_settings
 from api.db import get_db
 from api.deps import require_role
-from api.schemas_admin import ActivateRequest, AuditRow, ThresholdUpdate
-from api.services import drift
-from api.services.metrics import http_metrics
+from api.schemas_admin import AuditEntryOut, SettingsModel, UserRowOut
 from api.services.model_registry import ModelUnavailableError, get_registry
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -27,41 +21,6 @@ def ping():
     """Sert à vérifier le contrôle d'accès par rôle."""
     return {"pong": True}
 
-
-# ---------- seuil d'alerte ----------
-
-@router.get("/threshold", dependencies=[admin_only])
-def get_threshold(conn=Depends(get_db)):
-    row = repo.get_config_row(conn, "seuil_alerte")
-    if row:
-        return {"seuil": float(row["valeur"]), "source": "configuration",
-                "mis_a_jour_le": row["mis_a_jour_le"], "mis_a_jour_par": row["mis_a_jour_par"]}
-    return {"seuil": get_settings().alert_threshold, "source": "defaut",
-            "mis_a_jour_le": None, "mis_a_jour_par": None}
-
-
-@router.put("/threshold")
-def set_threshold(
-    body: ThresholdUpdate,
-    user: dict = Depends(require_role("administrateur")),
-    conn=Depends(get_db),
-):
-    """Modifie le seuil en direct : lu à chaque /predict, donc effectif immédiatement.
-
-    Les prédictions déjà enregistrées gardent le seuil utilisé à leur création (`seuil_utilise`).
-    """
-    ancien = repo.get_seuil_alerte(conn, get_settings().alert_threshold)
-    repo.set_config(conn, "seuil_alerte", repr(body.seuil), user["email"])
-    write_audit(
-        conn, event_type="seuil_modifie", actor_id=user["user_id"],
-        entity_type="configuration", entity_id="seuil_alerte",
-        input_data={"ancien_seuil": ancien, "nouveau_seuil": body.seuil},
-        output_data={"seuil": body.seuil},
-    )
-    return {"seuil": body.seuil, "ancien_seuil": ancien}
-
-
-# ---------- modèle : état, versions, activation, retour arrière ----------
 
 @router.get("/model", dependencies=[admin_only])
 def model_info(registry=Depends(get_registry)):
@@ -75,26 +34,6 @@ def model_info(registry=Depends(get_registry)):
     }
 
 
-@router.get("/model/versions", dependencies=[admin_only])
-def model_versions(registry=Depends(get_registry)):
-    """Versions du modèle dans MLflow, alias et version actuellement chargée."""
-    try:
-        versions = registry.list_versions()
-    except ModelUnavailableError as exc:
-        raise HTTPException(status_code=502, detail=f"MLflow indisponible : {exc}") from exc
-    bundle = registry.get()
-    return {"actuelle": bundle.version if bundle else None, "versions": versions}
-
-
-def _audit_model_change(conn, user, bundle, previous, action: str, extra: dict | None = None):
-    write_audit(
-        conn, event_type="modele_charge", actor_id=user["user_id"], entity_type="model",
-        entity_id=bundle.name, model_name=bundle.name, model_version=bundle.version,
-        input_data={"previous_version": previous, "action": action, **(extra or {})},
-        output_data={"active_version": bundle.version},
-    )
-
-
 @router.post("/model/reload")
 def model_reload(
     force: bool = False,
@@ -102,111 +41,103 @@ def model_reload(
     conn=Depends(get_db),
     registry=Depends(get_registry),
 ):
-    """Recharge la version portant l'alias actif dans MLflow."""
+    """Recharge la version portant l'alias actif dans MLflow (mise à jour ou retour arrière)."""
     previous = registry.get().version if registry.get() else None
     try:
         bundle = registry.load_active(force=force)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=502, detail=f"Chargement impossible : {exc}") from exc
-    _audit_model_change(conn, user, bundle, previous, "reload", {"force": force})
+    write_audit(
+        conn, event_type="modele_charge", actor_id=user["user_id"], entity_type="model",
+        entity_id=bundle.name, model_name=bundle.name, model_version=bundle.version,
+        input_data={"previous_version": previous, "force": force},
+        output_data={"active_version": bundle.version},
+    )
     return {"name": bundle.name, "version": bundle.version, "previous_version": previous}
 
 
-@router.post("/model/activate")
-def model_activate(
-    body: ActivateRequest,
+# ---------- configuration modifiable sans toucher au code (CDC : « Configurable ») ----------
+
+_CLES = ("seuil_alerte", "canal_slack_actif", "slack_canal", "canal_email_actif",
+         "email_destinataires")
+
+
+def _lire_settings(conn) -> SettingsModel:
+    cfg = repo.get_configuration(conn, list(_CLES))
+    try:
+        seuil = float(cfg["seuil_alerte"])
+    except (KeyError, ValueError):
+        seuil = get_settings().alert_threshold
+    return SettingsModel(
+        alert_threshold=seuil,
+        slack_enabled=cfg.get("canal_slack_actif") == "true",
+        slack_channel=cfg.get("slack_canal", ""),
+        email_enabled=cfg.get("canal_email_actif") == "true",
+        email_recipients=cfg.get("email_destinataires", ""),
+    )
+
+
+@router.get("/settings", response_model=SettingsModel, dependencies=[admin_only])
+def get_admin_settings(conn=Depends(get_db)):
+    return _lire_settings(conn)
+
+
+@router.put("/settings", response_model=SettingsModel)
+def put_admin_settings(
+    body: SettingsModel,
     user: dict = Depends(require_role("administrateur")),
     conn=Depends(get_db),
-    registry=Depends(get_registry),
 ):
-    """Active une version précise (déplace l'alias dans MLflow après chargement réussi)."""
-    previous = registry.get().version if registry.get() else None
-    try:
-        bundle = registry.activate_version(body.version)
-    except ModelUnavailableError as exc:
-        raise HTTPException(status_code=502, detail=f"Activation impossible : {exc}") from exc
-    _audit_model_change(conn, user, bundle, previous, "activate")
-    return {"name": bundle.name, "version": bundle.version, "previous_version": previous}
+    """Le nouveau seuil s'applique dès la prédiction suivante (relu en base à chaque appel)."""
+    avant = _lire_settings(conn)
+    repo.set_configuration(conn, {
+        "seuil_alerte": repr(body.alert_threshold),
+        "canal_slack_actif": "true" if body.slack_enabled else "false",
+        "slack_canal": body.slack_channel,
+        "canal_email_actif": "true" if body.email_enabled else "false",
+        "email_destinataires": body.email_recipients,
+    })
+    write_audit(
+        conn, event_type="config_modifiee", actor_id=user["user_id"], entity_type="configuration",
+        entity_id="alertes", input_data=avant.model_dump(), output_data=body.model_dump(),
+    )
+    return body
 
 
-@router.post("/model/rollback")
-def model_rollback(
-    user: dict = Depends(require_role("administrateur")),
-    conn=Depends(get_db),
-    registry=Depends(get_registry),
-):
-    """Retour arrière : réactive la version qui précédait l'actuelle (d'après le journal d'audit)."""
-    current = registry.get()
-    if current is None:
-        raise HTTPException(status_code=409, detail="Aucun modèle chargé")
-    target = repo.rollback_target(conn, current.version)
-    if target is None:
-        raise HTTPException(
-            status_code=409,
-            detail="Aucune version précédente connue : utiliser POST /admin/model/activate")
-    try:
-        bundle = registry.activate_version(target)
-    except ModelUnavailableError as exc:
-        raise HTTPException(status_code=502, detail=f"Retour arrière impossible : {exc}") from exc
-    _audit_model_change(conn, user, bundle, current.version, "rollback")
-    return {"name": bundle.name, "version": bundle.version, "previous_version": current.version}
+# ---------- lecture du journal d'audit ----------
 
-
-# ---------- journal d'audit (lecture seule) ----------
-
-@router.get("/audit", response_model=list[AuditRow], dependencies=[admin_only])
-def read_audit(
-    type_evenement: str | None = Query(None, max_length=40, pattern=r"^[a-z_]+$"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+@router.get("/audit-log", response_model=list[AuditEntryOut], dependencies=[admin_only])
+def get_audit_log(
+    event_type: str | None = Query(None, max_length=40),
+    limit: int = Query(100, ge=1, le=500),
     conn=Depends(get_db),
 ):
-    return repo.list_audit(conn, type_evenement, limit, offset)
+    """Pseudonymes uniquement : l'acteur est affiché sous la forme RÔLE-numéro."""
+    out = []
+    for r in repo.list_audit(conn, event_type=event_type, limit=limit):
+        acteur = (
+            f"{(r['role_acteur'] or 'SYSTEME').upper()}-{r['utilisateur_id']:04d}"
+            if r["utilisateur_id"] is not None else "SYSTEME"
+        )
+        out.append({
+            "ts": r["date"].isoformat(),
+            "event_type": r["type_evenement"],
+            "actor": acteur,
+            "entity": f"{r['type_entite']} {r['entite_id'] or ''}".strip(),
+            "model_version": r["version_modele"],
+        })
+    return out
 
 
-# ---------- supervision ----------
-
-@router.get("/metrics", dependencies=[admin_only])
-def metrics(conn=Depends(get_db), registry=Depends(get_registry)):
-    """Volume, erreurs et latence. `http` = processus courant ; `predictions` = base (24 h)."""
-    preds = repo.metrics_predictions(conn, 24)
-    audit = repo.metrics_audit_counts(conn, 24)
-    volume = int(preds["volume"])
-    bundle = registry.get()
-    return {
-        "http": http_metrics.snapshot(),
-        "predictions_24h": {
-            "volume": volume,
-            "alertes": int(preds["alertes"]),
-            "taux_alerte": round(int(preds["alertes"]) / volume, 4) if volume else 0.0,
-            "latence_ms": {
-                "p50": float(preds["p50"]) if preds["p50"] is not None else None,
-                "p95": float(preds["p95"]) if preds["p95"] is not None else None,
-                "max": preds["max_latence"],
-            },
-        },
-        "evenements_24h": {
-            "factures_rejetees": audit.get("facture_rejetee", 0),
-            "erreurs_prediction": audit.get("erreur_prediction", 0),
-            "decisions": audit.get("decision", 0),
-        },
-        "modele": {"charge": bundle is not None,
-                   "version": bundle.version if bundle else None,
-                   "derniere_erreur": registry.last_error},
-    }
-
-
-@router.get("/drift", dependencies=[admin_only])
-def drift_status(conn=Depends(get_db)):
-    """PSI par variable clé : référence = premières prédictions, courant = derniers jours."""
-    s = get_settings()
-    features = s.drift_feature_list
-    if not features:
-        importance = repo.recent_shap_importance(conn)
-        features = [k for k, _ in sorted(importance.items(), key=lambda kv: -kv[1])[: s.drift_top_k]]
-    reference = repo.drift_reference_variables(conn, s.drift_reference_size)
-    current = repo.drift_current_variables(conn, s.drift_window_days, s.drift_reference_size)
-    result = drift.compute_drift(reference, current, features, s.drift_min_samples)
-    result["variables_suivies"] = features
-    result["fenetre_jours"] = s.drift_window_days
-    return result
+@router.get("/users", response_model=list[UserRowOut], dependencies=[admin_only])
+def list_users(conn=Depends(get_db)):
+    """Comptes de la plateforme (jamais le hachage du mot de passe)."""
+    return [
+        {
+            "user_id": r["utilisateur_id"], "email": r["email"], "role": r["role"],
+            "assure_id": r["assure_id"], "prestataire_id": r["prestataire_id"],
+            "is_active": r["actif"],
+            "last_login": r["derniere_connexion"].isoformat() if r["derniere_connexion"] else None,
+        }
+        for r in repo.list_utilisateurs(conn)
+    ]

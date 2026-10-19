@@ -34,7 +34,7 @@ export interface InvoiceLine {
   suspicious?: boolean;
 }
 
-export type AlertStatus = 'pending' | 'validated' | 'rejected';
+export type AlertStatus = 'pending' | 'validated' | 'rejected' | 'investigating';
 
 export interface Alert {
   id: string;
@@ -70,7 +70,7 @@ export interface SHAPFactor {
 
 export interface DecisionHistoryItem {
   ts: string;
-  decision: 'validated' | 'rejected';
+  decision: 'validated' | 'rejected' | 'investigating';
   actor_pseudo: string;
   score: number;
 }
@@ -114,7 +114,7 @@ export interface ServiceStatus {
   vector_db: ServiceState;
 }
 
-export type ServiceState = 'ok' | 'degraded' | 'down';
+export type ServiceState = 'ok' | 'degraded' | 'down' | 'unknown';
 
 export interface SystemMetrics {
   latency_p95_ms: number;
@@ -201,4 +201,12 @@ export interface RegisterPayload {
   provider_code?: string;
   tax_id?: string;
   onm_number?: string;
+}
+
+export interface UserRow {
+  pseudonym: string;
+  display_name: string;
+  role: Role;
+  email: string;
+  status: 'active' | 'inactive';
 }

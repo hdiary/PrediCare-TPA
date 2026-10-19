@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Users, Search } from 'lucide-react';
 import { Card, Badge, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
 import { ROLE_LABELS } from '@/lib/format';
-import { MOCK_ACCOUNTS } from '@/lib/mockData';
-import type { Role } from '@/lib/types';
+import { api } from '@/lib/api';
+import type { Role, UserRow } from '@/lib/types';
 
 const ROLE_BADGE_COLORS: Record<Role, string> = {
   insured: 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200',
@@ -12,34 +12,15 @@ const ROLE_BADGE_COLORS: Record<Role, string> = {
   admin: 'bg-danger-100 text-danger-700 dark:bg-danger-800 dark:text-danger-200',
 };
 
-interface UserRow {
-  pseudonym: string;
-  display_name: string;
-  role: Role;
-  email: string;
-  status: 'active' | 'inactive';
-}
-
-const mockUsers: UserRow[] = MOCK_ACCOUNTS.map((acc) => ({
-  pseudonym: acc.pseudonym,
-  display_name: acc.display_name,
-  role: acc.role,
-  email: acc.email,
-  status: 'active' as const,
-}));
-
-// Add a few more mock users
-mockUsers.push(
-  { pseudonym: 'GST-0008', display_name: 'Gestionnaire A', role: 'manager', email: 'gst8@predicare.fr', status: 'active' },
-  { pseudonym: 'GST-0011', display_name: 'Gestionnaire B', role: 'manager', email: 'gst11@predicare.fr', status: 'inactive' },
-  { pseudonym: 'PRS-0052', display_name: 'Praticien B', role: 'provider', email: 'prs52@predicare.fr', status: 'active' },
-  { pseudonym: 'PRS-0078', display_name: 'Praticien C', role: 'provider', email: 'prs78@predicare.fr', status: 'active' },
-  { pseudonym: 'ASS-004218', display_name: 'Assuré B', role: 'insured', email: 'ass4218@predicare.fr', status: 'active' },
-  { pseudonym: 'ASS-004219', display_name: 'Assuré C', role: 'insured', email: 'ass4219@predicare.fr', status: 'active' },
-);
-
 export function AdminUsers() {
-  const [users] = useState<UserRow[]>(mockUsers);
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    api.getUsers().then((rows) => { setUsers(rows); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  }, []);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
@@ -49,6 +30,9 @@ export function AdminUsers() {
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     return matchSearch && matchRole;
   });
+
+  if (loading) return <Skeleton className="h-96" />;
+  if (error) return <ErrorState message="Impossible de charger les utilisateurs." />;
 
   return (
     <div className="space-y-6">

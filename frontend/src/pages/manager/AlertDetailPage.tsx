@@ -10,7 +10,7 @@ import {
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import {
-  formatEUR, formatDate, formatDateTime, riskColor,
+  formatMGA, formatDate, formatDateTime, riskColor,
   ALERT_TYPE_LABELS, ALERT_STATUS_LABELS, ALERT_STATUS_COLORS,
 } from '@/lib/format';
 import type { AlertDetail } from '@/lib/types';
@@ -37,7 +37,7 @@ export function AlertDetailPage() {
     if (!detail || !decision) return;
     setSubmitting(true);
     try {
-      await api.decideAlert(detail.id, decision, comment);
+      await api.decideAlert(detail.id, decision, comment, detail.amount);
       showToast(
         decision === 'validate' ? 'Fraude validée et enregistrée' : 'Alerte rejetée',
         'success'
@@ -111,7 +111,7 @@ export function AlertDetailPage() {
               </div>
               <div className="rounded-2xl bg-surface-50 dark:bg-surface-700 p-3">
                 <p className="text-xs text-surface-400 mb-1">Montant</p>
-                <p className="text-sm font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatEUR(detail.amount)}</p>
+                <p className="text-sm font-bold tabular-nums text-surface-800 dark:text-surface-100">{formatMGA(detail.amount)}</p>
               </div>
               <div className="rounded-2xl bg-surface-50 dark:bg-surface-700 p-3">
                 <p className="text-xs text-surface-400 mb-1">Score</p>
@@ -139,7 +139,7 @@ export function AlertDetailPage() {
                         <span className="text-xs text-surface-400 ml-1">×{line.quantity}</span>
                       </div>
                     </div>
-                    <span className="text-sm font-medium tabular-nums text-surface-700 dark:text-surface-200">{formatEUR(line.amount)}</span>
+                    <span className="text-sm font-medium tabular-nums text-surface-700 dark:text-surface-200">{formatMGA(line.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -162,7 +162,7 @@ export function AlertDetailPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-surface-700 dark:text-surface-200">
-                      {h.decision === 'validated' ? 'Fraude validée' : 'Alerte rejetée'} · Score {h.score.toFixed(2)}
+                      {h.decision === 'validated' ? 'Fraude validée' : h.decision === 'investigating' ? 'À investiguer' : 'Alerte rejetée'} · Score {h.score.toFixed(2)}
                     </p>
                     <p className="text-xs text-surface-400">{formatDateTime(h.ts)} · {h.actor_pseudo}</p>
                   </div>

@@ -5,6 +5,16 @@ import { useAuth, getRoleHome } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { Button, Input, Spinner } from '@/components/ui';
 import { MOCK_ACCOUNTS } from '@/lib/mockData';
+import { isMock } from '@/lib/api';
+
+// Comptes créés par le backend quand DEMO_PASSWORD est défini (mot de passe : celui du .env)
+const REAL_DEMO_ACCOUNTS = [
+  { email: 'gestionnaire@predicare.local', display_name: 'Gestionnaire', pseudonym: 'Alertes et décisions' },
+  { email: 'pro@predicare.local', display_name: 'Professionnel de santé', pseudonym: 'Dépôt de factures' },
+  { email: 'assure@predicare.local', display_name: 'Assuré', pseudonym: 'Remboursements' },
+  { email: 'admin@predicare.local', display_name: 'Administrateur', pseudonym: 'Configuration' },
+];
+const SHOW_DEMO = isMock('auth') || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -16,23 +26,19 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const from = (location.state as { from?: string })?.from;
+  // AppLayout transmet l'objet « location » de la page demandée (ou une chaîne) : on garde le chemin.
+  const rawFrom = (location.state as { from?: string | { pathname?: string; search?: string } })?.from;
+  const from = typeof rawFrom === 'string' ? rawFrom : rawFrom?.pathname ? rawFrom.pathname + (rawFrom.search ?? '') : undefined;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      const token = localStorage.getItem('predicare_token');
-      const account = MOCK_ACCOUNTS.find((a) => 'mock-jwt-' + a.role === token);
-      if (account) {
-        if (from && from.startsWith('/')) {
-          navigate(from);
-        } else {
-          navigate(getRoleHome(account.role));
-        }
-      }
+      const loggedIn = await login(email, password);
+      // La page demandée n'est reprise que si elle appartient au rôle connecté.
+      const home = getRoleHome(loggedIn.role);
+      navigate(from && from.startsWith(home) ? from : home);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion');
     } finally {
@@ -168,25 +174,28 @@ export function LoginPage() {
             </p>
           </div>
 
-          {/* Demo accounts */}
-          <div className="glass rounded-2xl px-5 pt-5 pb-[22px]">
-            <p className="text-xs text-surface-500 dark:text-surface-400 mb-3.5 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#4ADE80]" />
-              Comptes de démonstration
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {MOCK_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.role}
-                  onClick={() => fillDemo(acc.email, acc.password)}
-                  className="text-left px-3.5 py-3 rounded-xl border border-surface-300 dark:border-[#2A6A6B] bg-white hover:bg-surface-100 dark:bg-[#12363A] dark:hover:bg-surface-700 transition-colors"
-                >
-                  <p className="text-[13px] font-semibold text-surface-900 dark:text-[#E8F1F0]">{acc.display_name}</p>
-                  <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-1">{acc.pseudonym}</p>
-                </button>
-              ))}
+          {/* Comptes de démonstration (mode simulé, ou VITE_SHOW_DEMO_ACCOUNTS=true) */}
+          {SHOW_DEMO && (
+            <div className="glass rounded-2xl px-5 pt-5 pb-[22px]">
+              <p className="text-xs text-surface-500 dark:text-surface-400 mb-3.5 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#4ADE80]" />
+                Comptes de démonstration
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {(isMock('auth') ? MOCK_ACCOUNTS : REAL_DEMO_ACCOUNTS.map((a) => ({ ...a, role: a.email, password: '' }))).map((acc) => (
+                  <button
+                    key={acc.role}
+                    type="button"
+                    onClick={() => fillDemo(acc.email, acc.password)}
+                    className="text-left px-3.5 py-3 rounded-xl border text-left px-3.5 py-3 rounded-xl border border-surface-300 dark:border-[#2A6A6B] bg-white hover:bg-surface-100 dark:bg-[#12363A] dark:hover:bg-surface-700 transition-colors"
+                  >
+                    <p className="text-[13px] font-semibold text-surface-900 dark:text-[#E8F1F0]">{acc.display_name}</p>
+                    <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-1">{acc.pseudonym}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
-export function formatEUR(amount: number): string {
+/** Montants en ariary (MGA), sans décimales : c'est la devise du backend (DEVISE_INVALIDE sinon). */
+export function formatMGA(amount: number): string {
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 2,
+    currency: 'MGA',
+    maximumFractionDigits: 0,
   }).format(amount);
 }
 
@@ -56,12 +57,14 @@ export const ALERT_STATUS_LABELS: Record<string, string> = {
   pending: 'En attente',
   validated: 'Fraude validée',
   rejected: 'Rejetée',
+  investigating: 'À investiguer',
 };
 
 export const ALERT_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-warning-100 text-warning-700 dark:bg-warning-800 dark:text-warning-200',
   validated: 'bg-danger-100 text-danger-700 dark:bg-danger-800 dark:text-danger-200',
   rejected: 'bg-success-100 text-success-700 dark:bg-success-800 dark:text-success-200',
+  investigating: 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200',
 };
 
 export function riskColor(score: number): string {
@@ -70,9 +73,10 @@ export function riskColor(score: number): string {
   return 'bg-success-100 text-success-700 dark:bg-success-900 dark:text-success-200 border-success-300 dark:border-success-700';
 }
 
-export function serviceStateColor(state: 'ok' | 'degraded' | 'down'): string {
+export function serviceStateColor(state: 'ok' | 'degraded' | 'down' | 'unknown'): string {
   if (state === 'ok') return 'bg-success-500';
   if (state === 'degraded') return 'bg-warning-500';
+  if (state === 'unknown') return 'bg-surface-400';
   return 'bg-danger-500';
 }
 

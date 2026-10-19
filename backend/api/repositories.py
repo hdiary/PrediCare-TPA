@@ -35,7 +35,10 @@ def categorie_existe(conn, type_facture: str) -> bool:
 
 
 def lookup_codes(conn, codes: list[str]) -> dict[str, dict]:
-    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}} (équivaut à ref_codes)."""
+    """Codes connus parmi actes et médicaments : {code: {type_ligne, libelle}}.
+
+    Équivaut à ref_codes.
+    """
     rows = conn.execute(
         "SELECT code_acte AS code, 'ACTE' AS type_ligne, libelle FROM referentiel_actes "
         "WHERE code_acte = ANY(%s) "
@@ -75,7 +78,9 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
     """
     total = clean["montant_total"]
     date_soin = date.fromisoformat(clean["date_soin"])
-    date_facture = date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    date_facture = (
+        date.fromisoformat(clean["date_facture"]) if clean.get("date_facture") else date_soin
+    )
     date_reception = (
         date.fromisoformat(clean["date_reception"]) if clean.get("date_reception")
         else date_reception_defaut
@@ -86,7 +91,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
         "canal_reception, mode_reglement, attestation_pec_id, entente_prealable_id, devise, "
         "nb_lignes, montant_total, montant_eligible, montant_pris_en_charge, reste_a_charge, "
         "statut, motif_rejet, date_traitement) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+        "%s, "
         "0, %s, 'EN_COURS', NULL, NULL)",
         (
             clean["facture_id"], clean["numero_facture"], clean["prestataire_id"],
@@ -102,7 +108,8 @@ def insert_facture(conn, clean: dict, date_reception_defaut: date) -> None:
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO lignes_facture (ligne_id, facture_id, num_ligne, code, type_ligne, "
-            "libelle, quantite, prix_unitaire, montant) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "libelle, quantite, prix_unitaire, montant) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             [
                 (f"{clean['facture_id']}-L{ln['num_ligne']:02d}", clean["facture_id"],
                  ln["num_ligne"], ln["code"], ln["type_ligne"], ln["libelle"],
@@ -148,25 +155,12 @@ def list_alertes(conn, statut: str, limit: int, offset: int) -> list[dict]:
         where += " AND d.decision IS NOT NULL"
     return conn.execute(
         "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
-        "(SELECT count(*) FROM alertes_prescription ar WHERE ar.prediction_id = p.prediction_id) "
-        "AS nb_regles, "
+        "f.prestataire_id, f.assure_id, f.type_facture, "
         "d.decision AS derniere_decision, d.date_decision "
         "FROM predictions p JOIN factures f ON f.facture_id = p.facture_id "
         f"{_DERNIERE_DECISION} {where} ORDER BY p.date DESC LIMIT %s OFFSET %s",
         (limit, offset),
     ).fetchall()
-
-
-def count_alertes(conn, statut: str) -> int:
-    where = "WHERE p.est_alerte"
-    if statut == "en_attente":
-        where += " AND d.decision IS NULL"
-    elif statut == "traitees":
-        where += " AND d.decision IS NOT NULL"
-    row = conn.execute(
-        f"SELECT count(*) AS n FROM predictions p {_DERNIERE_DECISION} {where}"
-    ).fetchone()
-    return int(row["n"])
 
 
 def get_prediction(conn, facture_id: str) -> dict | None:
@@ -219,193 +213,111 @@ def get_identite_chiffree(conn, assure_id: str):
     return row["donnees_chiffrees"] if row else None
 
 
-# ---------- alertes de règles de prescription (P3-16) ----------
+# ---------- contexte facture (détail d'alerte, listes) ----------
 
-def insert_alertes_regles(conn, prediction_id: int, facture_id: str, findings) -> None:
-    if not findings:
-        return
-    with conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO alertes_prescription (prediction_id, facture_id, regle_code, severite, "
-            "message, details) VALUES (%s, %s, %s, %s, %s, %s)",
-            [(prediction_id, facture_id, f.regle_code, f.severite, f.message, Jsonb(f.details))
-             for f in findings],
-        )
-
-
-def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
-    return conn.execute(
-        "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "
-        "FROM alertes_prescription WHERE prediction_id = %s ORDER BY alerte_regle_id",
-        (prediction_id,),
-    ).fetchall()
-
-
-# ---------- KPI (P3-15) ----------
-
-def kpi_summary(conn, jours: int) -> dict:
-    """Agrégats sur la période (jours derniers jours). Aucune donnée personnelle."""
-    row = conn.execute(
-        "SELECT count(*) AS factures_scorees, "
-        "count(*) FILTER (WHERE p.est_alerte) AS alertes_total, "
-        "count(*) FILTER (WHERE p.est_alerte AND d.decision IS NULL) AS alertes_en_attente, "
-        "count(*) FILTER (WHERE d.decision IS NOT NULL) AS alertes_traitees, "
-        "count(*) FILTER (WHERE d.decision = 'fraude_confirmee') AS fraudes_confirmees, "
-        "count(*) FILTER (WHERE d.decision = 'faux_positif') AS faux_positifs, "
-        "count(*) FILTER (WHERE d.decision = 'a_investiguer') AS a_investiguer, "
-        "COALESCE(sum(f.montant_total) FILTER (WHERE p.est_alerte AND d.decision IS NULL), 0) "
-        "AS montant_en_attente, "
-        "COALESCE(sum(f.montant_total) FILTER (WHERE d.decision = 'fraude_confirmee'), 0) "
-        "AS montant_fraude_confirmee, "
-        "COALESCE(avg(p.score), 0) AS score_moyen "
-        "FROM predictions p JOIN factures f ON f.facture_id = p.facture_id "
-        f"{_DERNIERE_DECISION} "
-        "WHERE p.date >= now() - make_interval(days => %s)",
-        (jours,),
+def get_facture_et_lignes(conn, facture_id: str) -> tuple[dict | None, list[dict]]:
+    facture = conn.execute(
+        "SELECT facture_id, numero_facture, prestataire_id, assure_id, contrat_id, type_facture, "
+        "date_soin, devise, nb_lignes, montant_total FROM factures WHERE facture_id = %s",
+        (facture_id,),
     ).fetchone()
-    return dict(row)
-
-
-def kpi_economies(conn, jours: int) -> int:
-    """Somme des montants économisés saisis par les gestionnaires (dernière décision de chaque alerte)."""
-    row = conn.execute(
-        "SELECT COALESCE(sum(d.montant_economise), 0) AS total "
-        "FROM predictions p JOIN LATERAL (SELECT decision, montant_economise "
-        "FROM decisions_gestionnaire WHERE prediction_id = p.prediction_id "
-        "ORDER BY date_decision DESC, decision_id DESC LIMIT 1) d ON TRUE "
-        "WHERE d.decision = 'fraude_confirmee' AND p.date >= now() - make_interval(days => %s)",
-        (jours,),
-    ).fetchone()
-    return int(row["total"])
-
-
-def kpi_par_jour(conn, jours: int) -> list[dict]:
-    return conn.execute(
-        "SELECT p.date::date AS jour, count(*) AS factures, "
-        "count(*) FILTER (WHERE p.est_alerte) AS alertes "
-        "FROM predictions p WHERE p.date >= now() - make_interval(days => %s) "
-        "GROUP BY 1 ORDER BY 1",
-        (jours,),
+    lignes = conn.execute(
+        "SELECT num_ligne, code, type_ligne, libelle, quantite, prix_unitaire, montant "
+        "FROM lignes_facture WHERE facture_id = %s ORDER BY num_ligne",
+        (facture_id,),
     ).fetchall()
+    return facture, lignes
 
 
-def kpi_regles(conn, jours: int) -> list[dict]:
-    return conn.execute(
-        "SELECT regle_code, count(*) AS n FROM alertes_prescription "
-        "WHERE cree_le >= now() - make_interval(days => %s) GROUP BY 1 ORDER BY n DESC",
-        (jours,),
+def list_factures(conn, *, prestataire_id: str | None, assure_id: str | None,
+                  statut: str | None, limit: int, offset: int) -> tuple[list[dict], int]:
+    """Factures visibles par l'appelant (le filtre de périmètre est posé par le routeur)."""
+    where, params = [], []
+    if prestataire_id is not None:
+        where.append("prestataire_id = %s")
+        params.append(prestataire_id)
+    if assure_id is not None:
+        where.append("assure_id = %s")
+        params.append(assure_id)
+    if statut is not None:
+        where.append("statut = %s")
+        params.append(statut)
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+    total = conn.execute(f"SELECT count(*) AS n FROM factures {clause}", params).fetchone()["n"]
+    rows = conn.execute(
+        "SELECT facture_id, numero_facture, prestataire_id, assure_id, date_soin, nb_lignes, "
+        "montant_total, montant_pris_en_charge, reste_a_charge, statut "
+        f"FROM factures {clause} ORDER BY date_soin DESC, facture_id DESC LIMIT %s OFFSET %s",
+        [*params, limit, offset],
     ).fetchall()
+    return rows, total
 
 
-# ---------- configuration modifiable (P3-17) ----------
-
-def set_config(conn, cle: str, valeur: str, par: str) -> None:
-    conn.execute(
-        "INSERT INTO configuration (cle, valeur, mis_a_jour_le, mis_a_jour_par) "
-        "VALUES (%s, %s, now(), %s) "
-        "ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, "
-        "mis_a_jour_le = now(), mis_a_jour_par = EXCLUDED.mis_a_jour_par",
-        (cle, valeur, par),
-    )
-
-
-def get_config_row(conn, cle: str) -> dict | None:
-    return conn.execute(
-        "SELECT cle, valeur, mis_a_jour_le, mis_a_jour_par FROM configuration WHERE cle = %s",
-        (cle,),
-    ).fetchone()
+def lignes_de_factures(conn, facture_ids: list[str]) -> dict[str, list[dict]]:
+    if not facture_ids:
+        return {}
+    rows = conn.execute(
+        "SELECT facture_id, num_ligne, code, libelle, quantite, prix_unitaire, montant "
+        "FROM lignes_facture WHERE facture_id = ANY(%s) ORDER BY facture_id, num_ligne",
+        (facture_ids,),
+    ).fetchall()
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["facture_id"], []).append(r)
+    return out
 
 
-def list_audit(conn, type_evenement: str | None, limit: int, offset: int) -> list[dict]:
+# ---------- configuration modifiable (écran d'administration) ----------
+
+def get_configuration(conn, keys: list[str]) -> dict[str, str]:
+    try:
+        with conn.transaction():
+            rows = conn.execute(
+                "SELECT cle, valeur FROM configuration WHERE cle = ANY(%s)", (keys,)
+            ).fetchall()
+    except psycopg.errors.UndefinedTable:
+        return {}
+    return {r["cle"]: r["valeur"] for r in rows}
+
+
+def set_configuration(conn, values: dict[str, str]) -> None:
+    for cle, valeur in values.items():
+        cur = conn.execute("UPDATE configuration SET valeur = %s WHERE cle = %s", (valeur, cle))
+        if cur.rowcount == 0:
+            conn.execute("INSERT INTO configuration (cle, valeur) VALUES (%s, %s)", (cle, valeur))
+
+
+# ---------- lecture du journal d'audit ----------
+
+def list_audit(conn, *, event_type: str | None, limit: int) -> list[dict]:
     where, params = "", []
-    if type_evenement:
-        where, params = "WHERE type_evenement = %s", [type_evenement]
+    if event_type:
+        where, params = "WHERE j.type_evenement = %s", [event_type]
     return conn.execute(
-        "SELECT audit_id, horodatage, type_evenement, utilisateur_id, type_entite, entite_id, "
-        "nom_modele, version_modele, entree, sortie FROM journal_audit "
-        f"{where} ORDER BY audit_id DESC LIMIT %s OFFSET %s",
-        (*params, limit, offset),
+        "SELECT j.date, j.type_evenement, j.utilisateur_id, u.role AS role_acteur, "
+        "j.type_entite, j.entite_id, j.version_modele "
+        "FROM journal_audit j LEFT JOIN utilisateurs u ON u.utilisateur_id = j.utilisateur_id "
+        f"{where} ORDER BY j.date DESC, j.audit_id DESC LIMIT %s",
+        [*params, limit],
     ).fetchall()
 
 
-def rollback_target(conn, current_version: str, limit: int = 50) -> str | None:
-    """Version à restaurer : celle qui était active avant l'activation de la version courante.
-
-    S'appuie sur le journal d'audit (événements `modele_charge`, champ previous_version).
-    """
-    rows = conn.execute(
-        "SELECT entree->>'previous_version' AS prev, sortie->>'active_version' AS v "
-        "FROM journal_audit WHERE type_evenement = 'modele_charge' "
-        "ORDER BY audit_id DESC LIMIT %s",
-        (limit,),
+def list_utilisateurs(conn) -> list[dict]:
+    return conn.execute(
+        "SELECT utilisateur_id, email, role, assure_id, prestataire_id, actif, derniere_connexion "
+        "FROM utilisateurs ORDER BY utilisateur_id"
     ).fetchall()
-    for r in rows:
-        if r["v"] == current_version and r["prev"] and r["prev"] != current_version:
-            return r["prev"]
-    return None
 
 
-# ---------- métriques et dérive (P3-18 / P3-19) ----------
-
-def metrics_predictions(conn, hours: int) -> dict:
-    row = conn.execute(
-        "SELECT count(*) AS volume, count(*) FILTER (WHERE est_alerte) AS alertes, "
-        "percentile_cont(0.5) WITHIN GROUP (ORDER BY latence_ms) AS p50, "
-        "percentile_cont(0.95) WITHIN GROUP (ORDER BY latence_ms) AS p95, "
-        "max(latence_ms) AS max_latence "
-        "FROM predictions WHERE date >= now() - make_interval(hours => %s)",
-        (hours,),
-    ).fetchone()
-    return dict(row)
-
-
-def metrics_audit_counts(conn, hours: int) -> dict[str, int]:
-    rows = conn.execute(
-        "SELECT type_evenement, count(*) AS n FROM journal_audit "
-        "WHERE horodatage >= now() - make_interval(hours => %s) GROUP BY 1",
-        (hours,),
+def historique_prestataire(conn, prestataire_id: str, hors_facture_id: str,
+                           limit: int = 10) -> list[dict]:
+    """Dernières décisions prises sur les AUTRES alertes du même prestataire."""
+    return conn.execute(
+        "SELECT p.facture_id, p.score, d.decision, d.date_decision, d.gestionnaire_id "
+        "FROM decisions_gestionnaire d "
+        "JOIN predictions p ON p.prediction_id = d.prediction_id "
+        "JOIN factures f ON f.facture_id = p.facture_id "
+        "WHERE f.prestataire_id = %s AND p.facture_id <> %s "
+        "ORDER BY d.date_decision DESC, d.decision_id DESC LIMIT %s",
+        (prestataire_id, hors_facture_id, limit),
     ).fetchall()
-    return {r["type_evenement"]: int(r["n"]) for r in rows}
-
-
-def drift_reference_variables(conn, size: int) -> list[dict]:
-    """Référence = les `size` premières prédictions (distribution de départ)."""
-    rows = conn.execute(
-        "SELECT variables FROM predictions WHERE variables IS NOT NULL "
-        "ORDER BY prediction_id ASC LIMIT %s", (size,)
-    ).fetchall()
-    return [r["variables"] for r in rows]
-
-
-def drift_current_variables(conn, days: int, skip_first: int) -> list[dict]:
-    """Courant = prédictions des `days` derniers jours, hors échantillon de référence."""
-    rows = conn.execute(
-        "SELECT variables FROM predictions WHERE variables IS NOT NULL "
-        "AND date >= now() - make_interval(days => %s) "
-        "AND prediction_id > (SELECT COALESCE(max(prediction_id), 0) FROM ("
-        "  SELECT prediction_id FROM predictions ORDER BY prediction_id ASC LIMIT %s) r) "
-        "ORDER BY prediction_id ASC",
-        (days, skip_first),
-    ).fetchall()
-    return [r["variables"] for r in rows]
-
-
-def recent_shap_importance(conn, limit: int = 300) -> dict[str, float]:
-    """Importance moyenne |SHAP| par variable (sur les dernières explications)."""
-    rows = conn.execute(
-        "SELECT valeurs->'toutes' AS toutes FROM explications_shap "
-        "ORDER BY prediction_id DESC LIMIT %s", (limit,)
-    ).fetchall()
-    sums: dict[str, float] = {}
-    n = 0
-    for r in rows:
-        toutes = r["toutes"]
-        if not isinstance(toutes, dict):
-            continue
-        n += 1
-        for k, v in toutes.items():
-            try:
-                sums[k] = sums.get(k, 0.0) + abs(float(v))
-            except (TypeError, ValueError):
-                continue
-    return {k: v / n for k, v in sums.items()} if n else {}

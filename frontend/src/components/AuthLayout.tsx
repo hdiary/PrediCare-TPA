@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Logo } from './Logo';
+import { isMock } from '@/lib/api';
 
 /** Cadre commun aux pages publiques (inscription, mot de passe oublié, réinitialisation). */
 export function AuthLayout({
@@ -21,6 +22,11 @@ export function AuthLayout({
         </div>
         <div className="glass rounded-2xl p-6 md:p-8">
           <h2 className="text-[26px] text-surface-900 dark:text-[#E8F1F0]">{title}</h2>
+          {(isMock('register') || isMock('password')) && (
+            <p role="status" className="mt-3 text-xs rounded-lg px-3 py-2 bg-warning-50 text-warning-700 dark:bg-warning-900/30 dark:text-warning-300">
+              Mode démonstration : aucun compte n'est créé et aucun e-mail n'est envoyé.
+            </p>
+          )}
           {subtitle && <p className="mt-2 mb-6 text-sm text-surface-500 dark:text-surface-400">{subtitle}</p>}
           {children}
         </div>

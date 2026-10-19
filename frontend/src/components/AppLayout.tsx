@@ -4,6 +4,14 @@ import { useAuth } from '@/lib/auth';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { PageLoader } from './PageLoader';
+import { mockedFeatureList, type Feature } from '@/lib/api';
+
+const FEATURE_LABELS: Record<Feature, string> = {
+  auth: 'connexion', alerts: 'alertes', invoices: 'factures', settings: 'configuration', audit: "journal d'audit",
+  users: 'utilisateurs', health: 'état des services', kpis: 'tableau de bord (indicateurs)',
+  metrics: 'métriques système', models: 'versions du modèle', chat: 'assistant conversationnel',
+  prescriptions: 'ordonnances et alertes de prescription', register: 'inscription', password: 'mot de passe oublié',
+};
 import type { Role } from '@/lib/types';
 
 const ROLE_PREFIX: Record<Role, string> = {
@@ -41,6 +49,11 @@ export function AppLayout({ allowedRoles, children }: { allowedRoles: Role[]; ch
       <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
+        {mockedFeatureList().length > 0 && (
+          <div role="status" className="px-4 md:px-8 py-2 text-xs bg-warning-50 text-warning-700 dark:bg-warning-900/30 dark:text-warning-300 border-b border-warning-200 dark:border-warning-800">
+            Données de démonstration (non réelles) : {mockedFeatureList().map((f) => FEATURE_LABELS[f]).join(', ')}.
+          </div>
+        )}
         <main className="flex-1 p-4 md:p-6 lg:p-8 pb-6 max-w-[1400px] w-full mx-auto">
           <Suspense fallback={<PageLoader />}>
             <div key={location.pathname} className="animate-page-in motion-reduce:animate-none">

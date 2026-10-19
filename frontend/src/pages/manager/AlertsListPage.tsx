@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, AlertTriangle, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, Badge, Button, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
 import { api } from '@/lib/api';
-import { formatEUR, formatDate, riskColor, ALERT_TYPE_LABELS, ALERT_STATUS_LABELS, ALERT_STATUS_COLORS } from '@/lib/format';
+import { formatMGA, formatDate, riskColor, ALERT_TYPE_LABELS, ALERT_STATUS_LABELS, ALERT_STATUS_COLORS } from '@/lib/format';
 import type { Alert } from '@/lib/types';
 
 const STATUS_FILTERS = [
@@ -142,7 +142,7 @@ export function AlertsListPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300">{ALERT_TYPE_LABELS[alert.type]}</td>
-                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 tabular-nums font-medium">{formatEUR(alert.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 tabular-nums font-medium">{formatMGA(alert.amount)}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.provider_pseudo}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{alert.insured_pseudo}</td>
                     <td className="px-6 py-4 text-sm text-surface-500 tabular-nums">{formatDate(alert.created_at)}</td>
