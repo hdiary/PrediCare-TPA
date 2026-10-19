@@ -517,3 +517,45 @@ def historique_prestataire(conn, prestataire_id: str, hors_facture_id: str,
         "ORDER BY d.date_decision DESC, d.decision_id DESC LIMIT %s",
         (prestataire_id, hors_facture_id, limit),
     ).fetchall()
+
+# ---------- référentiels pour pdf_extract ----------
+
+def load_reference_tables(conn) -> dict:
+    """Charge les 3 tables nécessaires à pdf_extract.build_reference()."""
+    rows_actes = conn.execute(
+        "SELECT code_acte AS code, libelle FROM referentiel_actes"
+    ).fetchall()
+    rows_meds = conn.execute(
+        "SELECT code_medicament AS code, libelle FROM referentiel_medicaments"
+    ).fetchall()
+    rows_prestataires = conn.execute(
+        "SELECT prestataire_id, nom, nif, numero_onm FROM prestataires"
+    ).fetchall()
+
+    return {
+        "referentiel_actes": [dict(r) for r in rows_actes],
+        "referentiel_medicaments": [dict(r) for r in rows_meds],
+        "prestataires": [dict(r) for r in rows_prestataires],
+    }
+    """Charge les 3 tables nécessaires à pdf_extract.build_reference().
+
+    Seul endroit qui connaît les colonnes utilisées par l'extraction PDF :
+      - referentiel_actes(code_acte, libelle)
+      - referentiel_medicaments(code_medicament, libelle)
+      - prestataires(prestataire_id, nom, nif, numero_onm)
+    """
+    rows_actes = conn.execute(
+        "SELECT code_acte AS code, libelle FROM referentiel_actes"
+    ).fetchall()
+    rows_meds = conn.execute(
+        "SELECT code_medicament AS code, libelle FROM referentiel_medicaments"
+    ).fetchall()
+    rows_prestataires = conn.execute(
+        "SELECT prestataire_id, nom, nif, numero_onm FROM prestataires"
+    ).fetchall()
+
+    return {
+        "referentiel_actes":    [dict(r) for r in rows_actes],
+        "referentiel_medicaments": [dict(r) for r in rows_meds],
+        "prestataires":         [dict(r) for r in rows_prestataires],
+    }

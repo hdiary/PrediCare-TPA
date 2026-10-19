@@ -324,9 +324,10 @@ export const api = {
   },
 
   /**
-   * Dépôt d'une facture (POST /predict).
+   * Dépôt d'une facture (POST /predict ou /predict/pdf).
    * - Saisie manuelle : objet { insured_pseudo, care_date, care_time, contract_id, invoice_number, invoice_type, lines }.
-   * - Fichier : seul le JSON (contrat de données, section 11.1) est accepté par l'API.
+   * - Fichier PDF : upload multipart envoyé à /predict/pdf.
+   * - Fichier JSON : parse puis POST /predict (contrat de données, section 11.1).
    * Une facture rejetée par la validation n'est PAS une erreur technique : on renvoie status "rejected" avec les motifs.
    */
   async submitInvoice(data: FormData | Record<string, unknown>): Promise<InvoiceSubmissionResult> {
@@ -334,13 +335,64 @@ export const api = {
       await delay(1200);
       return mockInvoiceResult;
     }
+
     const me = await currentUser();
-    let payload: Record<string, unknown>;
+
+    // ============ CAS 1 : dépôt d'un fichier (PDF ou JSON) ============
     if (data instanceof FormData) {
       const file = data.get("file");
-      if (!(file instanceof File) || !/\.json$/i.test(file.name)) {
-        throw new Error("Format non pris en charge : déposez un fichier JSON ou utilisez la saisie manuelle.");
+      if (!(file instanceof File)) {
+        throw new Error("Aucun fichier fourni.");
       }
+
+      const isPdf = /\.pdf$/i.test(file.name);
+      const isJson = /\.json$/i.test(file.name);
+
+      if (!isPdf && !isJson) {
+        throw new Error("Format non pris en charge : déposez un fichier PDF ou JSON.");
+      }
+
+      // Récupérer l'ordonnance si fournie (JSON sérialisé)
+      const rxRaw = data.get("prescription");
+      let prescriptionJson: string | null = null;
+      if (typeof rxRaw === "string" && rxRaw) {
+        prescriptionJson = rxRaw;
+      }
+
+      // -------- Cas PDF : envoi multipart à /predict/pdf --------
+      if (isPdf) {
+        const form = new FormData();
+        form.append("file", file);
+        if (prescriptionJson) form.append("prescription", prescriptionJson);
+        if (me.role === "provider") form.append("prestataire_id", me.pseudonym);
+
+        const res = await fetch(`${BASE_URL}/predict/pdf`, {
+          method: "POST",
+          headers: { ...authHeaders() }, // ⚠️ PAS de Content-Type : multipart natif
+          body: form,
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          const err = parseErrorBody(body, res.status);
+          if ([400, 403, 409, 422].includes(res.status)) {
+            return {
+              invoice_id: "—",
+              status: "rejected",
+              errors: err.errors.length
+                ? err.errors.map((x) => ({ field: x.field, message: x.message }))
+                : [{ field: "", message: err.message }],
+            };
+          }
+          throw err;
+        }
+
+        const r = (await res.json()) as { facture_id: string };
+        return { invoice_id: r.facture_id, status: "accepted", errors: [] };
+      }
+
+      // -------- Cas JSON : parse + POST /predict (comportement d'origine) --------
+      let payload: Record<string, unknown>;
       try {
         payload = JSON.parse(await file.text());
       } catch {
@@ -349,49 +401,88 @@ export const api = {
       if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
         throw new Error("Le fichier JSON doit contenir un objet facture.");
       }
-      // ordonnance saisie dans le formulaire (champ « prescription », JSON) : seul son numéro est transmis
-      const rx = data.get("prescription");
-      if (typeof rx === "string" && rx && !payload.ordonnance_id) {
+      if (prescriptionJson && !payload.ordonnance_id) {
         try {
-          payload.ordonnance_id = (JSON.parse(rx) as { prescription_id?: string }).prescription_id;
-        } catch { /* champ facultatif illisible : ignoré */ }
+          payload.ordonnance_id = (JSON.parse(prescriptionJson) as { prescription_id?: string }).prescription_id;
+        } catch {
+          /* champ facultatif illisible : ignoré */
+        }
       }
-    } else {
-      const d = data as {
-        insured_pseudo: string; care_date: string; care_time?: string; contract_id: string;
-        invoice_number: string; invoice_type: string;
-        lines: { code: string; label?: string; quantity: number; unit_price: number }[];
-        prescription?: { prescription_id?: string };
-      };
-      payload = {
-        numero_facture: d.invoice_number,
-        assure_id: d.insured_pseudo.trim(),
-        contrat_id: d.contract_id.trim(),
-        type_facture: d.invoice_type,
-        date_soin: d.care_date,
-        heure_soin: d.care_time || "08:00",
-        devise: "MGA",
-        lignes: d.lines.map((l) => ({ code: l.code.trim(), quantite: l.quantity, prix_unitaire: l.unit_price })),
-      };
-      // L'API ne stocke que le numéro d'ordonnance (date, prescripteur et diagnostic ne sont pas encore acceptés).
-      if (d.prescription?.prescription_id) payload.ordonnance_id = d.prescription.prescription_id.trim();
+      if (me.role === "provider") payload.prestataire_id = me.pseudonym;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!payload.facture_id) payload.facture_id = newFactureId();
+        try {
+          const r = await request<{ facture_id: string }>("/predict", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          return { invoice_id: r.facture_id, status: "accepted", errors: [] };
+        } catch (e) {
+          if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
+          const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
+          if (doublon && attempt === 0) continue;
+          return {
+            invoice_id: String(payload.facture_id ?? "—"),
+            status: "rejected",
+            errors: e.errors.length
+              ? e.errors.map((x) => ({ field: x.field, message: x.message }))
+              : [{ field: "", message: e.message }],
+          };
+        }
+      }
+      throw new Error("Dépôt impossible");
+    }
+
+    // ============ CAS 2 : saisie manuelle (objet) ============
+    const d = data as {
+      insured_pseudo: string;
+      care_date: string;
+      care_time?: string;
+      contract_id: string;
+      invoice_number: string;
+      invoice_type: string;
+      lines: { code: string; label?: string; quantity: number; unit_price: number }[];
+      prescription?: { prescription_id?: string };
+    };
+
+    const payload: Record<string, unknown> = {
+      numero_facture: d.invoice_number,
+      assure_id: d.insured_pseudo.trim(),
+      contrat_id: d.contract_id.trim(),
+      type_facture: d.invoice_type,
+      date_soin: d.care_date,
+      heure_soin: d.care_time || "08:00",
+      devise: "MGA",
+      lignes: d.lines.map((l) => ({
+        code: l.code.trim(),
+        quantite: l.quantity,
+        prix_unitaire: l.unit_price,
+      })),
+    };
+    if (d.prescription?.prescription_id) {
+      payload.ordonnance_id = d.prescription.prescription_id.trim();
     }
     if (me.role === "provider") payload.prestataire_id = me.pseudonym;
-    const generated = !payload.facture_id;
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      if (generated) payload.facture_id = newFactureId();
+      if (!payload.facture_id) payload.facture_id = newFactureId();
       try {
-        const r = await request<{ facture_id: string }>("/predict", { method: "POST", body: JSON.stringify(payload) });
+        const r = await request<{ facture_id: string }>("/predict", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
         return { invoice_id: r.facture_id, status: "accepted", errors: [] };
       } catch (e) {
         if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
         const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
-        if (doublon && generated && attempt === 0) continue; // collision d'identifiant : on retire un autre numéro
+        if (doublon && attempt === 0) continue;
         return {
           invoice_id: String(payload.facture_id ?? "—"),
           status: "rejected",
-          errors: e.errors.length ? e.errors.map((x) => ({ field: x.field, message: x.message })) : [{ field: "", message: e.message }],
+          errors: e.errors.length
+            ? e.errors.map((x) => ({ field: x.field, message: x.message }))
+            : [{ field: "", message: e.message }],
         };
       }
     }

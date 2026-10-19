@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       // (le backend expose /auth/login, /alerts, ... sans préfixe). Aucun CORS à configurer en dev.
       proxy: {
         '/api': {
-          target: backend,
+          target: 'http://api:8000',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
