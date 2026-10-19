@@ -50,6 +50,14 @@ def _audits(conn):
 
 # ---------- autorisation /predict ----------
 
+def test_pro_sans_prestataire_rattache_message_explicite(client, conn):
+    _login_as("professionnel_sante", None)
+    r = client.post("/predict", json=FACTURE)
+    assert r.status_code == 403
+    assert r.json()["codes"] == ["PRESTATAIRE_NON_RATTACHE"]
+    assert len(_audits(conn)) == 1
+
+
 def test_pro_ne_peut_pas_soumettre_pour_un_autre_prestataire(client, conn):
     _login_as("professionnel_sante", "PRE-00999")
     r = client.post("/predict", json=FACTURE)            # facture au nom de PRE-00214

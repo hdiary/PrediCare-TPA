@@ -559,3 +559,11 @@ def load_reference_tables(conn) -> dict:
         "referentiel_medicaments": [dict(r) for r in rows_meds],
         "prestataires":         [dict(r) for r in rows_prestataires],
     }
+
+
+def contrat_de_assure(conn, assure_id: str) -> str | None:
+    """Contrat auquel est rattaché l'assuré (le PDF de facture ne le mentionne pas)."""
+    row = conn.execute(
+        "SELECT contrat_id FROM assures WHERE assure_id = %s", (assure_id,)
+    ).fetchone()
+    return row["contrat_id"] if row else None

@@ -166,12 +166,15 @@ function mapUser(u: ApiUser): { role: Role; display_name: string; pseudonym: str
   return { role, pseudonym, email: u.email, display_name: local.charAt(0).toUpperCase() + local.slice(1) };
 }
 
-let cachedMe: { pseudonym: string; role: Role } | null = null;
+let cachedMe: { pseudonym: string; role: Role; prestataireId: string | null } | null = null;
 
 async function currentUser() {
   if (!cachedMe) {
-    const me = mapUser(await request<ApiUser>("/auth/me"));
-    cachedMe = { pseudonym: me.pseudonym, role: me.role };
+    const raw = await request<ApiUser>("/auth/me");
+    const me = mapUser(raw);
+    // prestataireId = vrai rattachement en base (null si le compte n'est lié à aucun prestataire).
+    // Ne jamais envoyer le pseudonyme d'affichage (ex. « PRE-0004 ») comme identifiant métier.
+    cachedMe = { pseudonym: me.pseudonym, role: me.role, prestataireId: raw.prestataire_id ?? null };
   }
   return cachedMe;
 }
@@ -282,8 +285,9 @@ export const api = {
       if (!account) throw new Error("Non authentifié");
       return { role: account.role, display_name: account.display_name, pseudonym: account.pseudonym, email: account.email };
     }
-    const me = mapUser(await request<ApiUser>("/auth/me"));
-    cachedMe = { pseudonym: me.pseudonym, role: me.role };
+    const raw = await request<ApiUser>("/auth/me");
+    const me = mapUser(raw);
+    cachedMe = { pseudonym: me.pseudonym, role: me.role, prestataireId: raw.prestataire_id ?? null };
     return me;
   },
 
@@ -364,7 +368,7 @@ export const api = {
         const form = new FormData();
         form.append("file", file);
         if (prescriptionJson) form.append("prescription", prescriptionJson);
-        if (me.role === "provider") form.append("prestataire_id", me.pseudonym);
+        if (me.role === "provider" && me.prestataireId) form.append("prestataire_id", me.prestataireId);
 
         const res = await fetch(`${BASE_URL}/predict/pdf`, {
           method: "POST",
@@ -408,7 +412,7 @@ export const api = {
           /* champ facultatif illisible : ignoré */
         }
       }
-      if (me.role === "provider") payload.prestataire_id = me.pseudonym;
+      if (me.role === "provider" && me.prestataireId) payload.prestataire_id = me.prestataireId;
 
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!payload.facture_id) payload.facture_id = newFactureId();
@@ -463,7 +467,7 @@ export const api = {
     if (d.prescription?.prescription_id) {
       payload.ordonnance_id = d.prescription.prescription_id.trim();
     }
-    if (me.role === "provider") payload.prestataire_id = me.pseudonym;
+    if (me.role === "provider" && me.prestataireId) payload.prestataire_id = me.prestataireId;
 
     for (let attempt = 0; attempt < 2; attempt++) {
       if (!payload.facture_id) payload.facture_id = newFactureId();

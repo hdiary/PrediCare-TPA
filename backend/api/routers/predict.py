@@ -71,7 +71,14 @@ def predict(
     if user["role"] == "professionnel_sante":
         propre = user.get("prestataire_id")
         fourni = payload.get("prestataire_id")
-        if propre is None or (fourni is not None and fourni != propre):
+        if propre is None:
+            # Compte non rattaché : problème de configuration du compte, pas de la facture.
+            _reject(conn, user, payload,
+                    [{"code": "PRESTATAIRE_NON_RATTACHE", "champ": "prestataire_id",
+                      "message": "Votre compte n'est rattaché à aucun établissement. "
+                                 "Contactez un administrateur pour le lier à un prestataire."}],
+                    403, "autorisation")
+        if fourni is not None and fourni != propre:
             _reject(conn, user, payload,
                     [{"code": "PRESTATAIRE_NON_AUTORISE", "champ": "prestataire_id",
                       "message": "Seules les factures de votre établissement sont acceptées"}],
@@ -166,13 +173,23 @@ def predict(
 # ============================================================================
 
 
-def _pdf_to_payload(extracted: dict, prestataire_id: str | None) -> dict:
-    """Transforme les champs extraits du PDF en payload accepté par /predict."""
+def _new_facture_id() -> str:
+    """Identifiant technique d'une facture déposée (plage FAC-9xxxxxxx, comme le front)."""
+    return f"FAC-9{secrets.randbelow(10_000_000):07d}"
+
+
+def _pdf_to_payload(extracted: dict, prestataire_id: str | None,
+                    contrat_id: str | None = None) -> dict:
+    """Transforme les champs extraits du PDF en payload accepté par /predict.
+
+    Le PDF ne porte ni `facture_id` (identifiant technique, généré ici) ni `contrat_id`
+    (déduit de l'assuré en base) : sans eux /predict rejette la facture (422).
+    """
     return {
-        "facture_id": f"FAC-{secrets.randbelow(100_000_000):08d}",
+        "facture_id": _new_facture_id(),
         "numero_facture": extracted.get("numero_facture"),
         "assure_id": extracted.get("assure_id"),
-        "contrat_id": extracted.get("contrat_id") or extracted.get("attestation_pec_id"),
+        "contrat_id": extracted.get("contrat_id") or contrat_id,
         "type_facture": extracted.get("type_facture"),
         "date_soin": extracted.get("date_soin"),
         "heure_soin": extracted.get("heure_soin") or "08:00",
@@ -212,6 +229,8 @@ async def predict_pdf(
         raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 10 Mo.")
 
     # 2. Extraire le PDF
+    # load_reference_tables renvoie les tables brutes ; extract_document attend le référentiel
+    # construit (codes, nif_to_prestataire, ...) -> build_reference est obligatoire.
     ref = build_reference(load_reference_tables(conn))
     extraction = extract_document(content, ref=ref)
 
@@ -231,7 +250,11 @@ async def predict_pdf(
         )
 
     # 3. Reconstruire le payload
-    payload = _pdf_to_payload(extraction.data, prestataire_id or user.get("prestataire_id"))
+    contrat_id = None
+    if extraction.data.get("assure_id") and not extraction.data.get("contrat_id"):
+        contrat_id = repo.contrat_de_assure(conn, extraction.data["assure_id"])
+    payload = _pdf_to_payload(
+        extraction.data, prestataire_id or user.get("prestataire_id"), contrat_id)
 
     # 4. Si une ordonnance a été fournie côté front, la rattacher
     if prescription:
