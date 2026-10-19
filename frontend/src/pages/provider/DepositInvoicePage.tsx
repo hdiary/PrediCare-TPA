@@ -62,8 +62,8 @@ export function DepositInvoicePage() {
       showToast('Le fichier ne doit pas dépasser 10 Mo', 'error');
       return;
     }
-    if (!f.name.match(/\.json$/i)) {
-      showToast('Seul le format JSON est accepté pour le moment (ou utilisez la saisie manuelle)', 'error');
+    if (!f.name.match(/\.pdf$/i)) {
+      showToast('Seul le format PDF est accepté pour le moment (ou utilisez la saisie manuelle)', 'error');
       return;
     }
     setFile(f);
@@ -280,7 +280,7 @@ export function DepositInvoicePage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".json"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
@@ -300,7 +300,7 @@ export function DepositInvoicePage() {
                   <p className="text-sm font-medium text-surface-700 dark:text-surface-200 mb-1">
                     Glissez votre fichier ici ou cliquez pour parcourir
                   </p>
-                  <p className="text-xs text-surface-400">Fichier JSON · 10 Mo max</p>
+                  <p className="text-xs text-surface-400">Fichier PDF · 10 Mo max</p>
                 </>
               )}
             </div>
