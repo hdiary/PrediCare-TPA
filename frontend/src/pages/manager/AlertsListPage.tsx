@@ -6,8 +6,8 @@ import { api } from '@/lib/api';
 import type { AlertApiSummary } from '@/lib/types';
 import { ALERT_STATUS_COLORS, ALERT_STATUS_LABELS, formatDate, formatEUR, riskColor } from '@/lib/format';
 
-const statuses = [['all', 'Toutes'], ['EN_ATTENTE', 'En attente'], ['VALIDEE', 'Validées'], ['REJETEE', 'Rejetées'], ['CONFIRMEE_FRAUDE', 'Fraudes confirmées']];
-const priorities = [['all', 'Toutes priorités'], ['HAUTE', 'Haute'], ['MOYENNE', 'Moyenne'], ['BASSE', 'Basse']];
+const statuses = [['all', 'Toutes'], ['EN_ATTENTE', 'En attente'], ['VALIDEE', 'Validées'], ['REJETEE', 'Rejetées'], ['ESCALADEE', 'Escaladées']];
+const priorities = [['all', 'Toutes priorités'], ['HAUTE', 'Haute'], ['MOYENNE', 'Moyenne'], ['FAIBLE', 'Faible']];
 export function AlertsListPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<AlertApiSummary[]>([]); const [total, setTotal] = useState(0);

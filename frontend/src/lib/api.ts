@@ -366,7 +366,7 @@ export const api = {
       await delay(800);
       return {
         id,
-        decision_id: 1, facture_id: id, gestionnaire_id: 'demo', decision, commentaire: comment, montant_economise: 0, date_decision: new Date().toISOString(),
+        decision_id: 1, facture_id: id, gestionnaire_id: 0, decision, commentaire: comment, montant_economise: 0, date_decision: new Date().toISOString(),
       };
     }
     return request(`/api/v1/alertes/${encodeURIComponent(id)}/decision`, {

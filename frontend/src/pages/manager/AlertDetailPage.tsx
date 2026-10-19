@@ -27,7 +27,7 @@ export function AlertDetailPage() {
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-32"/><Skeleton className="h-96"/></div>;
   if (error || !detail) return <><Link to="/gestionnaire/alertes" className="inline-flex gap-2 mb-4"><ArrowLeft/>Retour aux alertes</Link><ErrorState message="Impossible de charger le détail de l'alerte." onRetry={load}/></>;
   const p = detail.prediction; const lines = Array.isArray(detail.facture.lignes) ? detail.facture.lignes as Array<Record<string, unknown>> : [];
-  const shap = detail.shap?.top || [];
+  const shap = Array.isArray(detail.shap) ? detail.shap : detail.shap?.top || [];
   return <div className="space-y-5"><Link to="/gestionnaire/alertes" className="inline-flex gap-2"><ArrowLeft/>Retour aux alertes</Link>
     <Card className="p-6 space-y-5"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-bold">Facture {p.facture_id}</h2><p className="text-sm text-surface-500">{p.type} · {formatDate(p.date)}</p></div><Badge className={ALERT_STATUS_COLORS[p.statut] || ''}>{ALERT_STATUS_LABELS[p.statut] || p.statut}</Badge></div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><div>Score <strong className={riskColor(p.score)}>{p.score.toFixed(3)}</strong></div><div>Priorité <strong>{p.priorite}</strong></div><div>Montant <strong>{formatEUR(p.montant_total)}</strong></div><div>Prestataire / assuré <strong>{p.prestataire_id || '—'} / {p.assure_id || '—'}</strong></div></div>
