@@ -6,7 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from api.schemas_predict import RegleItem, ShapItem
 
-DecisionValue = Literal["fraude_confirmee", "faux_positif", "a_investiguer"]
+DecisionValue = Literal[
+    "VALIDER", "REJETER", "CONFIRMER_FRAUDE", "ESCALADER",
+    "fraude_confirmee", "faux_positif", "a_investiguer", "valide", "rejete",
+]
 
 
 class DecisionRequest(BaseModel):
@@ -16,8 +19,8 @@ class DecisionRequest(BaseModel):
 
     @model_validator(mode="after")
     def montant_seulement_si_fraude(self):
-        if self.montant_economise is not None and self.decision != "fraude_confirmee":
-            raise ValueError("montant_economise n'est accepté que pour 'fraude_confirmee'")
+        if self.montant_economise is not None and self.decision not in {"fraude_confirmee", "CONFIRMER_FRAUDE"}:
+            raise ValueError("montant_economise n'est accepté que pour confirmer une fraude")
         return self
 
 
@@ -42,6 +45,12 @@ class AlertSummary(BaseModel):
     nb_regles: int = 0
     derniere_decision: DecisionValue | None = None
     date_decision: datetime | None = None
+    type: str = "FRAUDE"
+    priorite: Literal["FAIBLE", "MOYENNE", "HAUTE"] = "MOYENNE"
+    statut: str = "EN_ATTENTE"
+    codes: list[str] = Field(default_factory=list)
+    etat_notification: Literal["NON_REQUISE", "EN_ATTENTE", "ENVOYEE", "ECHEC"] = "NON_REQUISE"
+    tentatives_notification: int = 0
 
 
 class AlertDetailOut(BaseModel):
@@ -53,6 +62,8 @@ class AlertDetailOut(BaseModel):
     shap: list[ShapItem] | dict | None = None
     regles: list[RegleItem] = Field(default_factory=list)
     decisions: list[DecisionOut] = Field(default_factory=list)
+    facture: dict = Field(default_factory=dict)
+    codes_fraude: list[str] = Field(default_factory=list)
 
 
 class IdentiteOut(BaseModel):

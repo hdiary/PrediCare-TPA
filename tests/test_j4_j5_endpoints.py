@@ -51,6 +51,12 @@ class AdminConn(FakeConn):
         return super().execute(query, params)
 
     def _answer(self, q, params):
+        if "FROM PREDICTIONS P JOIN FACTURES F" in q and "WHERE P.FACTURE_ID = %S" in q:
+            return Cur(dict(facture_id="FAC-00000001", score=0.9, version_modele="7",
+                            date=NOW, montant_total=25000, nb_regles=2,
+                            type="FRAUDE", priorite="HAUTE", codes=[],
+                            etat_notification="NON_REQUISE", tentatives_notification=0,
+                            statut="EN_ATTENTE", derniere_decision=None, date_decision=None))
         if q.startswith("INSERT INTO CONFIGURATION"):
             self.config[params[0]] = params[1]
             return Cur(None)

@@ -20,6 +20,7 @@ from api.services.calculation_service import calculate_reimbursement
 from api.services.context_service import ContextUnavailableError, build_context
 from api.services.fraud_rules_v2 import evaluate_fraud_rules
 from api.services.model_registry import get_registry
+from api.services.notify import notification_service
 from api.services.rules import evaluate_rules
 from api.services.scoring import predict_with_explanation
 from api.validation import InvoiceRejected, today_mg, validate_invoice
@@ -134,8 +135,10 @@ def predict(
         "PRESTATAIRE_RADIE", "ORDONNANCE_EXPIREE",
     }
     rule_alert_codes = [f.code for f in fraud_findings if f.code in alert_rule_codes]
-    is_alert = result["score"] >= seuil or bool(rule_alert_codes)
+    score_alert = result["score"] > seuil
+    is_alert = score_alert or bool(rule_alert_codes)
     latence_ms = int((time.perf_counter() - started) * 1000)
+    alerte_id = None
 
     # 4. Stockage + audit dans UNE transaction (validée à la sortie de la requête)
     try:
@@ -160,7 +163,7 @@ def predict(
             findings = evaluate_rules(conn, clean)
             repo.insert_alertes_regles(conn, prediction_id, clean["facture_id"], findings)
             if is_alert:
-                repo.insert_alert(
+                alerte_id = repo.insert_alert(
                     conn,
                     facture_id=clean["facture_id"],
                     codes=sorted(set(rule_alert_codes or ["SCORE_SUPERIEUR_SEUIL"])),
@@ -190,6 +193,26 @@ def predict(
         raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
 
     # Un professionnel de santé ne reçoit pas le score (éviter d'aider un fraudeur à l'ajuster)
+    if score_alert and alerte_id:
+        notification_service(
+            conn,
+            user,
+            {
+                "prediction_id": prediction_id,
+                "facture_id": clean["facture_id"],
+                "assure_id": clean["assure_id"],
+                "prestataire_id": clean["prestataire_id"],
+                "score": result["score"],
+                "seuil": seuil,
+                "version_modele": bundle.version,
+                "nom_modele": bundle.name,
+                "montant_total": clean["montant_total"],
+            },
+            result["shap"],
+            [finding.code for finding in fraud_findings],
+            findings,
+        )
+
     if user["role"] == "professionnel_sante":
         return PredictResponse(facture_id=clean["facture_id"], prediction_id=prediction_id)
     return PredictResponse(

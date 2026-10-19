@@ -158,45 +158,82 @@ def insert_shap(conn, prediction_id: int, facture_id: str, valeurs: dict) -> Non
 # ---------- alertes et décisions ----------
 
 _DERNIERE_DECISION = (
-    "LEFT JOIN LATERAL (SELECT decision, date_decision FROM decisions_gestionnaire "
-    "WHERE prediction_id = p.prediction_id ORDER BY date_decision DESC, decision_id DESC "
+    "LEFT JOIN LATERAL (SELECT decision, decided_at AS date_decision FROM decisions_gestionnaires "
+    "WHERE prediction_id = p.prediction_id ORDER BY decided_at DESC, decision_id DESC "
     "LIMIT 1) d ON TRUE"
 )
 
 
-def list_alertes(conn, statut: str, limit: int, offset: int) -> list[dict]:
-    where = "WHERE p.est_alerte"
-    if statut == "en_attente":
-        where += " AND d.decision IS NULL"
-    elif statut == "traitees":
-        where += " AND d.decision IS NOT NULL"
+def _alert_filter_sql(statut: str, priorite: str | None, type_alerte: str | None) -> tuple[str, list]:
+    where = ["p.est_alerte"]
+    params = []
+    if statut in {"en_attente", "EN_ATTENTE"}:
+        where.append("d.decision IS NULL")
+    elif statut in {"traitees", "TRAITEE", "VALIDEE", "REJETEE", "ESCALADEE"}:
+        where.append("d.decision IS NOT NULL")
+        decisions = {
+            "VALIDEE": ("VALIDER", "valide"),
+            "REJETEE": ("REJETER", "CONFIRMER_FRAUDE", "rejete", "fraude_confirmee", "faux_positif"),
+            "ESCALADEE": ("ESCALADER", "a_investiguer"),
+        }
+        if statut in decisions:
+            values = decisions[statut]
+            where.append("d.decision IN (" + ", ".join(["%s"] * len(values)) + ")")
+            params.extend(values)
+    elif statut not in {"toutes", "TOUTES"}:
+        raise ValueError("Statut d'alerte invalide")
+    if priorite:
+        where.append("a.priorite = %s")
+        params.append(priorite)
+    if type_alerte:
+        where.append("a.type = %s")
+        params.append(type_alerte)
+    return " AND ".join(where), params
+
+
+def list_alertes(conn, statut: str = "EN_ATTENTE", limit: int = 50, offset: int = 0,
+                 priorite: str | None = None, type_alerte: str | None = None,
+                 tri: str = "priorite") -> list[dict]:
+    where, params = _alert_filter_sql(statut, priorite, type_alerte)
+    order = {
+        "priorite": "CASE a.priorite WHEN 'HAUTE' THEN 0 WHEN 'MOYENNE' THEN 1 ELSE 2 END, p.date DESC",
+        "date": "p.date DESC",
+        "score": "p.score DESC, p.date DESC",
+    }.get(tri)
+    if order is None:
+        raise ValueError("Tri d'alerte invalide")
     return conn.execute(
         "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
+        "CASE WHEN d.decision IS NULL THEN 'EN_ATTENTE' "
+        "WHEN d.decision IN ('VALIDER', 'valide') THEN 'VALIDEE' "
+        "WHEN d.decision IN ('REJETER', 'CONFIRMER_FRAUDE', 'rejete', 'fraude_confirmee', 'faux_positif') THEN 'REJETEE' "
+        "ELSE 'ESCALADEE' END AS statut, "
         "(SELECT count(*) FROM alertes_prescription ar WHERE ar.prediction_id = p.prediction_id) "
         "AS nb_regles, "
         "d.decision AS derniere_decision, d.date_decision "
         "FROM predictions p JOIN factures f ON f.facture_id = p.facture_id "
-        f"{_DERNIERE_DECISION} {where} ORDER BY p.date DESC LIMIT %s OFFSET %s",
-        (limit, offset),
+        "JOIN alertes a ON a.facture_id = p.facture_id "
+        f"{_DERNIERE_DECISION} WHERE {where} ORDER BY {order} LIMIT %s OFFSET %s",
+        (*params, limit, offset),
     ).fetchall()
 
 
-def count_alertes(conn, statut: str) -> int:
-    where = "WHERE p.est_alerte"
-    if statut == "en_attente":
-        where += " AND d.decision IS NULL"
-    elif statut == "traitees":
-        where += " AND d.decision IS NOT NULL"
+def count_alertes(conn, statut: str, priorite: str | None = None,
+                  type_alerte: str | None = None) -> int:
+    where, params = _alert_filter_sql(statut, priorite, type_alerte)
     row = conn.execute(
-        f"SELECT count(*) AS n FROM predictions p {_DERNIERE_DECISION} {where}"
+        "SELECT count(*) AS n FROM predictions p JOIN alertes a ON a.facture_id = p.facture_id "
+        f"{_DERNIERE_DECISION} WHERE {where}", params
     ).fetchone()
     return int(row["n"])
 
 
-def get_prediction(conn, facture_id: str) -> dict | None:
+def get_prediction(conn, facture_id: str, for_update: bool = False) -> dict | None:
+    lock = " FOR UPDATE" if for_update else ""
     return conn.execute(
         "SELECT prediction_id, facture_id, nom_modele, version_modele, score, seuil_utilise, "
-        "est_alerte, date FROM predictions WHERE facture_id = %s",
+        "est_alerte, date FROM predictions WHERE facture_id = %s" + lock,
         (facture_id,),
     ).fetchone()
 
@@ -209,9 +246,9 @@ def get_shap(conn, prediction_id: int) -> dict | None:
 
 def list_decisions(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
-        "SELECT decision_id, facture_id, gestionnaire_id, decision, commentaire, "
-        "montant_economise, date_decision FROM decisions_gestionnaire "
-        "WHERE prediction_id = %s ORDER BY date_decision DESC, decision_id DESC",
+        "SELECT decision_id, facture_id, user_id::bigint AS gestionnaire_id, decision, commentaire, "
+        "montant_economise, decided_at AS date_decision FROM decisions_gestionnaires "
+        "WHERE prediction_id = %s ORDER BY decided_at DESC, decision_id DESC",
         (prediction_id,),
     ).fetchall()
 
@@ -219,12 +256,59 @@ def list_decisions(conn, prediction_id: int) -> list[dict]:
 def insert_decision(conn, *, prediction_id, facture_id, gestionnaire_id, decision,
                     commentaire, montant_economise) -> dict:
     return conn.execute(
-        "INSERT INTO decisions_gestionnaire (prediction_id, facture_id, gestionnaire_id, decision, "
+        "INSERT INTO decisions_gestionnaires (prediction_id, facture_id, user_id, decision, "
         "commentaire, montant_economise) VALUES (%s, %s, %s, %s, %s, %s) "
-        "RETURNING decision_id, facture_id, gestionnaire_id, decision, commentaire, "
-        "montant_economise, date_decision",
-        (prediction_id, facture_id, gestionnaire_id, decision, commentaire, montant_economise),
+        "RETURNING decision_id, facture_id, user_id::bigint AS gestionnaire_id, decision, commentaire, "
+        "montant_economise, decided_at AS date_decision",
+        (prediction_id, facture_id, str(gestionnaire_id), decision, commentaire, montant_economise),
     ).fetchone()
+
+
+def get_alert_summary(conn, facture_id: str) -> dict | None:
+    return conn.execute(
+        "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
+        "(SELECT count(*) FROM alertes_prescription ar WHERE ar.prediction_id = p.prediction_id) AS nb_regles, "
+        "CASE WHEN d.decision IS NULL THEN 'EN_ATTENTE' "
+        "WHEN d.decision IN ('VALIDER', 'valide') THEN 'VALIDEE' "
+        "WHEN d.decision IN ('REJETER', 'CONFIRMER_FRAUDE', 'rejete', 'fraude_confirmee', 'faux_positif') THEN 'REJETEE' "
+        "ELSE 'ESCALADEE' END AS statut, d.decision AS derniere_decision, d.date_decision "
+        "FROM predictions p JOIN factures f ON f.facture_id = p.facture_id "
+        "JOIN alertes a ON a.facture_id = p.facture_id "
+        f"{_DERNIERE_DECISION} WHERE p.facture_id = %s AND p.est_alerte",
+        (facture_id,),
+    ).fetchone()
+
+
+def decision_existe(conn, prediction_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 AS existe FROM decisions_gestionnaires WHERE prediction_id = %s LIMIT 1",
+        (prediction_id,),
+    ).fetchone()
+    return row is not None
+
+
+def update_facture_status(conn, facture_id: str, status: str) -> None:
+    conn.execute(
+        "UPDATE factures SET statut = %s, date_traitement = CURRENT_DATE WHERE facture_id = %s",
+        (status, facture_id),
+    )
+
+
+def update_alert_notification(conn, facture_id: str, state: str, attempts: int) -> None:
+    conn.execute(
+        "UPDATE alertes SET etat_notification = %s, tentatives_notification = %s "
+        "WHERE facture_id = %s",
+        (state, attempts, facture_id),
+    )
+
+
+def get_alert_invoice(conn, facture_id: str) -> dict:
+    row = conn.execute(
+        "SELECT facture_id, numero_facture, type_facture, date_soin, montant_total, "
+        "devise, statut FROM factures WHERE facture_id = %s", (facture_id,),
+    ).fetchone()
+    return dict(row) if row else {}
 
 
 # ---------- identités (déchiffrement réservé à l'affichage d'une alerte) ----------

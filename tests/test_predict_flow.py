@@ -68,6 +68,7 @@ class FakeConn:
     def __init__(self, existing_invoice=False):
         self.calls = []
         self.existing_invoice = existing_invoice
+        self.has_decision = False
 
     def transaction(self):
         return nullcontext()
@@ -118,10 +119,13 @@ class FakeConn:
                 return Cur(self._pred(False))
             return Cur(None)
         if "INSERT INTO DECISIONS_GESTIONNAIRE" in q:
+            self.has_decision = True
             return Cur({"decision_id": 7, "facture_id": params[1], "gestionnaire_id": params[2],
                         "decision": params[3], "commentaire": params[4],
                         "montant_economise": params[5],
                         "date_decision": datetime(2026, 10, 16, tzinfo=UTC)})
+        if "FROM DECISIONS_GESTIONNAIRES" in q:
+            return Cur({"existe": 1} if self.has_decision else None)
         if "FROM IDENTITES_CHIFFREES" in q:
             payload = {"nom": "RAKOTO", "prenoms": "Jean", "telephone": "034 00 000 00",
                        "email": "j@x.mg", "adresse": "secret", "numero_cin": "123456789012",
@@ -315,6 +319,18 @@ def test_decision_on_non_alert_409(setup):
     r = client.post("/alerts/FAC-00000002/decision", headers=manager(),
                     json={"decision": "faux_positif"})
     assert r.status_code == 409
+
+
+def test_phase6_patch_decision_and_duplicate_conflict(setup):
+    client, _ = setup
+    headers = manager()
+    path = "/api/v1/alertes/FAC-00000001/decision"
+    payload = {"decision": "CONFIRMER_FRAUDE", "commentaire": "Écart vérifié"}
+    first = client.patch(path, headers=headers, json=payload)
+    second = client.patch(path, headers=headers, json=payload)
+    assert first.status_code == 200
+    assert first.json()["decision"] == "CONFIRMER_FRAUDE"
+    assert second.status_code == 409
 
 
 def test_decision_bad_facture_id_422(setup):

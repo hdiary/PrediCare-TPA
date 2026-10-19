@@ -4,6 +4,7 @@ S1  : RGPD art. 32, AI Act art. 15 - un assuré qui appelle un endpoint gestionn
 S12 : RGPD art. 32 - mots de passe hachés, session qui expire, échecs de connexion limités.
 """
 from datetime import UTC, datetime, timedelta
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import jwt
@@ -56,6 +57,9 @@ class RoleConn:
     def commit(self):
         pass
 
+    def transaction(self):
+        return nullcontext()
+
 
 class NoModelRegistry:
     last_error = None
@@ -87,8 +91,10 @@ FID = "FAC-00000001"
 ENDPOINTS = [
     ("GET", "/alerts", None, {"gestionnaire"}),
     ("GET", "/api/v1/alerts", None, {"gestionnaire"}),
+    ("GET", "/api/v1/alertes", None, {"gestionnaire"}),
     ("GET", f"/alerts/{FID}", None, {"gestionnaire"}),
     ("POST", f"/alerts/{FID}/decision", {"decision": "faux_positif"}, {"gestionnaire"}),
+    ("PATCH", f"/api/v1/alertes/{FID}/decision", {"decision": "REJETER"}, {"gestionnaire"}),
     ("GET", f"/alerts/{FID}/identite", None, {"gestionnaire"}),
     ("GET", f"/api/v1/alerts/{FID}", None, {"gestionnaire"}),
     ("GET", "/api/v1/factures", None, {"professionnel_sante"}),
