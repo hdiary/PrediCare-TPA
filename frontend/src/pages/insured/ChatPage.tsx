@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  MessageSquare, Send, Shield, ThumbsUp, ThumbsDown,
-  Sparkles, AlertCircle, Plus, RefreshCw, FileText, X,
+  Send, Shield, ThumbsUp, ThumbsDown,
+  Sparkles, AlertCircle, Plus, FileText,
 } from 'lucide-react';
-import { Card, Button, Drawer, Spinner, EmptyState, ErrorState } from '@/components/ui';
+import { Card, Button, Drawer, EmptyState } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTime } from '@/lib/format';
@@ -22,8 +22,8 @@ const CHAT_BY_ROLE = {
   },
   provider: {
     suggestions: [
-      'Où en est ma facture FAC-2024-1018 ?',
-      'Pourquoi ma dernière facture a-t-elle été rejetée ?',
+      'Où en est ma dernière facture ?',
+      'Quel est le statut de mes factures rejetées ?',
       'Quels justificatifs joindre pour un acte soumis à prescription ?',
       'Quel est le tarif de référence d\'une consultation ?',
     ],
@@ -51,8 +51,7 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const [streamingText, setStreamingText] = useState('');
-  const [error, setError] = useState(false);
-  const [sources, setSources] = useState<ChatSource[]>([]);
+  const [error, setError] = useState('');
   const [drawerSource, setDrawerSource] = useState<ChatSource | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -66,7 +65,10 @@ export function ChatPage() {
         setMessages(data.conversations[0].messages);
       }
       setLoadingHistory(false);
-    }).catch(() => setLoadingHistory(false));
+    }).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : "Impossible de charger l'historique");
+      setLoadingHistory(false);
+    });
   }, [role]);
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export function ChatPage() {
     const content = (text || input).trim();
     if (!content || sending) return;
 
-    setError(false);
+    setError('');
     setInput('');
 
     const userMsg: ChatMessage = {
@@ -122,13 +124,21 @@ export function ChatPage() {
       };
       setMessages((m) => [...m, assistantMsg]);
       setStreamingText('');
-      setSources(resp.sources);
 
-      if (!activeConvId) {
-        setActiveConvId(resp.conversation_id);
-      }
-    } catch {
-      setError(true);
+      setConversations((current) => {
+        const existing = current.find((conversation) => conversation.id === resp.conversation_id);
+        const updated: Conversation = {
+          id: resp.conversation_id,
+          title: existing?.title ?? content.slice(0, 80),
+          last_message: resp.answer,
+          updated_at: new Date().toISOString(),
+          messages: [...(existing?.messages ?? []), userMsg, assistantMsg],
+        };
+        return [updated, ...current.filter((conversation) => conversation.id !== resp.conversation_id)];
+      });
+      setActiveConvId(resp.conversation_id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       setTyping(false);
     } finally {
       setSending(false);
@@ -155,8 +165,7 @@ export function ChatPage() {
     setMessages([]);
     setActiveConvId(null);
     setStreamingText('');
-    setSources([]);
-    setError(false);
+    setError('');
   };
 
   const charCount = input.length;
@@ -237,6 +246,13 @@ export function ChatPage() {
             {cfg.scope && ` ${cfg.scope}`}
           </span>
         </div>
+
+        {error && (
+          <div role="alert" className="mb-3 flex items-start gap-2 p-3 rounded-2xl bg-danger-50 dark:bg-danger-900/30 border border-danger-200 dark:border-danger-800 text-sm text-danger-700 dark:text-danger-300">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <Card className="flex-1 flex flex-col overflow-hidden">
           {/* Messages */}
@@ -351,13 +367,6 @@ export function ChatPage() {
                   </div>
                 )}
 
-                {error && (
-                  <ErrorState
-                    message="Une erreur est survenue. Vérifiez votre connexion et réessayez."
-                    onRetry={() => { setError(false); handleSend(messages[messages.length - 1]?.content); }}
-                  />
-                )}
-
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -402,7 +411,7 @@ export function ChatPage() {
               <FileText className="w-5 h-5 text-primary-700 dark:text-primary-400" />
               <div>
                 <p className="font-semibold text-surface-800 dark:text-surface-100">{drawerSource.document}</p>
-                <p className="text-sm text-surface-400">Page {drawerSource.page}</p>
+                {drawerSource.page && <p className="text-sm text-surface-400">Page {drawerSource.page}</p>}
               </div>
             </div>
             <div className="rounded-xl border border-surface-300/80 dark:border-surface-600 bg-surface-100 dark:bg-surface-700/50 p-4">

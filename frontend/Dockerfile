@@ -1,0 +1,16 @@
+FROM node:22-alpine
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+
+ARG VITE_API_URL=http://localhost:8000
+ARG VITE_USE_MOCKS=true
+ARG VITE_USE_MOCK_AUTH=false
+ARG VITE_USE_MOCK_CHAT=false
+ENV VITE_API_URL=$VITE_API_URL VITE_USE_MOCKS=$VITE_USE_MOCKS \
+    VITE_USE_MOCK_AUTH=$VITE_USE_MOCK_AUTH VITE_USE_MOCK_CHAT=$VITE_USE_MOCK_CHAT
+
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

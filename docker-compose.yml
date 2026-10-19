@@ -198,7 +198,8 @@ services:
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -221,11 +222,11 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
-      interval: 10s
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" ]
+      interval: 30s
       timeout: 5s
-      retries: 10
-      start_period: 20s
+      retries: 3
+      start_period: 40s
 
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
@@ -251,16 +252,16 @@ services:
       retries: 5
       start_period: 40s
 
-  # ---------- Frontend (Next.js généré avec v0/Bolt) ----------
+  # ---------- Frontend React/Vite ----------
   web:
     profiles: [ "full" ] # a decommenter pour activer le frontend dans le container
     build:
       context: ./frontend
       args:
-        # Valeur intégrée au build : c'est le navigateur qui appelle l'API,
-        # donc http://localhost:8000 (et non http://api:8000)
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        NEXT_PUBLIC_USE_MOCKS: ${NEXT_PUBLIC_USE_MOCKS:-false}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_USE_MOCKS: ${VITE_USE_MOCKS:-true}
+        VITE_USE_MOCK_AUTH: ${VITE_USE_MOCK_AUTH:-false}
+        VITE_USE_MOCK_CHAT: ${VITE_USE_MOCK_CHAT:-false}
     restart: unless-stopped
     depends_on:
       - api
@@ -296,6 +297,4 @@ services:
 volumes:
   pgdata:
   mlflow_data:
-  n8n_data: # prepared_data:
-
   n8n_data: # prepared_data:

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     login_max_attempts: int = 5          # échecs consécutifs avant verrouillage du compte
     login_lockout_minutes: int = 15      # durée du verrouillage
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
     alert_threshold: float = 0.8  # valeur initiale ; la valeur "vivante" est dans app_settings
 
     # Registre de modèles (MLflow)

@@ -49,11 +49,15 @@ class RagAgent:
         self.cache = cache
         self.audit = audit
 
-    def answer(self, question: str, *, contract_id: str, user_pseudo_id: str,
-               role: str, assure_id: str | None = None) -> ChatResponse:
+    def answer(self, question: str, *, contract_id: str | None,
+               user_pseudo_id: str, role: str,
+               assure_id: str | None = None,
+               prestataire_id: str | None = None) -> ChatResponse:
         if not question.strip():
             raise ValueError("Question must not be empty")
-        if not contract_id or not user_pseudo_id or not role:
+        if (not user_pseudo_id or not role
+                or (not contract_id and not prestataire_id)
+                or (assure_id and prestataire_id)):
             raise ValueError("Authenticated user context is required")
         started_at = time.monotonic()
         reason = blocked_reason(question, contract_id)
@@ -70,7 +74,7 @@ class RagAgent:
             return response
 
         claim_question = AgentToolkit.is_claim_question(question)
-        if claim_question and not assure_id:
+        if claim_question and not (assure_id or prestataire_id):
             response = ChatResponse(
                 "Le suivi des factures nécessite l'identifiant pseudonymisé "
                 "de l'assuré connecté. En CLI, fournissez-le avec "
@@ -83,16 +87,34 @@ class RagAgent:
                 started_at=started_at)
             return response
 
+        if (prestataire_id
+                and AgentToolkit.is_reimbursement_total_question(question)):
+            response = ChatResponse(
+                "Je ne peux pas calculer un total de remboursements à partir "
+                "des factures d'un professionnel de santé.", [])
+            self.audit.write(
+                user_pseudo_id=user_pseudo_id, role=role, question=question,
+                tools_used=["provider_total_not_available"], cache_hit=False,
+                blocked=False, block_reason=None, tokens_in=0, tokens_out=0,
+                started_at=started_at)
+            return response
+
         if AgentToolkit.is_claim_status_question(question):
             toolkit = AgentToolkit(
                 embeddings=self.embeddings,
                 retriever=self.retriever,
                 engine=self.retriever.engine,
-                contract_id=contract_id,
+                contract_id=contract_id or "",
                 assure_id=assure_id,
+                prestataire_id=prestataire_id,
             )
             answer = toolkit.recent_claims_answer()
-            answer = f"{answer}\n\nSource : historique des factures du compte."
+            source_label = (
+                "historique des factures du prestataire connecté"
+                if prestataire_id
+                else "historique des factures du compte"
+            )
+            answer = f"{answer}\n\nSource : {source_label}."
             self.audit.write(
                 user_pseudo_id=user_pseudo_id, role=role, question=question,
                 tools_used=["search_my_claims"], cache_hit=False,
@@ -102,18 +124,19 @@ class RagAgent:
 
         structured_question = is_guarantee_table_question(question)
         exclusion_question = is_exclusion_question(question)
-        deterministic_question = (
+        deterministic_question = (not prestataire_id and (
             structured_question
             or exclusion_question
             or is_direct_contract_question(question)
-        )
+        ))
         query_embedding = (
             self.embeddings.embed([question])[0]
             if deterministic_question or not claim_question
             else None
         )
-        if not deterministic_question and not claim_question:
-            if query_embedding is None:
+        if (not deterministic_question and not claim_question
+                and not prestataire_id):
+            if query_embedding is None or not contract_id:
                 raise RuntimeError("Query embedding was not initialized")
             cached = self.cache.get(query_embedding, contract_id, question)
             if cached and not contains_sensitive_data(cached[0]):
@@ -134,7 +157,7 @@ class RagAgent:
             if query_embedding is None:
                 raise RuntimeError("Query embedding was not initialized")
             chunks = self.retriever.search(
-                query_embedding, contract_id,
+                query_embedding, contract_id or "",
                 include_guarantee_table=structured_question,
                 include_exclusions=exclusion_question)
             if not chunks:
@@ -170,8 +193,9 @@ class RagAgent:
             embeddings=self.embeddings,
             retriever=self.retriever,
             engine=self.retriever.engine,
-            contract_id=contract_id,
+            contract_id=contract_id or "",
             assure_id=assure_id,
+            prestataire_id=prestataire_id,
         )
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": question}
@@ -252,8 +276,9 @@ class RagAgent:
                     f"{answer.rstrip()}\n\n"
                     "Source : historique des factures du compte."
                 )
-            if not claim_question and "search_my_claims" not in tools_used:
-                if query_embedding is None:
+            if (not claim_question and "search_my_claims" not in tools_used
+                    and not prestataire_id):
+                if query_embedding is None or not contract_id:
                     raise RuntimeError("Query embedding was not initialized")
                 self.cache.put(
                     question, query_embedding, contract_id, answer,

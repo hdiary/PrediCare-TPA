@@ -103,6 +103,20 @@ _REIMBURSEMENT_TOTAL_TOOL = {
         },
     },
 }
+_PROVIDER_CLAIM_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_my_claims",
+        "description": (
+            "Consulter les factures du professionnel de santé connecté "
+            "uniquement. La recherche est limitée côté serveur à son "
+            "prestataire_id. Utiliser pour le statut, les dates et les "
+            "montants de ses factures."
+        ),
+        "strict": True,
+        "parameters": _CLAIM_TOOL["function"]["parameters"],
+    },
+}
 _DOCUMENT_TOOL = {
     "type": "function",
     "function": {
@@ -118,11 +132,24 @@ _DOCUMENT_TOOL = {
                 "query": {
                     "type": "string",
                     "description": "Question ou termes à chercher dans les documents.",
-                }
+                },
             },
             "required": ["query"],
             "additionalProperties": False,
         },
+    },
+}
+_NETWORK_DOCUMENT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_network_documents",
+        "description": (
+            "Rechercher des extraits sourcés uniquement dans les documents "
+            "généraux du réseau de soins. Ne recherche jamais dans les "
+            "documents propres au contrat d'un assuré."
+        ),
+        "strict": True,
+        "parameters": _DOCUMENT_TOOL["function"]["parameters"],
     },
 }
 _CLAIMS_SQL = text("""
@@ -163,6 +190,35 @@ _REIMBURSEMENT_TOTAL_SQL = text("""
       AND contrat_id = :contract_id
       AND statut = 'PAYEE'
 """)
+_PROVIDER_CLAIMS_SQL = text("""
+    SELECT facture_id, date_reception, date_soin, date_traitement,
+           type_facture, montant_total, montant_pris_en_charge, statut
+    FROM v_agent_claim_status
+    WHERE prestataire_id = :prestataire_id
+      AND (
+          (
+              (CAST(:date_from AS date) IS NULL
+               OR date_reception >= CAST(:date_from AS date))
+              AND
+              (CAST(:date_to AS date) IS NULL
+               OR date_reception <= CAST(:date_to AS date))
+          )
+          OR
+          (
+              (CAST(:date_from AS date) IS NULL
+               OR date_soin >= CAST(:date_from AS date))
+              AND
+              (CAST(:date_to AS date) IS NULL
+               OR date_soin <= CAST(:date_to AS date))
+          )
+      )
+      AND (
+          CAST(:invoice_id AS text) IS NULL
+          OR facture_id = CAST(:invoice_id AS text)
+      )
+    ORDER BY date_reception DESC NULLS LAST, facture_id
+    LIMIT 10
+""")
 
 
 @dataclass(frozen=True)
@@ -182,17 +238,28 @@ class AgentToolkit:
         engine: Engine,
         contract_id: str,
         assure_id: str | None,
+        prestataire_id: str | None = None,
     ):
         if assure_id and not _ASSURED_ID.fullmatch(assure_id):
             raise ValueError("assure_id must be a pseudonymous ASS- identifier")
+        if prestataire_id and not re.fullmatch(
+                r"PRE-[0-9]{5}", prestataire_id, re.IGNORECASE):
+            raise ValueError(
+                "prestataire_id must be a pseudonymous PRE- identifier")
+        if assure_id and prestataire_id:
+            raise ValueError("Only one authenticated claim scope is allowed")
         self.embeddings = embeddings
         self.retriever = retriever
         self.engine = engine
         self.contract_id = contract_id
         self.assure_id = assure_id.upper() if assure_id else None
+        self.prestataire_id = (
+            prestataire_id.upper() if prestataire_id else None)
 
     @property
     def definitions(self) -> list[dict[str, Any]]:
+        if self.prestataire_id:
+            return [_NETWORK_DOCUMENT_TOOL, _PROVIDER_CLAIM_TOOL]
         tools = [_DOCUMENT_TOOL]
         if self.assure_id:
             tools.append(_CLAIM_TOOL)
@@ -204,6 +271,10 @@ class AgentToolkit:
         return bool(
             _CLAIM_SELF_REFERENCE.search(question)
             or _REIMBURSEMENT_TOTAL_QUESTION.search(question))
+
+    @staticmethod
+    def is_reimbursement_total_question(question: str) -> bool:
+        return bool(_REIMBURSEMENT_TOTAL_QUESTION.search(question))
 
     @staticmethod
     def is_claim_status_question(question: str) -> bool:
@@ -230,7 +301,8 @@ class AgentToolkit:
             return "Aucune facture correspondante trouvée pour votre compte."
 
         lines = [
-            f"Voici les factures les plus récentes de votre compte "
+            f"Voici les factures les plus récentes "
+            f"{'de votre activité' if self.prestataire_id else 'de votre compte'} "
             f"({len(claims)} résultat(s)) :"
         ]
         for claim in claims:
@@ -259,13 +331,22 @@ class AgentToolkit:
         return "\n".join(lines)
 
     def execute(self, name: str, arguments: dict[str, Any]) -> ToolOutput:
-        if name == "search_contract_documents":
+        if name in {"search_contract_documents", "search_network_documents"}:
+            if name == "search_contract_documents" and self.prestataire_id:
+                raise ValueError(
+                    "Providers may only search network-wide documents")
+            if name == "search_network_documents" and not self.prestataire_id:
+                raise ValueError(
+                    "search_network_documents requires a provider context")
             self._require_arguments(arguments, {"query"})
             query = arguments["query"]
             if not isinstance(query, str) or not query.strip():
                 raise ValueError("query must be a non-empty string")
             embedding = self.embeddings.embed([query])[0]
-            chunks = self.retriever.search(embedding, self.contract_id)
+            if name == "search_network_documents":
+                chunks = self.retriever.search_global(embedding)
+            else:
+                chunks = self.retriever.search(embedding, self.contract_id)
             if not chunks:
                 return ToolOutput(
                     "Aucun extrait pertinent trouvé dans les documents du "
@@ -282,9 +363,9 @@ class AgentToolkit:
                 json.dumps(excerpts, ensure_ascii=False), chunks)
 
         if name == "search_my_claims":
-            if not self.assure_id:
+            if not self.assure_id and not self.prestataire_id:
                 raise ValueError(
-                    "search_my_claims requires a CLI-provided assure_id")
+                    "search_my_claims requires an authenticated user context")
             self._require_arguments(
                 arguments, {"date_from", "date_to", "invoice_id"})
             date_from = self._parse_date(arguments["date_from"], "date_from")
@@ -298,13 +379,26 @@ class AgentToolkit:
                 raise ValueError("invoice_id must use FAC- followed by 8 digits")
 
             with self.engine.connect() as connection:
-                rows = connection.execute(_CLAIMS_SQL, {
-                    "assure_id": self.assure_id,
-                    "contract_id": self.contract_id,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                    "invoice_id": invoice_id.upper() if invoice_id else None,
-                }).mappings().all()
+                if self.prestataire_id:
+                    query = _PROVIDER_CLAIMS_SQL
+                    params = {
+                        "prestataire_id": self.prestataire_id,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                        "invoice_id": (
+                            invoice_id.upper() if invoice_id else None),
+                    }
+                else:
+                    query = _CLAIMS_SQL
+                    params = {
+                        "assure_id": self.assure_id,
+                        "contract_id": self.contract_id,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                        "invoice_id": (
+                            invoice_id.upper() if invoice_id else None),
+                    }
+                rows = connection.execute(query, params).mappings().all()
             if not rows:
                 return ToolOutput(
                     "Aucune facture correspondante trouvée pour l'assuré "

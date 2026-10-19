@@ -12,7 +12,6 @@ import type {
   ModelVersion,
   AuditLogEntry,
   AdminSettings,
-  ChatMessage,
   Conversation,
   InvoiceSubmissionResult,
 } from "./types";
@@ -35,8 +34,38 @@ import {
   mockChatResponse,
 } from "./mockData";
 
-export const USE_MOCKS = true;
-const BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
+export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== "false";
+export const USE_MOCK_AUTH = import.meta.env.VITE_USE_MOCK_AUTH === "true";
+const USE_MOCK_CHAT =
+  USE_MOCK_AUTH || import.meta.env.VITE_USE_MOCK_CHAT === "true";
+const BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000")
+  .replace(/\/+$/, "");
+
+interface BackendUser {
+  user_id: number;
+  email: string;
+  role: string;
+  assure_id: string | null;
+  prestataire_id: string | null;
+}
+
+const FRONTEND_ROLE: Record<string, Role> = {
+  professionnel_sante: "provider",
+  assure: "insured",
+  gestionnaire: "manager",
+  administrateur: "admin",
+};
+
+function mapBackendUser(user: BackendUser) {
+  const role = FRONTEND_ROLE[user.role];
+  if (!role) throw new Error("Rôle utilisateur non pris en charge");
+  return {
+    role,
+    display_name: user.email,
+    pseudonym: user.assure_id || user.prestataire_id || user.email,
+    email: user.email,
+  };
+}
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -60,7 +89,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error("Session expirée");
   }
   if (res.status === 403) {
-    throw new Error("Accès refusé");
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "Accès refusé");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -71,7 +101,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   async login(email: string, password: string): Promise<AuthResponse> {
-    if (USE_MOCKS) {
+    if (USE_MOCK_AUTH) {
       await delay(600);
       const account = MOCK_ACCOUNTS.find(
         (a) => a.email === email && a.password === password,
@@ -86,22 +116,21 @@ export const api = {
     }
     const data = await request<{
       access_token: string;
-      role: Role;
-      display_name: string;
-      pseudonym: string;
+      user: BackendUser;
     }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    return data;
+    return { access_token: data.access_token, ...mapBackendUser(data.user) };
   },
 
   async getMe(): Promise<{
     role: Role;
     display_name: string;
     pseudonym: string;
+    email: string;
   }> {
-    if (USE_MOCKS) {
+    if (USE_MOCK_AUTH) {
       await delay(200);
       const token = localStorage.getItem("predicare_token");
       const account = MOCK_ACCOUNTS.find((a) => "mock-jwt-" + a.role === token);
@@ -110,9 +139,11 @@ export const api = {
         role: account.role,
         display_name: account.display_name,
         pseudonym: account.pseudonym,
+        email: account.email,
       };
     }
-    return request("/me");
+    const user = await request<BackendUser>("/auth/me");
+    return mapBackendUser(user);
   },
 
   async getInvoices(filters?: {
@@ -345,7 +376,7 @@ export const api = {
   },
 
   async getConversations(role?: Role): Promise<{ conversations: Conversation[] }> {
-    if (USE_MOCKS) {
+    if (USE_MOCK_CHAT) {
       await delay(300);
       return { conversations: role === "provider" ? mockProviderConversations : mockConversations };
     }
@@ -361,7 +392,7 @@ export const api = {
     answer: string;
     sources: { document: string; page: number; excerpt: string }[];
   }> {
-    if (USE_MOCKS) {
+    if (USE_MOCK_CHAT) {
       await delay(1000);
       const resp = mockChatResponse(message, role);
       return {

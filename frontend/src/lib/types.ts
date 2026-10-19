@@ -86,7 +86,7 @@ export interface ChatMessage {
 
 export interface ChatSource {
   document: string;
-  page: number;
+  page?: number;
   excerpt: string;
 }
 

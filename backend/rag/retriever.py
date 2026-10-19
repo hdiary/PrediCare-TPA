@@ -159,3 +159,33 @@ class ContractRetriever:
             )
             or float(row["score"]) >= self.min_score
         ]
+
+    def search_global(self, query_embedding: list[float]) -> list[RetrievedChunk]:
+        """Search only network-wide documents, never contract/formula content."""
+        query = text("""
+            SELECT c.content, c.scope, c.contrat_id AS contract_id,
+                   c.formule AS formula, c.article, c.page_start, c.page_end,
+                   d.filename,
+                   1 - (c.embedding <=> CAST(:embedding AS vector)) AS score
+            FROM rag_chunks AS c
+            JOIN rag_documents AS d ON d.id = c.document_id
+            WHERE c.scope = 'global'
+            ORDER BY c.embedding <=> CAST(:embedding AS vector)
+            LIMIT :top_k
+        """)
+        with self.engine.connect() as connection:
+            rows = connection.execute(query, {
+                "embedding": _vector_literal(query_embedding),
+                "top_k": self.top_k,
+            }).mappings().all()
+        return [
+            RetrievedChunk(
+                content=row["content"], scope=row["scope"],
+                contract_id=row["contract_id"], formula=row["formula"],
+                article=row["article"], page_start=row["page_start"],
+                page_end=row["page_end"], filename=row["filename"],
+                score=float(row["score"]),
+            )
+            for row in rows
+            if float(row["score"]) >= self.min_score
+        ]

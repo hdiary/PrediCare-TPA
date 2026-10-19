@@ -5,6 +5,7 @@ import { useAuth, getRoleHome } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import { Button, Input, Spinner } from '@/components/ui';
 import { MOCK_ACCOUNTS } from '@/lib/mockData';
+import { USE_MOCK_AUTH } from '@/lib/api';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -23,16 +24,8 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      const token = localStorage.getItem('predicare_token');
-      const account = MOCK_ACCOUNTS.find((a) => 'mock-jwt-' + a.role === token);
-      if (account) {
-        if (from && from.startsWith('/')) {
-          navigate(from);
-        } else {
-          navigate(getRoleHome(account.role));
-        }
-      }
+      const role = await login(email, password);
+      navigate(from && from.startsWith('/') ? from : getRoleHome(role));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion');
     } finally {
@@ -148,7 +141,11 @@ export function LoginPage() {
               </div>
 
               <div className="flex justify-end !mt-4">
-                <Link to="/mot-de-passe-oublie" className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Mot de passe oublié ?</Link>
+                {USE_MOCK_AUTH ? (
+                  <Link to="/mot-de-passe-oublie" className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Mot de passe oublié ?</Link>
+                ) : (
+                  <span className="text-sm text-surface-500 dark:text-surface-400">Pour réinitialiser votre accès, contactez un administrateur.</span>
+                )}
               </div>
 
               <Button type="submit" className="w-full" size="lg" disabled={loading}>
@@ -163,30 +160,38 @@ export function LoginPage() {
             </form>
 
             <p className="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
-              Pas encore de compte ?{' '}
-              <Link to="/inscription" className="text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Créer un compte</Link>
+              {USE_MOCK_AUTH ? (
+                <>
+                  Pas encore de compte ?{' '}
+                  <Link to="/inscription" className="text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Créer un compte</Link>
+                </>
+              ) : (
+                "La création de compte est gérée par un administrateur."
+              )}
             </p>
           </div>
 
           {/* Demo accounts */}
-          <div className="glass rounded-2xl px-5 pt-5 pb-[22px]">
-            <p className="text-xs text-surface-500 dark:text-surface-400 mb-3.5 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#4ADE80]" />
-              Comptes de démonstration
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {MOCK_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.role}
-                  onClick={() => fillDemo(acc.email, acc.password)}
-                  className="text-left px-3.5 py-3 rounded-xl border border-surface-300 dark:border-[#2A6A6B] bg-white hover:bg-surface-100 dark:bg-[#12363A] dark:hover:bg-surface-700 transition-colors"
-                >
-                  <p className="text-[13px] font-semibold text-surface-900 dark:text-[#E8F1F0]">{acc.display_name}</p>
-                  <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-1">{acc.pseudonym}</p>
-                </button>
-              ))}
+          {USE_MOCK_AUTH && (
+            <div className="glass rounded-2xl px-5 pt-5 pb-[22px]">
+              <p className="text-xs text-surface-500 dark:text-surface-400 mb-3.5 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#4ADE80]" />
+                Comptes de démonstration
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {MOCK_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.role}
+                    onClick={() => fillDemo(acc.email, acc.password)}
+                    className="text-left px-3.5 py-3 rounded-xl border border-surface-300 dark:border-[#2A6A6B] bg-white hover:bg-surface-100 dark:bg-[#12363A] dark:hover:bg-surface-700 transition-colors"
+                  >
+                    <p className="text-[13px] font-semibold text-surface-900 dark:text-[#E8F1F0]">{acc.display_name}</p>
+                    <p className="text-[11px] text-surface-500 dark:text-surface-400 mt-1">{acc.pseudonym}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

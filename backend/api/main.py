@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from api import db
 from api.bootstrap import ensure_demo_users
 from api.config import get_settings
-from api.routers import admin, alerts, auth, health, kpis, predict
+from api.routers import admin, alerts, auth, chat, health, kpis, predict
 from api.services.metrics import http_metrics
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
@@ -39,9 +39,19 @@ async def lifespan(_: FastAPI):
         logger.warning("JWT_SECRET faible ou par défaut : générer avec `openssl rand -hex 32`")
     db.init_pool()
     ensure_demo_users()
+    try:
+        from rag.factory import create_agent
+
+        app.state.rag_agent = create_agent()
+    except ValueError as exc:
+        app.state.rag_agent = None
+        logger.warning("rag_disabled: %s", exc)
     # En arrière-plan : un MLflow lent ou absent ne doit pas retarder le démarrage de l'API
     threading.Thread(target=_initial_model_load, daemon=True).start()
     yield
+    rag_agent = getattr(app.state, "rag_agent", None)
+    if rag_agent is not None:
+        rag_agent.retriever.engine.dispose()
     db.close_pool()
 
 
@@ -121,6 +131,7 @@ async def validation_error_handler(_: Request, exc: RequestValidationError):
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(chat.router)
 app.include_router(predict.router)
 app.include_router(alerts.router)
 app.include_router(kpis.router)

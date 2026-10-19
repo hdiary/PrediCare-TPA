@@ -41,9 +41,7 @@ Pour vérifier l'indexation :
 docker compose logs rag-indexer
 ```
 
-Le message final `Corpus ready: ...` confirme la fin de l'indexation. Ce
-conteneur indexe le corpus ; la route API chat authentifiée n'est pas encore
-intégrée à l'application.
+Le message final `Corpus ready: ...` confirme la fin de l'indexation.
 Lors d'une recherche, le RAG garde aussi un extrait des conditions particulières
 du contrat demandé. Les questions chiffrées par catégorie (taux, plafond,
 franchise ou carence) sont répondues directement depuis la ligne correspondante
@@ -127,11 +125,40 @@ l'identifiant pseudonymisé d'un assuré de ce contrat. La migration
 aussi les montants. Chaque appel peut consommer des crédits auprès du
 fournisseur LLM et d'embeddings.
 
+## Chat authentifié dans l'application
+
+Le chat est exposé par FastAPI (`POST /chat`, `GET /chat/history`) et utilise
+le jeton de session existant. Les identifiants d'assuré, de prestataire, le rôle
+et le contrat ne sont jamais acceptés dans le corps de la requête : l'API les
+résout depuis le compte actif en base. L'historique est conservé par compte et
+une conversation ne peut être lue ou prolongée que par son propriétaire.
+
+Pour démarrer l'interface intégrée, l'API et la base avec Docker Compose :
+
+```powershell
+docker compose --profile full up --build -d
+```
+
+L'interface est disponible sur `http://localhost:5173` et l'API sur
+`http://localhost:8000`. Configurez `DEMO_PASSWORD`, `LLM_API_KEY`,
+`LLM_MODEL`, `EMBEDDING_MODEL` et l'URL de votre service d'embeddings dans
+`.env`. Les autres écrans conservent leurs données simulées par défaut ;
+`VITE_USE_MOCK_AUTH=false` et `VITE_USE_MOCK_CHAT=false` activent l'authentification
+et le chat réels. Les comptes démo sont créés par l'API quand `DEMO_PASSWORD`
+est défini.
+
+Le chat assuré est limité au contrat rattaché au compte. Le chat professionnel
+ne peut consulter que les factures du `prestataire_id` rattaché au compte et
+ne recherche que dans les documents généraux du réseau, jamais dans les
+conditions particulières d'un assuré. Les rôles gestionnaire et administrateur
+n'ont pas accès au chat.
+
 ## Schéma et code
 
 Les migrations `0004_rag_tables`, `0005_rag_embedding_1024`,
-`0006_agent_claim_status_view` et `0007_agent_claim_amounts` créent les tables
-RAG et la vue de suivi, puis
+`0006_agent_claim_status_view`, `0007_agent_claim_amounts` et
+`0010_chat_api_and_provider_scope` créent les tables RAG et la vue de suivi,
+ajoutent l'accès prestataire limité ainsi que l'historique du chat, puis
 adaptent les vecteurs à BGE-M3. La migration 0005 supprime les anciens vecteurs
 et documents RAG, y compris ceux de l'ancienne table `documents_vectorises`,
 pour que le corpus soit réindexé avec le nouveau modèle. La vue SQL n'expose

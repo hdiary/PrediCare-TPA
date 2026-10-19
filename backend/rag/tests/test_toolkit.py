@@ -145,9 +145,14 @@ class FakeRetriever:
     def __init__(self, chunks):
         self.chunks = chunks
         self.calls: list[tuple] = []
+        self.global_calls: list[list[float]] = []
 
     def search(self, embedding, contract_id):
         self.calls.append((embedding, contract_id))
+        return self.chunks
+
+    def search_global(self, embedding):
+        self.global_calls.append(embedding)
         return self.chunks
 
 
@@ -343,6 +348,40 @@ def test_claims_tool_hidden_without_insured():
         f"outils exposés : {names}, requêtes SQL : {len(engine.calls)}",
         "Seul search_contract_documents, appels dossiers et total refusés",
         names == ["search_contract_documents"] and not engine.calls)
+
+
+def test_provider_tools_are_limited_to_own_invoices_and_global_documents():
+    provider_id = "PRE-00123"
+    engine = FakeEngine(sample_rows())
+    retriever = FakeRetriever([
+        SimpleNamespace(source="Document général", content="Règle réseau.")
+    ])
+    toolkit = AgentToolkit(
+        embeddings=FakeEmbeddings(),
+        retriever=retriever,
+        engine=engine,
+        contract_id="",
+        assure_id=None,
+        prestataire_id=provider_id,
+    )
+
+    names = [tool["function"]["name"] for tool in toolkit.definitions]
+    toolkit.execute("search_my_claims", CLAIMS_ARGS)
+    toolkit.execute("search_network_documents", {"query": "barème réseau"})
+
+    assert names == ["search_network_documents", "search_my_claims"]
+    assert engine.calls[0] == {
+        "prestataire_id": provider_id,
+        "date_from": None,
+        "date_to": None,
+        "invoice_id": None,
+    }
+    assert "prestataire_id = :prestataire_id" in engine.statements[0]
+    assert "assure_id = :assure_id" not in engine.statements[0]
+    assert retriever.global_calls
+    assert not retriever.calls
+    with pytest.raises(ValueError, match="Providers may only search"):
+        toolkit.execute("search_contract_documents", {"query": "contrat"})
 
 
 def test_tool_schemas_are_strict():
