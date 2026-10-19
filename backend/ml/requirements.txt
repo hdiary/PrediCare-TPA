@@ -1,0 +1,13 @@
+# Dépendances de l'image d'entraînement ML (P2).
+# AVANT LA LIVRAISON : épingler les versions (pip freeze) pour une image identique.
+pandas
+numpy
+scikit-learn
+joblib
+openpyxl
+lightgbm
+xgboost
+shap
+pytest
+imbalanced-learn
+mlflow

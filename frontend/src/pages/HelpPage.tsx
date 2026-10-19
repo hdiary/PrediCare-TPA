@@ -31,15 +31,17 @@ const HELP_CONTENT: Record<Role, { title: string; icon: React.ReactNode; tips: {
       tips: [
         { title: 'Téléversement ou saisie', description: 'Déposez un fichier CSV, JSON ou PDF, ou saisissez les actes manuellement avec le formulaire.' },
         { title: 'Lignes d\'actes', description: 'Ajoutez ou supprimez des lignes. Le total se calcule automatiquement.' },
+        { title: 'Ordonnance', description: 'Cochez « liée à une ordonnance » pour les médicaments et actes prescrits : indiquez son numéro, sa date et le prescripteur, et ajoutez le scan si vous l\'avez.' },
         { title: 'Confirmation', description: 'Après le dépôt, vous recevez un numéro de facture et le statut (acceptée ou rejetée avec erreurs).' },
       ],
     },
     {
-      title: 'Mes factures',
-      icon: <Receipt className="w-5 h-5" />,
+      title: 'Assistant',
+      icon: <MessageSquare className="w-5 h-5" />,
       tips: [
-        { title: 'Suivi du statut', description: 'Consultez le statut de chaque facture : reçue, en cours de contrôle, acceptée, rejetée, payée.' },
-        { title: 'Recherche', description: 'Recherchez par numéro de facture ou par assuré pour retrouver rapidement une facture.' },
+        { title: 'Posez vos questions', description: 'L\'assistant IA répond sur l\'état de vos factures, les motifs de rejet, les pièces à fournir et le barème des actes.' },
+        { title: 'Périmètre', description: 'Il ne voit que vos propres factures et les documents du réseau de soins, jamais celles d\'un autre prestataire.' },
+        { title: 'Consultez les sources', description: 'Chaque réponse sur un document cite sa source. Vérifiez les informations importantes : l\'assistant peut se tromper.' },
       ],
     },
   ],
@@ -60,6 +62,14 @@ const HELP_CONTENT: Record<Role, { title: string; icon: React.ReactNode; tips: {
         { title: 'Tri et filtrage', description: 'Triez par score, montant ou date. Filtrez par statut et recherchez par prestataire ou assuré.' },
         { title: 'Détail de l\'alerte', description: 'Cliquez sur une ligne pour voir l\'explication complète : score, facteurs SHAP, contrôles de prescription.' },
         { title: 'Décision tracée', description: 'Chaque décision (valider/rejeter) nécessite un commentaire et est enregistrée dans le journal d\'audit.' },
+      ],
+    },
+    {
+      title: 'Ordonnances',
+      icon: <FileText className="w-5 h-5" />,
+      tips: [
+        { title: 'Anomalies de prescription', description: 'Doublons, inadéquation avec le diagnostic, prescripteur non conforme, ordonnance antidatée ou surchargée, classés par gravité.' },
+        { title: 'Détail', description: 'Cliquez sur une ligne pour voir ce qui a été détecté, ce que cela signifie et ce qu\'il faut vérifier.' },
       ],
     },
   ],

@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { PageLoader } from './PageLoader';
 import type { Role } from '@/lib/types';
 
 const ROLE_PREFIX: Record<Role, string> = {
@@ -19,11 +20,7 @@ export function AppLayout({ allowedRoles, children }: { allowedRoles: Role[]; ch
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-surface-200 border-t-primary-600 rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader fullscreen />;
   }
 
   if (!user) {
@@ -44,10 +41,14 @@ export function AppLayout({ allowedRoles, children }: { allowedRoles: Role[]; ch
       <Sidebar collapsed={collapsed} onToggleCollapse={() => setCollapsed(!collapsed)} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
-        <main className="flex-1 p-4 md:p-6 lg:p-8 pb-20 md:pb-6 max-w-[1400px] w-full mx-auto">
-          {children}
+        <main className="flex-1 p-4 md:p-6 lg:p-8 pb-6 max-w-[1400px] w-full mx-auto">
+          <Suspense fallback={<PageLoader />}>
+            <div key={location.pathname} className="animate-page-in motion-reduce:animate-none">
+              {children}
+            </div>
+          </Suspense>
         </main>
-        <footer className="px-4 md:px-8 py-4 border-t border-surface-300/80 dark:border-surface-700 text-xs text-surface-400 flex items-center justify-between flex-wrap gap-2">
+        <footer className="px-4 md:px-8 pt-4 pb-20 md:pb-4 border-t border-surface-300/80 dark:border-surface-700 text-xs text-surface-400 flex items-center justify-between flex-wrap gap-2">
           <span>Données synthétiques - Démonstration</span>
           <div className="flex gap-4">
             <span className="hover:text-surface-600 cursor-pointer">Confidentialité</span>

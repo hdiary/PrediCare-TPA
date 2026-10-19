@@ -151,7 +151,7 @@ export function Drawer({ open, onClose, title, children, width = 'md' }: { open:
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className={`relative w-full ${widths[width]} bg-white dark:bg-surface-800 shadow-lg border-l border-surface-300/80 dark:border-surface-700 overflow-y-auto animate-slide-in-right`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-5 border-b border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 md:px-8 py-5 border-b border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800">
           <h2 className="text-lg font-medium text-surface-900 dark:text-surface-100">{title}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-200/70 dark:hover:bg-surface-700 text-surface-500">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -159,7 +159,7 @@ export function Drawer({ open, onClose, title, children, width = 'md' }: { open:
             </svg>
           </button>
         </div>
-        <div className="p-8">{children}</div>
+        <div className="p-5 md:p-8">{children}</div>
       </div>
     </div>
   );

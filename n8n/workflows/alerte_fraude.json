@@ -1,0 +1,407 @@
+{
+  "name": "PrediCare - Alerte fraude",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## PrediCare : alerte de fraude (P3-13 / P3-14) — v3\n**Appelé par l'API** après un /predict dont le score atteint le seuil.\n\n### Chaîne\n1. Webhook (secret en en-tête `X-Webhook-Secret`)\n2. Lecture du seuil et des canaux dans la table `configuration`\n3. Message construit par **liste blanche** : pseudonymes uniquement (test S11)\n4. Slack puis **Gmail** selon `notif_slack` / `notif_email`\n5. **Journal d'audit** (S8) puis réponse honnête (202/200/422)\n\n### À configurer après import\n- **4 identifiants** : Header Auth (`X-Webhook-Secret`), Postgres, Slack, **Gmail OAuth2**\n- **Secret webhook** : `openssl rand -hex 32` → `.env` API + credential n8n\n- **Gmail** : compte expéditeur = compte authentifié (ou alias vérifié)\n- **Canal Slack** : lu en config (`notif_slack_canal`), repli `#alertes-fraude`\n\n### Rôle SQL conseillé (lecture seule + audit)\n```sql\nCREATE ROLE n8n_alert_reader LOGIN PASSWORD '...';\nGRANT CONNECT ON DATABASE predicare TO n8n_alert_reader;\nGRANT USAGE ON SCHEMA public TO n8n_alert_reader;\nGRANT SELECT ON configuration TO n8n_alert_reader;\nGRANT INSERT ON journal_audit TO n8n_alert_reader;\nGRANT USAGE ON SEQUENCE journal_audit_audit_id_seq TO n8n_alert_reader;\n-- JAMAIS : identites_chiffrees, utilisateurs, assures\n```\n\n### Règles\n- Seuil : `score >= seuil_alerte` (score égal au seuil = alerte)\n- PII : liste blanche + filet regex (email, tél MG, CIN 12 chiffres)\n- Audit : `type_evenement='decision'`, `type_entite='facture'`, `sortie.action='alerte_envoyee'`\n\n### Gmail OAuth2 (self-hosted)\n1. Google Cloud Console → activer **Gmail API**\n2. Créer OAuth Client ID (Web application)\n3. URI de redirection : `http://localhost:5678/rest/oauth2-credential/callback`\n4. Credential n8n → **Sign in with Google**\n5. Erreur 401 = API Gmail non activée\n",
+        "height": 1292,
+        "width": 540,
+        "color": 5
+      },
+      "id": "033c49b5-2211-4111-b016-33b3aad80e7a",
+      "name": "Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "predicare-alert",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "37c1f298-ca20-4007-a9b5-53633ee1257f",
+      "name": "Webhook alerte",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        800,
+        480
+      ],
+      "webhookId": "8c3f2a64-5b1e-4d7a-9f20-6e1b7c4d9a35"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cle, valeur FROM configuration WHERE cle IN ('seuil_alerte', 'notif_slack', 'notif_email', 'notif_email_destinataire', 'notif_slack_canal');",
+        "options": {}
+      },
+      "id": "8605b195-48f2-4cce-8307-00f72b2f426a",
+      "name": "Lire la configuration",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1024,
+        480
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// P3-13 / S11 : minimisation RGPD (art. 5). LISTE BLANCHE : seuls des identifiants pseudonymes\n// validés par expression régulière et des indicateurs techniques sont recopiés dans le message.\n// Aucun champ libre du webhook (nom, téléphone, e-mail, commentaire...) n'est jamais repris.\nconst body = $('Webhook alerte').first().json.body ?? {};\n\nconst cfg = {};\nfor (const it of $input.all()) {\n  if (it.json && it.json.cle) cfg[it.json.cle] = it.json.valeur;\n}\nconst seuilLu = Number.parseFloat(cfg.seuil_alerte);\nconst seuil = Number.isFinite(seuilLu) ? seuilLu : 0.8;\nconst flag = (v) => (v === undefined || v === null ? true : String(v).toLowerCase() === 'true');\nconst destinataire = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cfg.notif_email_destinataire || '')\n  ? cfg.notif_email_destinataire : null;\nconst canalSlack = (typeof cfg.notif_slack_canal === 'string' && /^#[a-z0-9\\-]{1,80}$/.test(cfg.notif_slack_canal))\n  ? cfg.notif_slack_canal : '#alertes-fraude';\n\nconst RE = {\n  facture: /^FAC-\\d{8}$/,\n  assure: /^ASS-[0-9A-F]{10}$/,\n  prestataire: /^PRE-\\d{5}$/,\n  variable: /^[A-Za-z0-9_.\\-]{1,60}$/,\n  regle: /^[A-Z_]{3,60}$/,\n  severite: /^(info|moyenne|haute)$/,\n  version: /^\\d{1,6}$/,\n};\nconst erreurs = [];\nconst pick = (re, v, nom) => {\n  if (typeof v === 'string' && re.test(v)) return v;\n  erreurs.push(nom);\n  return null;\n};\n\nconst facture = pick(RE.facture, body.facture_id, 'facture_id');\nconst assure = pick(RE.assure, body.assure_id, 'assure_id');\nconst prestataire = pick(RE.prestataire, body.prestataire_id, 'prestataire_id');\nconst score = typeof body.score === 'number' ? body.score : Number.NaN;\nif (!(score >= 0 && score <= 1)) erreurs.push('score');\nconst version = typeof body.version_modele === 'string' && RE.version.test(body.version_modele)\n  ? body.version_modele : null;\nconst montant = Number.isInteger(body.montant_total) && body.montant_total >= 0\n  ? String(body.montant_total).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ' ') : null;\n\nconst shap = (Array.isArray(body.shap) ? body.shap : [])\n  .filter((s) => s && typeof s.variable === 'string' && RE.variable.test(s.variable)\n    && typeof s.contribution === 'number' && Number.isFinite(s.contribution))\n  .slice(0, 3)\n  .map((s) => `${s.variable} (${s.contribution >= 0 ? '+' : ''}${s.contribution.toFixed(2).replace('.', ',')})`);\n\nconst regles = (Array.isArray(body.regles) ? body.regles : [])\n  .filter((r) => r && typeof r.regle_code === 'string' && RE.regle.test(r.regle_code)\n    && typeof r.severite === 'string' && RE.severite.test(r.severite))\n  .slice(0, 5)\n  .map((r) => `${r.regle_code} (${r.severite})`);\n\nconst fmt = (x) => x.toFixed(2).replace('.', ',');\nconst lignes = [\n  `Facture : ${facture}`,\n  `Assuré (pseudonyme) : ${assure}`,\n  `Prestataire : ${prestataire}`,\n  `Score : ${Number.isFinite(score) ? fmt(score) : '?'} (seuil ${fmt(seuil)})`,\n];\nif (montant) lignes.push(`Montant : ${montant} MGA`);\nif (shap.length) lignes.push(`Variables principales : ${shap.join(', ')}`);\nif (regles.length) lignes.push(`Règles déclenchées : ${regles.join(', ')}`);\nif (version) lignes.push(`Modèle : version ${version}`);\nconst pied = \"Identité de l'assuré : visible uniquement dans PrediCare (rôle gestionnaire).\";\n\nconst text_slack = `:rotating_light: *Alerte fraude potentielle*\\n${lignes.join('\\n')}\\n_${pied}_`;\nconst subject = `[PrediCare] Alerte fraude ${facture} (score ${Number.isFinite(score) ? fmt(score) : '?'})`;\nconst body_email = `Alerte fraude potentielle\\n\\n${lignes.join('\\n')}\\n\\n${pied}\\n`;\n\nconst PII = [\n  /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/,\n  /(?:\\+?261|\\b0)\\s?3[2-9][\\d .]{7,}/,\n  /\\b\\d{12}\\b/,\n];\nconst pii = PII.some((re) => re.test(text_slack) || re.test(body_email));\n\nlet raison = 'ok';\nif (erreurs.length) raison = 'payload_invalide';\nelse if (pii) raison = 'donnees_personnelles_detectees';\nelse if (!(score >= seuil)) raison = 'sous_seuil';\n\nreturn [{\n  json: {\n    envoyer: raison === 'ok',\n    raison,\n    erreurs,\n    facture_id: facture,\n    assure_id: assure,\n    prestataire_id: prestataire,\n    prediction_id: Number.isInteger(body.prediction_id) ? body.prediction_id : null,\n    version_modele: version,\n    score: Number.isFinite(score) ? score : null,\n    seuil,\n    notif_slack: flag(cfg.notif_slack),\n    notif_email: flag(cfg.notif_email) && destinataire !== null,\n    destinataire,\n    canal_slack: canalSlack,\n    text_slack,\n    subject,\n    body_email,\n  },\n}];\n"
+      },
+      "id": "2d170f4a-d190-46d2-9c9d-81ba2de6a57a",
+      "name": "Préparer le message (pseudonymes)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "n-if-seuil-c1",
+              "leftValue": "={{ $json.envoyer }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "af55d1a9-0aea-4938-a581-b209b1b13f75",
+      "name": "Seuil atteint ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "n-if-slack-c1",
+              "leftValue": "={{ $('Préparer le message (pseudonymes)').first().json.notif_slack }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aebf3a3d-a1a3-4771-bb5a-b4de3247fe8c",
+      "name": "Slack activé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $('Préparer le message (pseudonymes)').first().json.canal_slack }}",
+          "mode": "name"
+        },
+        "text": "={{ $('Préparer le message (pseudonymes)').first().json.text_slack }}",
+        "otherOptions": {}
+      },
+      "id": "c17064bc-9f9c-4732-823d-693bade4d975",
+      "name": "Envoyer Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1904,
+        320
+      ],
+      "webhookId": "10ceeb39-8d17-45e2-81a6-9ebab3b645e4",
+      "credentials": {
+        "slackApi": {
+          "id": "VtlJha9h5KrtrNdg",
+          "name": "Slack account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "n-if-email-c1",
+              "leftValue": "={{ $('Préparer le message (pseudonymes)').first().json.notif_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "44055eaf-21f0-46c5-be87-aa12a400e553",
+      "name": "Email activé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2128,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Préparer le message (pseudonymes)').first().json.destinataire }}",
+        "subject": "={{ $('Préparer le message (pseudonymes)').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Préparer le message (pseudonymes)').first().json.body_email }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e59ed7da-6f08-42b1-8fe3-c9f540a1f254",
+      "name": "Envoyer Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2352,
+        320
+      ],
+      "webhookId": "c28fd337-7274-40cc-a265-f911cf36f73f",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO journal_audit\n  (type_evenement, type_entite, entite_id, nom_modele, version_modele, entree, sortie)\nVALUES\n  ('decision', 'facture', $1, 'predicare-fraud', $2, $3::jsonb, $4::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Préparer le message (pseudonymes)').first().json.facture_id,\n  $('Préparer le message (pseudonymes)').first().json.version_modele || null,\n  JSON.stringify({\n    prediction_id: $('Préparer le message (pseudonymes)').first().json.prediction_id,\n    assure_id: $('Préparer le message (pseudonymes)').first().json.assure_id,\n    prestataire_id: $('Préparer le message (pseudonymes)').first().json.prestataire_id,\n    score: $('Préparer le message (pseudonymes)').first().json.score,\n    seuil: $('Préparer le message (pseudonymes)').first().json.seuil\n  }),\n  JSON.stringify({\n    action: 'alerte_envoyee',\n    slack_tente: $('Préparer le message (pseudonymes)').first().json.notif_slack,\n    email_tente: $('Préparer le message (pseudonymes)').first().json.notif_email,\n    slack_ok: !!(($('Envoyer Slack').first()?.json) ?? {}).ok,\n    email_ok: !!(($('Envoyer Email (Gmail)').first()?.json) ?? {}).id,\n    canal_slack: $('Préparer le message (pseudonymes)').first().json.canal_slack,\n    destinataire: $('Préparer le message (pseudonymes)').first().json.destinataire\n  })\n] }}"
+        }
+      },
+      "id": "26cd0bad-96a7-4264-8a9e-5b89276eb9ab",
+      "name": "Journaliser (audit S8)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2560,
+        352
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  recue: true,\n  facture_id: $('Préparer le message (pseudonymes)').first().json.facture_id,\n  prediction_id: $('Préparer le message (pseudonymes)').first().json.prediction_id,\n  score: $('Préparer le message (pseudonymes)').first().json.score,\n  seuil: $('Préparer le message (pseudonymes)').first().json.seuil,\n  slack_tente: $('Préparer le message (pseudonymes)').first().json.notif_slack,\n  email_tente: $('Préparer le message (pseudonymes)').first().json.notif_email,\n  slack_ok: !!(($('Envoyer Slack').first()?.json) ?? {}).ok,\n  email_ok: !!(($('Envoyer Email (Gmail)').first()?.json) ?? {}).id,\n  raison: 'ok'\n} }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "3b245359-fe53-4fd7-8f7b-f98e7aa2fe80",
+      "name": "Répondre : alerte traitée",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2784,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  recue: true,\n  envoyee: false,\n  raison: $json.raison,\n  erreurs: $json.erreurs,\n  facture_id: $json.facture_id ?? null,\n  score: $json.score,\n  seuil: $json.seuil\n} }}",
+        "options": {
+          "responseCode": "={{ $json.raison === 'payload_invalide' ? 422 : 200 }}"
+        }
+      },
+      "id": "38a581ef-a682-4cc8-a068-2d2d6db875d1",
+      "name": "Répondre : alerte ignorée",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        624
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook alerte": {
+      "main": [
+        [
+          {
+            "node": "Lire la configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire la configuration": {
+      "main": [
+        [
+          {
+            "node": "Préparer le message (pseudonymes)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer le message (pseudonymes)": {
+      "main": [
+        [
+          {
+            "node": "Seuil atteint ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seuil atteint ?": {
+      "main": [
+        [
+          {
+            "node": "Slack activé ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Répondre : alerte ignorée",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack activé ?": {
+      "main": [
+        [
+          {
+            "node": "Envoyer Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email activé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer Slack": {
+      "main": [
+        [
+          {
+            "node": "Email activé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email activé ?": {
+      "main": [
+        [
+          {
+            "node": "Envoyer Email (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Journaliser (audit S8)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer Email (Gmail)": {
+      "main": [
+        [
+          {
+            "node": "Journaliser (audit S8)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Journaliser (audit S8)": {
+      "main": [
+        [
+          {
+            "node": "Répondre : alerte traitée",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "43052f92-abcd-47ea-b094-223acd708267",
+  "meta": {
+    "instanceId": "058603a26ef382eff5509baea1fc9732006d12b39c7c6e5298a474710f6eb1a2"
+  },
+  "nodeGroups": [],
+  "id": "lCNZNFqhg8cnaaGa",
+  "tags": []
+}

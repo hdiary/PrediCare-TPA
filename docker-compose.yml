@@ -158,16 +158,35 @@ services:
 
   # ---------- Registre des versions du modèle ----------
   mlflow:
-    profiles: [ "full" ] # a decommenter pour activer mlflow dans le container
-    image: ghcr.io/mlflow/mlflow:latest # à épingler sur une version précise
+    profiles: [ "full", "train" ]
+    image: ghcr.io/mlflow/mlflow:v3.17.1
     restart: unless-stopped
     command: >
-      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --default-artifact-root /mlflow/artifacts --allowed-hosts mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
     volumes:
       - mlflow_data:/mlflow
     ports:
       - "5000:5000"
-
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')" ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+  ml:
+    profiles: [ "train" ] # lancé à la demande, pas à chaque "up"
+    build: ./backend/ml
+    restart: "no"
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000 # utilisé seulement si mlflow tourne
+    volumes:
+      - ./backend/ingestion/dataset:/data/dataset:ro
+      - ./backend/ingestion/labels:/data/labels:ro
+      - ./backend/ml/models:/app/models
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    
   # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     profiles: [ "full" ] # a decommenter pour activer l'API dans le container
@@ -222,6 +241,15 @@ services:
       - ./n8n/workflows:/workflows:ro # workflows .json à importer
     ports:
       - "5678:5678"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   # ---------- Frontend (Next.js généré avec v0/Bolt) ----------
   web:
@@ -268,4 +296,6 @@ services:
 volumes:
   pgdata:
   mlflow_data:
+  n8n_data: # prepared_data:
+
   n8n_data: # prepared_data:

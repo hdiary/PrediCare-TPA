@@ -1,6 +1,11 @@
 # Dépendances du backend - squelette de départ.
 # AVANT LA LIVRAISON : épingler chaque version (pip freeze) pour une
 # reconstruction identique sur la machine du jury.
+#ocr services
+pdfplumber       # lecture du texte des PDF « texte »
+pytesseract      # OCR des scans / photos (optionnel)
+pdf2image        # PDF -> images pour l'OCR (optionnel)
+
 
 # --- API ---
 fastapi>=0.115,<1.0
@@ -24,14 +29,6 @@ pgvector
 pandas
 pandera>=0.18
 python-dotenv
-
-# --- ML et explicabilité (P2) ---
-scikit-learn
-imbalanced-learn
-xgboost
-lightgbm
-shap
-mlflow
 
 # --- RAG et agent (P4) : à ajuster selon vos choix ---
 langchain

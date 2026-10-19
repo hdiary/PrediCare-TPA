@@ -111,8 +111,18 @@ export default {
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'shimmer': 'shimmer 1.5s linear infinite',
         'check': 'check 0.4s ease-out',
+        'page-in': 'pageIn 0.35s ease-out both',
+        'loader-bar': 'loaderBar 1.2s ease-in-out infinite',
       },
       keyframes: {
+        pageIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        loaderBar: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(250%)' },
+        },
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },

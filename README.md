@@ -474,7 +474,7 @@ Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conform
 
 # cd predicare-tpa
 
-# \# 1. Créer la configuration
+#### 1. Créer la configuration
 
 # cp env.example .env
 # \#    puis remplacer chaque valeur "change\_me" (voir section 5)
@@ -492,7 +492,7 @@ Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conform
 
 # |---|---|
 
-# | Interface web | http://localhost:3000 |
+# | Interface web | http://localhost:5173 |
 
 # | Documentation de l'API | http://localhost:8000/docs |
 
@@ -572,7 +572,7 @@ Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conform
 
 # | Rôle | Identifiant | Mot de passe |
 
-# |---|---|---|
+## |---|---|---|
 
 # | Professionnel de santé | à compléter | à compléter |
 

@@ -5,14 +5,32 @@ import {
 } from 'lucide-react';
 import { Card, Button, Drawer, Spinner, EmptyState, ErrorState } from '@/components/ui';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { formatTime } from '@/lib/format';
 import type { ChatMessage, ChatSource, Conversation } from '@/lib/types';
 
-const SUGGESTED_QUESTIONS = [
-  'Quel est mon plafond de remboursement dentaire ?',
-  'Où en est mon dossier du 12 septembre ?',
-  'Qu\'est-ce qui est exclu de mon contrat ?',
-];
+/** Contenu de l'assistant selon le rôle : l'assuré interroge son contrat, le professionnel ses factures. */
+const CHAT_BY_ROLE = {
+  insured: {
+    suggestions: [
+      'Quel est mon plafond de remboursement dentaire ?',
+      'Où en est mon dossier du 12 septembre ?',
+      'Qu\'est-ce qui est exclu de mon contrat ?',
+    ],
+    description: "Posez une question sur votre contrat, vos remboursements ou l'état de vos dossiers.",
+    scope: null as string | null,
+  },
+  provider: {
+    suggestions: [
+      'Où en est ma facture FAC-2024-1018 ?',
+      'Pourquoi ma dernière facture a-t-elle été rejetée ?',
+      'Quels justificatifs joindre pour un acte soumis à prescription ?',
+      'Quel est le tarif de référence d\'une consultation ?',
+    ],
+    description: "Posez une question sur l'état de vos factures, les motifs de rejet, les pièces à fournir ou le barème des actes.",
+    scope: 'Il ne répond que sur vos propres factures et sur les documents du réseau de soins.',
+  },
+} as const;
 
 function renderMarkdown(text: string) {
   return text
@@ -23,6 +41,9 @@ function renderMarkdown(text: string) {
 }
 
 export function ChatPage() {
+  const { user } = useAuth();
+  const role = user?.role === 'provider' ? 'provider' : 'insured';
+  const cfg = CHAT_BY_ROLE[role];
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -38,7 +59,7 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    api.getConversations().then((data) => {
+    api.getConversations(role).then((data) => {
       setConversations(data.conversations);
       if (data.conversations.length > 0) {
         setActiveConvId(data.conversations[0].id);
@@ -46,7 +67,7 @@ export function ChatPage() {
       }
       setLoadingHistory(false);
     }).catch(() => setLoadingHistory(false));
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,7 +100,7 @@ export function ChatPage() {
     setTyping(true);
 
     try {
-      const resp = await api.sendMessage(activeConvId, content);
+      const resp = await api.sendMessage(activeConvId, content, role);
       setTyping(false);
 
       // Streaming effect
@@ -142,7 +163,7 @@ export function ChatPage() {
   const maxChars = 1000;
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-14.5rem)]">
+    <div className="flex gap-4 h-[calc(100dvh-10rem)] md:h-[calc(100vh-14.5rem)]">
       {/* Conversation list */}
       <div className="hidden lg:flex w-64 flex-shrink-0 flex-col">
         <Card className="p-3 flex-1 flex flex-col">
@@ -182,10 +203,39 @@ export function ChatPage() {
 
       {/* Chat area */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Conversations (téléphone et tablette : la liste latérale est masquée) */}
+        <div className="lg:hidden mb-3 flex gap-2">
+          <select
+            value={activeConvId ?? ''}
+            onChange={(e) => {
+              const conv = conversations.find((c) => c.id === e.target.value);
+              if (conv) {
+                setActiveConvId(conv.id);
+                setMessages(conv.messages);
+                setStreamingText('');
+              }
+            }}
+            aria-label="Conversation"
+            className="flex-1 min-w-0 rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-800 dark:text-surface-100 px-3 py-2 text-sm"
+          >
+            {conversations.length === 0 && <option value="">Aucune conversation</option>}
+            {activeConvId === null && conversations.length > 0 && <option value="">Nouvelle conversation</option>}
+            {conversations.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+          <Button variant="outline" size="sm" onClick={newConversation}>
+            <Plus className="w-4 h-4" /> Nouvelle
+          </Button>
+        </div>
+
         {/* AI disclaimer banner */}
         <div className="mb-3 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 text-sm text-primary-700 dark:text-primary-300">
           <Shield className="w-4 h-4 flex-shrink-0 text-primary-500" />
-          <span>Vous échangez avec un assistant IA. Il peut se tromper : vérifiez les informations importantes.</span>
+          <span>
+            Vous échangez avec un assistant IA. Il peut se tromper : vérifiez les informations importantes.
+            {cfg.scope && ` ${cfg.scope}`}
+          </span>
         </div>
 
         <Card className="flex-1 flex flex-col overflow-hidden">
@@ -195,10 +245,10 @@ export function ChatPage() {
               <EmptyState
                 icon={<Sparkles className="w-8 h-8" />}
                 title="Comment puis-je vous aider ?"
-                description="Posez une question sur votre contrat, vos remboursements ou l'état de vos dossiers."
+                description={cfg.description}
                 action={
                   <div className="flex flex-wrap gap-2 justify-center mt-2">
-                    {SUGGESTED_QUESTIONS.map((q) => (
+                    {cfg.suggestions.map((q) => (
                       <button
                         key={q}
                         onClick={() => handleSend(q)}
@@ -219,7 +269,7 @@ export function ChatPage() {
                         <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-300" />
                       </div>
                     )}
-                    <div className={`max-w-[75%] ${msg.role === 'user' ? 'order-2' : ''}`}>
+                    <div className={`max-w-[88%] md:max-w-[75%] ${msg.role === 'user' ? 'order-2' : ''}`}>
                       <div className={`rounded-2xl px-5 py-3 ${
                         msg.role === 'user'
                           ? 'bg-surface-200 dark:bg-surface-700 text-surface-900 dark:text-surface-50 rounded-br-md'
@@ -293,7 +343,7 @@ export function ChatPage() {
                     <div className="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
                       <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-300" />
                     </div>
-                    <div className="max-w-[75%]">
+                    <div className="max-w-[88%] md:max-w-[75%]">
                       <div className="rounded-2xl rounded-bl-lg px-5 py-3 bg-white dark:bg-surface-700 shadow-soft">
                         <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingText) }} />
                       </div>

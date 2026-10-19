@@ -1,0 +1,511 @@
+[
+  {
+    "nom": "01 valide : consultation simple",
+    "attendu_http": 200,
+    "attendu_codes": [],
+    "facture": {
+      "facture_id": "FAC-90000001",
+      "numero_facture": "PRE214/2026/00001",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "02 valide : 2 lignes + ordonnance",
+    "attendu_http": 200,
+    "attendu_codes": [],
+    "facture": {
+      "facture_id": "FAC-90000002",
+      "numero_facture": "PRE214/2026/00002",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "PHARMACIE",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 2,
+          "prix_unitaire": 25000
+        },
+        {
+          "code": "MED-PARA500",
+          "type_ligne": "MEDICAMENT",
+          "quantite": 3,
+          "prix_unitaire": 1200
+        }
+      ],
+      "ordonnance_id": "ORD-0000002"
+    }
+  },
+  {
+    "nom": "03 valide : champs optionnels renseignés",
+    "attendu_http": 200,
+    "attendu_codes": [],
+    "facture": {
+      "facture_id": "FAC-90000003",
+      "numero_facture": "PRE214/2026/00003",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ],
+      "date_facture": "2026-10-10",
+      "date_reception": "2026-10-12",
+      "canal_reception": "PAPIER_SCAN",
+      "mode_reglement": "REMBOURSEMENT_ASSURE"
+    }
+  },
+  {
+    "nom": "04 valide : montant_total fourni et cohérent",
+    "attendu_http": 200,
+    "attendu_codes": [],
+    "facture": {
+      "facture_id": "FAC-90000004",
+      "numero_facture": "PRE214/2026/00004",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ],
+      "montant_total": 25000
+    }
+  },
+  {
+    "nom": "05 valide : heure limite 23:59",
+    "attendu_http": 200,
+    "attendu_codes": [],
+    "facture": {
+      "facture_id": "FAC-90000005",
+      "numero_facture": "PRE214/2026/00005",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "23:59",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "06 prix unitaire négatif",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "MONTANT_NEGATIF"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000006",
+      "numero_facture": "PRE214/2026/00006",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": -5
+        }
+      ]
+    }
+  },
+  {
+    "nom": "07 quantité nulle",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "MONTANT_NEGATIF"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000007",
+      "numero_facture": "PRE214/2026/00007",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 0,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "08 date de soin dans le futur",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "DATE_FUTURE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000008",
+      "numero_facture": "PRE214/2026/00008",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2099-01-01",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "09 date impossible (30 février)",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "DATE_IMPOSSIBLE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000009",
+      "numero_facture": "PRE214/2026/00009",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-02-30",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "10 heure impossible",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "DATE_IMPOSSIBLE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000010",
+      "numero_facture": "PRE214/2026/00010",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "25:61",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "11 devise étrangère",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "DEVISE_INVALIDE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000011",
+      "numero_facture": "PRE214/2026/00011",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "EUR",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "12 lignes vides",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "FACTURE_SANS_LIGNE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000012",
+      "numero_facture": "PRE214/2026/00012",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": []
+    }
+  },
+  {
+    "nom": "13 lignes absentes",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "FACTURE_SANS_LIGNE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000013",
+      "numero_facture": "PRE214/2026/00013",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA"
+    }
+  },
+  {
+    "nom": "14 contrat_id manquant",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "CHAMP_OBLIGATOIRE_MANQUANT"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000014",
+      "numero_facture": "PRE214/2026/00014",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "15 total incohérent",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "TOTAL_INCOHERENT"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000015",
+      "numero_facture": "PRE214/2026/00015",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ],
+      "montant_total": 999
+    }
+  },
+  {
+    "nom": "16 code d'acte inédit",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "CODE_ACTE_INCONNU"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000016",
+      "numero_facture": "PRE214/2026/00016",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "ZZZ-INEDIT",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "17 prestataire inconnu",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "PRESTATAIRE_INCONNU"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000017",
+      "numero_facture": "PRE214/2026/00017",
+      "prestataire_id": "PRE-99999",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "18 assuré inconnu",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "ASSURE_INCONNU"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000018",
+      "numero_facture": "PRE214/2026/00018",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-0000000000",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    }
+  },
+  {
+    "nom": "19 champ de fuite envoyé",
+    "attendu_http": 422,
+    "attendu_codes": [
+      "CHAMP_INTERDIT"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000019",
+      "numero_facture": "PRE214/2026/00019",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ],
+      "statut": "PAYEE"
+    }
+  },
+  {
+    "nom": "20 facture déjà enregistrée",
+    "attendu_http": 409,
+    "attendu_codes": [
+      "FACTURE_DEJA_ENREGISTREE"
+    ],
+    "facture": {
+      "facture_id": "FAC-90000020",
+      "numero_facture": "PRE214/2026/00020",
+      "prestataire_id": "PRE-00214",
+      "assure_id": "ASS-9CAA1484E0",
+      "contrat_id": "CTR-000001",
+      "type_facture": "CONSULTATION",
+      "date_soin": "2026-10-10",
+      "heure_soin": "09:30",
+      "devise": "MGA",
+      "lignes": [
+        {
+          "code": "CONS-GEN",
+          "type_ligne": "ACTE",
+          "quantite": 1,
+          "prix_unitaire": 25000
+        }
+      ]
+    },
+    "doublon": true
+  }
+]

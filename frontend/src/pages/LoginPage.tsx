@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, Activity, AlertCircle, Eye, EyeOff, ShieldCheck, BarChart3, UserCheck } from 'lucide-react';
 import { useAuth, getRoleHome } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
@@ -148,7 +148,7 @@ export function LoginPage() {
               </div>
 
               <div className="flex justify-end !mt-4">
-                <span className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 cursor-pointer underline">Mot de passe oublié ?</span>
+                <Link to="/mot-de-passe-oublie" className="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Mot de passe oublié ?</Link>
               </div>
 
               <Button type="submit" className="w-full" size="lg" disabled={loading}>
@@ -161,6 +161,11 @@ export function LoginPage() {
                 )}
               </Button>
             </form>
+
+            <p className="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
+              Pas encore de compte ?{' '}
+              <Link to="/inscription" className="text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Créer un compte</Link>
+            </p>
           </div>
 
           {/* Demo accounts */}
