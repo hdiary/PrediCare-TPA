@@ -320,11 +320,12 @@
 
 # │   └── requirements.txt
 
-# ├── db/
+# ├── database/
 
-# │   ├── migrations/           # scripts SQL versionnés (001\_\*.sql, ...)
+# │   ├── migrations/           # migrations Alembic versionnées
 
-# │   └── seed/                 # données de chargement initial
+# │   ├── sql/                  # scripts SQL versionnés
+# │   └── backups/              # sauvegarde SQL de référence
 
 # ├── n8n/workflows/            # workflows importables (.json)
 

@@ -28,8 +28,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data # données persistantes
       # Décommenter uniquement pour un client local (pgAdmin, DBeaver) :
-      # ports:
-      # - "127.0.0.1:5432:5432"
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-predicare}" ]
       timeout: 5s
@@ -71,8 +71,8 @@ services:
 
   loader:
     build:
-      context: ./backend/ingestion
-      dockerfile: db_init/Dockerfile
+      context: .
+      dockerfile: backend/ingestion/db_init/Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
       DATASET_DIR: /data/dataset
@@ -122,7 +122,7 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-    
+
   # ---------- API FastAPI (modèle, RAG, rôles, administration) ----------
   api:
     profiles: [ "full" ] # a decommenter pour activer l'API dans le container
@@ -172,7 +172,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -192,7 +192,7 @@ services:
     depends_on:
       - api
     ports:
-      - "5173:5173"
+      - "5173:80"
   # ---------- BI : à ajouter selon votre choix (Superset ou Metabase) ----------
   # Se connecter avec le rôle bi_ro (lecture seule sur les vues), jamais avec POSTGRES_USER.
   # superset:

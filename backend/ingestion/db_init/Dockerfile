@@ -1,16 +1,17 @@
 # db-init image (P1). Build context = repository root:
-#   docker build -f db_init/Dockerfile -t predicare-db-init .
+#   docker build -f backend/ingestion/db_init/Dockerfile -t predicare-db-init .
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
-COPY db_init/requirements.txt /tmp/requirements.txt
+COPY backend/ingestion/db_init/requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
-COPY clean.py pseudo.py encrypt_identities.py load.py alembic.ini ./
-COPY migrations ./migrations
-COPY db_init/entrypoint.sh /entrypoint.sh
+COPY backend/ingestion/clean.py backend/ingestion/pseudo.py backend/ingestion/encrypt_identities.py backend/ingestion/load.py ./
+COPY database/alembic.ini ./
+COPY database/migrations ./migrations
+COPY backend/ingestion/db_init/entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh \
     && useradd --create-home --uid 10001 dbinit \
