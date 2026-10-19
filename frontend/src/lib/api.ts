@@ -74,8 +74,36 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshAccessToken(): Promise<boolean> {
+  if (!refreshInFlight) {
+    const refreshToken = localStorage.getItem("predicare_refresh_token");
+    if (!refreshToken) return Promise.resolve(false);
+    refreshInFlight = fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+      .then(async (response) => {
+        if (!response.ok) return false;
+        const tokens = (await response.json()) as {
+          access_token: string;
+          refresh_token: string;
+        };
+        localStorage.setItem("predicare_token", tokens.access_token);
+        localStorage.setItem("predicare_refresh_token", tokens.refresh_token);
+        return true;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const send = () => fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -83,8 +111,30 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ...options.headers,
     },
   });
+  const accessToken = localStorage.getItem("predicare_token");
+  let res = await send();
+  if (
+    res.status === 401 &&
+    !["/auth/login", "/auth/token", "/auth/refresh"].includes(path) &&
+    localStorage.getItem("predicare_refresh_token")
+  ) {
+    if (
+      localStorage.getItem("predicare_token") !== accessToken ||
+      await refreshAccessToken()
+    ) {
+      res = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+          ...options.headers,
+        },
+      });
+    }
+  }
   if (res.status === 401) {
     localStorage.removeItem("predicare_token");
+    localStorage.removeItem("predicare_refresh_token");
     window.location.href = "/login";
     throw new Error("Session expirée");
   }
@@ -96,6 +146,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Erreur ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -116,12 +167,27 @@ export const api = {
     }
     const data = await request<{
       access_token: string;
+      refresh_token: string;
       user: BackendUser;
     }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    return { access_token: data.access_token, ...mapBackendUser(data.user) };
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      ...mapBackendUser(data.user),
+    };
+  },
+
+  async logout(): Promise<void> {
+    if (USE_MOCK_AUTH) return;
+    await request<void>("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({
+        refresh_token: localStorage.getItem("predicare_refresh_token"),
+      }),
+    });
   },
 
   async getMe(): Promise<{

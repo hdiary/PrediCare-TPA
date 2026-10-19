@@ -316,6 +316,15 @@ def get_config_row(conn, cle: str) -> dict | None:
     ).fetchone()
 
 
+def get_config_values(conn, keys: list[str]) -> dict[str, dict]:
+    rows = conn.execute(
+        "SELECT cle, valeur, mis_a_jour_le, mis_a_jour_par "
+        "FROM configuration WHERE cle = ANY(%s)",
+        (keys,),
+    ).fetchall()
+    return {row["cle"]: row for row in rows}
+
+
 def list_audit(conn, type_evenement: str | None, limit: int, offset: int) -> list[dict]:
     where, params = "", []
     if type_evenement:

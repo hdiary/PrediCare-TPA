@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 import jwt
 import pytest
@@ -30,6 +31,7 @@ class FakeConn:
 
     def __init__(self):
         self.hash = hash_password(PASSWORD)
+        self.sessions = {}
 
     def _row(self, email, data):
         return {"email": email, "password_hash": self.hash, "assure_id": None,
@@ -38,6 +40,73 @@ class FakeConn:
 
     def execute(self, query, params=()):
         q = query.strip().upper()
+        if q.startswith("INSERT INTO AUTH_SESSIONS"):
+            session_id, user_id, refresh_jti, expires_at = params
+            self.sessions[str(session_id)] = {
+                "user_id": user_id,
+                "refresh_jti": str(refresh_jti),
+                "expires_at": expires_at,
+                "revoked": False,
+            }
+            return FakeCursor({"session_id": session_id})
+        if "FROM AUTH_SESSIONS" in q and "JOIN UTILISATEURS" in q:
+            session_id, user_id, refresh_jti = params
+            session = self.sessions.get(str(session_id))
+            user_row = next(
+                (
+                    self._row(email, data)
+                    for email, data in USERS.items()
+                    if data["user_id"] == user_id
+                ),
+                None,
+            )
+            if (
+                session
+                and session["user_id"] == user_id
+                and session["refresh_jti"] == str(refresh_jti)
+                and not session["revoked"]
+                and session["expires_at"] > datetime.now(UTC)
+                and user_row
+                and user_row["is_active"]
+            ):
+                return FakeCursor(user_row)
+            return FakeCursor(None)
+        if q.startswith("UPDATE AUTH_SESSIONS SET REFRESH_JTI"):
+            refresh_jti, expires_at, session_id, user_id, previous_jti = params
+            session = self.sessions.get(str(session_id))
+            if (
+                session
+                and session["user_id"] == user_id
+                and session["refresh_jti"] == str(previous_jti)
+                and not session["revoked"]
+            ):
+                session["refresh_jti"] = str(refresh_jti)
+                session["expires_at"] = expires_at
+                return FakeCursor({"session_id": session_id})
+            return FakeCursor(None)
+        if q.startswith("UPDATE AUTH_SESSIONS SET REVOKED_AT"):
+            if len(params) == 2:
+                session_id, user_id = params
+                session = self.sessions.get(str(session_id))
+                if session and session["user_id"] == user_id:
+                    session["revoked"] = True
+            else:
+                (user_id,) = params
+                for session in self.sessions.values():
+                    if session["user_id"] == user_id:
+                        session["revoked"] = True
+            return FakeCursor(None)
+        if "FROM AUTH_SESSIONS" in q and "SELECT 1 AS ACTIVE" in q:
+            session_id, user_id = params
+            session = self.sessions.get(str(UUID(str(session_id))))
+            return FakeCursor(
+                {"active": 1}
+                if session
+                and session["user_id"] == user_id
+                and not session["revoked"]
+                and session["expires_at"] > datetime.now(UTC)
+                else None
+            )
         if q.startswith("SELECT") and "WHERE EMAIL" in q:
             data = USERS.get(params[0])
             return FakeCursor(self._row(params[0], data) if data else None)
@@ -54,7 +123,8 @@ class FakeConn:
 
 @pytest.fixture
 def client():
-    app.dependency_overrides[get_db] = lambda: FakeConn()
+    conn = FakeConn()
+    app.dependency_overrides[get_db] = lambda: conn
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -80,6 +150,51 @@ def test_login_success(client):
     assert body["user"]["role"] == "gestionnaire"
     payload = jwt.decode(body["access_token"], get_settings().jwt_secret, algorithms=["HS256"])
     assert payload["sub"] == "3"
+
+
+def test_v1_login_alias_works(client):
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "gestionnaire@predicare.local", "password": PASSWORD},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == "gestionnaire"
+
+
+def test_refresh_rotates_tokens_and_rejects_replay(client):
+    initial = login(client, "gestionnaire@predicare.local").json()
+    rotated = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": initial["refresh_token"]},
+    )
+
+    assert rotated.status_code == 200
+    tokens = rotated.json()
+    assert tokens["refresh_token"] != initial["refresh_token"]
+    assert client.post(
+        "/auth/refresh",
+        json={"refresh_token": initial["refresh_token"]},
+    ).status_code == 401
+    assert client.get("/auth/me", headers=bearer(tokens["access_token"])).status_code == 200
+
+
+def test_logout_revokes_access_and_refresh_tokens(client):
+    tokens = login(client, "gestionnaire@predicare.local").json()
+
+    response = client.post("/api/v1/auth/logout", headers=bearer(tokens["access_token"]))
+
+    assert response.status_code == 204
+    assert client.get("/auth/me", headers=bearer(tokens["access_token"])).status_code == 401
+    assert client.post(
+        "/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+    ).status_code == 401
+
+
+def test_refresh_token_cannot_authenticate_protected_routes(client):
+    tokens = login(client, "gestionnaire@predicare.local").json()
+    assert client.get("/auth/me", headers=bearer(tokens["refresh_token"])).status_code == 401
 
 
 def test_login_email_is_case_insensitive(client):
@@ -109,6 +224,19 @@ def test_me_with_token(client):
     r = client.get("/auth/me", headers=bearer(token))
     assert r.status_code == 200
     assert r.json()["email"] == "gestionnaire@predicare.local"
+
+
+def test_v1_routes_are_available_and_health_stays_at_root():
+    paths = app.openapi()["paths"]
+
+    assert "/health" in paths
+    assert "/api/v1/health" not in paths
+    assert "/api/v1/auth/login" in paths
+    assert "/api/v1/auth/refresh" in paths
+    assert "/api/v1/auth/logout" in paths
+    assert "/api/v1/predict" in paths
+    assert "/api/v1/alerts" in paths
+    assert "/api/v1/admin/metrics" in paths
 
 
 def test_expired_token_rejected(client):

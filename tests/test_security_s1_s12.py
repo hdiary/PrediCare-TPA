@@ -49,6 +49,8 @@ class RoleConn:
         if "FROM UTILISATEURS WHERE UTILISATEUR_ID" in q:
             return Cur(dict(user_id=params[0], email=f"u{params[0]}@x", role=ROLES[params[0]],
                             assure_id=None, prestataire_id=None, is_active=True))
+        if q.startswith("SELECT COUNT(*)") and "FROM PREDICTIONS" in q:
+            return Cur({"n": 0})
         return Cur(None)
 
     def commit(self):
@@ -72,11 +74,13 @@ FID = "FAC-00000001"
 # (méthode, chemin, corps JSON, rôles autorisés)
 ENDPOINTS = [
     ("GET", "/alerts", None, {"gestionnaire"}),
+    ("GET", "/api/v1/alerts", None, {"gestionnaire"}),
     ("GET", f"/alerts/{FID}", None, {"gestionnaire"}),
     ("POST", f"/alerts/{FID}/decision", {"decision": "faux_positif"}, {"gestionnaire"}),
     ("GET", f"/alerts/{FID}/identite", None, {"gestionnaire"}),
     ("POST", "/predict", {}, {"professionnel_sante", "gestionnaire"}),
     ("GET", "/admin/ping", None, {"administrateur"}),
+    ("GET", "/api/v1/admin/ping", None, {"administrateur"}),
     ("GET", "/admin/model", None, {"administrateur"}),
     ("POST", "/admin/model/reload", None, {"administrateur"}),
 ]
@@ -143,8 +147,15 @@ def test_s12_demo_accounts_are_stored_hashed(monkeypatch):
 
     class Conn:
         def execute(self, query, params=()):
-            if query.strip().upper().startswith("INSERT INTO UTILISATEURS"):
+            normalized = " ".join(query.split()).upper()
+            if normalized.startswith("SELECT A.ASSURE_ID"):
+                return Cur({"assure_id": "ASS-0000000001"})
+            if normalized.startswith("SELECT P.PRESTATAIRE_ID"):
+                return Cur({"prestataire_id": "PRE-00000001"})
+            if normalized.startswith("INSERT INTO UTILISATEURS"):
                 inserted.append(params)
+                if "RETURNING UTILISATEUR_ID" in normalized:
+                    return Cur({"utilisateur_id": 4})
             return Cur(None)
 
     class Pool:
@@ -161,12 +172,21 @@ def test_s12_demo_accounts_are_stored_hashed(monkeypatch):
             return Ctx()
 
     monkeypatch.setattr(bootstrap, "get_pool", lambda: Pool())
-    monkeypatch.setattr(bootstrap, "get_settings", lambda: SimpleNamespace(demo_password=PASSWORD))
+    monkeypatch.setattr(
+        bootstrap,
+        "get_settings",
+        lambda: SimpleNamespace(
+            admin_email="admin@predicare.local",
+            admin_initial_password=PASSWORD,
+            demo_password=PASSWORD,
+        ),
+    )
     bootstrap.ensure_demo_users()
 
     assert len(inserted) == 4
     for _, stored, *_ in inserted:
         assert stored != PASSWORD and stored.startswith("$2")
+    assert sum(len(params) == 2 for params in inserted) == 1
 
 
 # ---- expiration de session ----

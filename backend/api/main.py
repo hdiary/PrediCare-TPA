@@ -17,6 +17,7 @@ from api.routers import admin, alerts, auth, chat, health, kpis, predict
 from api.services.metrics import http_metrics
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
+from api.v1.router import router as api_v1_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -136,3 +137,4 @@ app.include_router(predict.router)
 app.include_router(alerts.router)
 app.include_router(kpis.router)
 app.include_router(admin.router)
+app.include_router(api_v1_router)

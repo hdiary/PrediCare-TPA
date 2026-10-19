@@ -177,8 +177,9 @@ export const mockAuditLog: AuditLogEntry[] = [
 
 export const mockAdminSettings: AdminSettings = {
   alert_threshold: 0.80,
+  extended_rule_enabled: false,
   channels: {
-    slack: { enabled: true, webhook: 'https://hooks.slack.com/services/xxx' },
+    slack: { enabled: true, channel: '#alertes-fraude' },
     email: { enabled: false, address: '' },
   },
 };

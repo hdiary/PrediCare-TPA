@@ -7,13 +7,21 @@
 Toute modification est écrite dans le journal d'audit.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import ValidationError
 
 from api import repositories as repo
 from api.audit import write_audit
 from api.config import get_settings
 from api.db import get_db
 from api.deps import require_role
-from api.schemas_admin import ActivateRequest, AuditRow, ThresholdUpdate
+from api.schemas_admin import (
+    ActivateRequest,
+    AdminSettings,
+    AdminSettingsPatch,
+    AuditRow,
+    ThresholdUpdate,
+)
+from api.services import config as config_service
 from api.services import drift
 from api.services.metrics import http_metrics
 from api.services.model_registry import ModelUnavailableError, get_registry
@@ -26,6 +34,59 @@ admin_only = Depends(require_role("administrateur"))
 def ping():
     """Sert à vérifier le contrôle d'accès par rôle."""
     return {"pong": True}
+
+
+# ---------- application configuration ----------
+
+@router.get("/settings", response_model=AdminSettings, dependencies=[admin_only])
+@router.get("/config", response_model=AdminSettings, dependencies=[admin_only])
+def get_admin_settings(conn=Depends(get_db)):
+    return config_service.get_admin_settings(conn)
+
+
+@router.put("/settings", response_model=AdminSettings)
+def put_admin_settings(
+    body: AdminSettings,
+    user: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    return config_service.update_admin_settings(conn, user, body)
+
+
+@router.patch("/config", response_model=AdminSettings)
+def patch_admin_config(
+    body: AdminSettingsPatch,
+    user: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    settings = config_service.get_admin_settings(conn).model_dump()
+    updates = body.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        if key == "channels":
+            if value is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Une valeur de configuration ne peut pas être nulle",
+                )
+            for channel, channel_updates in value.items():
+                if channel_updates is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Une valeur de configuration ne peut pas être nulle",
+                    )
+                settings["channels"][channel].update(channel_updates)
+        elif value is not None:
+            settings[key] = value
+        else:
+            raise HTTPException(status_code=422, detail="Une valeur de configuration ne peut pas être nulle")
+    try:
+        validated = AdminSettings.model_validate(settings)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Configuration invalide",
+        ) from exc
+    return config_service.update_admin_settings(conn, user, validated)
 
 
 # ---------- seuil d'alerte ----------

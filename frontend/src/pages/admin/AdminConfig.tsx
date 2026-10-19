@@ -103,6 +103,30 @@ export function AdminConfig() {
         </div>
       </Card>
 
+      <Card className="p-8">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-surface-800 dark:text-surface-100">Condition étendue</h3>
+            <p className="text-xs text-surface-400 mt-1">
+              Paramètre enregistré dans la configuration de la plateforme.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.extended_rule_enabled}
+            aria-label="Activer la condition étendue"
+            onClick={() => setSettings({
+              ...settings,
+              extended_rule_enabled: !settings.extended_rule_enabled,
+            })}
+            className={`relative w-11 h-6 rounded-full transition-all ${settings.extended_rule_enabled ? 'bg-primary-600' : 'bg-surface-300 dark:bg-surface-600'}`}
+          >
+            <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: settings.extended_rule_enabled ? '22px' : '2px' }} />
+          </button>
+        </div>
+      </Card>
+
       {/* Notification channels */}
       <Card className="p-8">
         <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-5">Canaux de notification</h3>
@@ -131,15 +155,15 @@ export function AdminConfig() {
           </div>
           {settings.channels.slack.enabled && (
             <div className="ml-12">
-              <label className="text-xs text-surface-400 mb-1 block">URL du webhook</label>
+              <label className="text-xs text-surface-400 mb-1 block">Canal Slack</label>
               <input
                 type="text"
-                value={settings.channels.slack.webhook}
+                value={settings.channels.slack.channel}
                 onChange={(e) => setSettings({
                   ...settings,
-                  channels: { ...settings.channels, slack: { ...settings.channels.slack, webhook: e.target.value } },
+                  channels: { ...settings.channels, slack: { ...settings.channels.slack, channel: e.target.value } },
                 })}
-                placeholder="https://hooks.slack.com/services/..."
+                placeholder="#alertes-fraude"
                 className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3 py-2 text-sm focus:border-primary-500"
               />
             </div>

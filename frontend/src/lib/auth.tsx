@@ -44,12 +44,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const res = await api.login(email, password);
     localStorage.setItem('predicare_token', res.access_token);
+    if (res.refresh_token) {
+      localStorage.setItem('predicare_refresh_token', res.refresh_token);
+    }
     setUser({ role: res.role, display_name: res.display_name, pseudonym: res.pseudonym, email });
     return res.role;
   }, []);
 
   const logout = useCallback(() => {
+    void api.logout().catch((error: unknown) => {
+      console.error('La révocation de la session a échoué.', error);
+    });
     localStorage.removeItem('predicare_token');
+    localStorage.removeItem('predicare_refresh_token');
     setUser(null);
   }, []);
 

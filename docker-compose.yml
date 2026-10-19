@@ -198,6 +198,9 @@ services:
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-30}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@predicare.local}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.7}

@@ -9,6 +9,7 @@ export interface User {
 
 export interface AuthResponse {
   access_token: string;
+  refresh_token?: string;
   role: Role;
   display_name: string;
   pseudonym: string;
@@ -142,8 +143,9 @@ export interface AuditLogEntry {
 
 export interface AdminSettings {
   alert_threshold: number;
+  extended_rule_enabled: boolean;
   channels: {
-    slack: { enabled: boolean; webhook: string };
+    slack: { enabled: boolean; channel: string };
     email: { enabled: boolean; address: string };
   };
 }

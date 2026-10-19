@@ -33,31 +33,36 @@ backend/api/
 | Méthode et route | Rôles | Rôle de l'endpoint |
 |---|---|---|
 | `GET /health` | public | État (base, modèle) |
-| `POST /auth/login`, `POST /auth/token` | public | Connexion, retourne un JWT |
-| `GET /auth/me` | connecté | Profil |
+| `POST /auth/login`, `POST /auth/token` | public | Connexion, retourne les jetons d'accès et de rafraîchissement |
+| `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` | jeton refresh / connecté | Rotation, révocation, profil |
 | `POST /predict` | professionnel_sante, gestionnaire | Scorer une facture |
 | `GET /alerts` | gestionnaire | Liste (`statut=en_attente`, `traitees`, `toutes`) |
 | `GET /alerts/{facture_id}` | gestionnaire | Détail avec SHAP et décisions |
 | `POST /alerts/{facture_id}/decision` | gestionnaire | Enregistrer une décision |
 | `GET /alerts/{facture_id}/identite` | gestionnaire | Identité déchiffrée de l'assuré (tracée) |
 | `GET /admin/model`, `POST /admin/model/reload` | administrateur | Version du modèle, rechargement |
+| `GET /admin/config`, `PATCH /admin/config` | administrateur | Lire ou modifier les paramètres applicatifs |
 | `GET /admin/ping` | administrateur | Test du contrôle d'accès |
 
 L'identifiant d'une alerte est le `facture_id` (une prédiction par facture).
 
 ## 3. Authentification
 
-1. `POST /auth/login` avec `{"email": "...", "password": "..."}` retourne un JWT.
-2. En-tête `Authorization: Bearer <jeton>`.
-3. Le rôle et l'état du compte sont relus en base à chaque requête (`utilisateurs`).
-4. `assure_id` et `prestataire_id` viennent de la base, jamais du client. L'agent IA doit utiliser `user["assure_id"]`.
+1. `POST /auth/login` avec `{"email": "...", "password": "..."}` retourne un jeton d'accès, un jeton de rafraîchissement et leurs durées.
+2. Les routes protégées utilisent l'en-tête `Authorization` avec le jeton d'accès.
+3. `POST /auth/refresh` avec `{"refresh_token": "..."}` effectue une rotation à usage unique du jeton de rafraîchissement.
+4. `POST /auth/logout` révoque la session courante ; les jetons liés à cette session ne sont plus acceptés.
+5. Les anciennes routes sans préfixe restent disponibles ; `/api/v1` expose les mêmes endpoints pour le frontend.
+6. Le rôle et l'état du compte sont relus en base à chaque requête (`utilisateurs`).
+7. `assure_id` et `prestataire_id` viennent de la base, jamais du client. L'agent IA doit utiliser `user["assure_id"]`.
 
 Protéger un endpoint : `dependencies=[Depends(require_role("gestionnaire"))]`.
 
 **Sécurité de la connexion (S12)** :
 
 - mots de passe hachés avec bcrypt (sel aléatoire), jamais renvoyés par l'API ;
-- jeton à durée limitée (`JWT_EXPIRE_MINUTES`), un jeton sans date d'expiration est refusé ;
+- jeton d'accès à durée limitée (`JWT_EXPIRE_MINUTES`) et jeton de rafraîchissement à durée limitée (`JWT_REFRESH_EXPIRE_DAYS`) ; un jeton sans date d'expiration est refusé ;
+- les sessions et identifiants de rafraîchissement sont persistés dans `auth_sessions` (migration `0011_auth_sessions`) ; une rotation invalide le jeton précédent et le logout révoque la session ;
 - après `LOGIN_MAX_ATTEMPTS` échecs consécutifs (5 par défaut), le compte est verrouillé `LOGIN_LOCKOUT_MINUTES` (15 par défaut) : réponse **429** avec l'en-tête `Retry-After`, même avec le bon mot de passe. Un succès remet le compteur à zéro. Colonnes `tentatives_echouees` et `verrouille_jusqua` de `utilisateurs` ;
 - limite connue : le compteur est par compte, pas par adresse IP ; un email inconnu n'est pas suivi.
 
@@ -129,18 +134,30 @@ Mise à jour ou retour arrière : déplacer l'alias dans MLflow, puis `POST /adm
 
 ## 8. Configuration
 
+`GET /admin/config` et `PATCH /admin/config` sont réservés au rôle
+`administrateur`. Les mises à jour sont écrites dans la table `configuration`
+et les changements effectifs sont inscrits dans `journal_audit`. Les secrets
+des intégrations (par exemple le webhook Slack) restent des variables
+d'environnement et ne sont jamais exposés par l'API. L'écran d'administration
+ne modifie que les canaux, le seuil d'alerte et l'indicateur de condition étendue.
+
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL | obligatoire |
-| `JWT_SECRET`, `JWT_EXPIRE_MINUTES` | Jetons | obligatoire / 60 |
+| `JWT_SECRET`, `JWT_EXPIRE_MINUTES`, `JWT_REFRESH_EXPIRE_DAYS` | Jetons | obligatoire / 60 / 30 jours |
 | `LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES` | Verrouillage après échecs de connexion | 5 / 15 |
 | `CORS_ORIGINS` | Origines autorisées | `http://localhost:3000` |
 | `ALERT_THRESHOLD` | Seuil initial (`configuration.seuil_alerte` prime) | 0.8 |
 | `IDENTITY_ENCRYPTION_KEY` | Clé Fernet (ou 64 caractères hex) | requise pour `/identite` |
 | `MLFLOW_TRACKING_URI`, `MLFLOW_MODEL_NAME`, `MLFLOW_MODEL_ALIAS` | MLflow | voir `config.py` |
-| `DEMO_PASSWORD` | Mot de passe des 4 comptes démo (désactivé si vide) | vide |
+| `ADMIN_EMAIL`, `ADMIN_INITIAL_PASSWORD` | Compte administrateur initial (créé si le mot de passe est renseigné) | `admin@predicare.local` / vide |
+| `DEMO_PASSWORD` | Mot de passe partagé des comptes démo professionnel, assuré et gestionnaire | vide |
 
-Comptes démo : `pro@`, `assure@`, `gestionnaire@`, `admin@predicare.local`. Le compte assuré est lié à un assuré principal ayant des factures, le compte pro à un prestataire actif ayant des factures.
+Les comptes démo sont `pro@predicare.local`, `assure@predicare.local` et
+`gestionnaire@predicare.local`. Le compte assuré est lié à un assuré principal
+ayant des factures, le compte professionnel à un prestataire actif ayant des
+factures. Le compte administrateur initial est distinct. Les créations sont
+idempotentes et ne réinitialisent jamais le mot de passe d'un compte existant.
 
 ## 9. Tests
 
@@ -155,6 +172,6 @@ Couverture : authentification et rôles, un test par code de rejet, audit (S8), 
 
 ## 10. Points ouverts
 
-- Notification n8n quand une alerte est créée (fin de `predict.py`) ; import de factures en lot ; `/metrics` et dérive ; seuil modifiable depuis l'écran d'administration.
+- Notification n8n quand une alerte est créée (fin de `predict.py`) ; import de factures en lot ; intégration des métriques et de la dérive.
 - Lecture des identités avec le rôle SQL `identity_reader` (le contrat le prévoit) plutôt qu'avec le compte propriétaire.
 - Connexion de l'API avec un rôle à droits limités.

@@ -1,5 +1,6 @@
 """Hachage des mots de passe (bcrypt) et jetons JWT."""
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import bcrypt
 import jwt
@@ -28,7 +29,11 @@ def verify_password(password: str, password_hash: str) -> bool:
 DUMMY_HASH = hash_password("dummy-password-for-timing")
 
 
-def create_access_token(user_id: int, role: str) -> tuple[str, int]:
+def create_access_token(
+    user_id: int,
+    role: str,
+    session_id: str | None = None,
+) -> tuple[str, int]:
     """Retourne (jeton, durée en secondes).
 
     Le jeton ne contient que l'identifiant et le rôle ; le rôle réel est
@@ -42,9 +47,36 @@ def create_access_token(user_id: int, role: str) -> tuple[str, int]:
         "role": role,
         "iat": now,
         "exp": now + timedelta(seconds=expires_in),
+        "token_type": "access",
     }
+    if session_id is not None:
+        payload["sid"] = session_id
     token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     return token, expires_in
+
+
+def create_refresh_token(
+    user_id: int,
+    role: str,
+    session_id: str,
+    token_id: str | None = None,
+) -> tuple[str, str, datetime]:
+    """Return a refresh JWT, its unique identifier, and its expiration."""
+    settings = get_settings()
+    now = datetime.now(UTC)
+    jti = token_id or str(uuid4())
+    expires_at = now + timedelta(days=settings.jwt_refresh_expire_days)
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "sid": session_id,
+        "jti": jti,
+        "token_type": "refresh",
+        "iat": now,
+        "exp": expires_at,
+    }
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return token, jti, expires_at
 
 
 def decode_token(token: str) -> dict:

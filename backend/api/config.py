@@ -5,11 +5,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     database_url: str
     jwt_secret: str
     jwt_expire_minutes: int = 60
+    jwt_refresh_expire_days: int = 30
     jwt_algorithm: str = "HS256"
     login_max_attempts: int = 5          # échecs consécutifs avant verrouillage du compte
     login_lockout_minutes: int = 15      # durée du verrouillage
@@ -30,8 +35,12 @@ class Settings(BaseSettings):
     drift_window_days: int = 7
     drift_min_samples: int = 30
 
-    # Comptes de démonstration (créés au démarrage si DEMO_PASSWORD est défini)
+    # Optional demonstration accounts (created when DEMO_PASSWORD is configured).
     demo_password: str | None = None
+
+    # Initial administrator account. Existing accounts are never overwritten.
+    admin_email: str = "admin@predicare.local"
+    admin_initial_password: str | None = None
 
     # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
     identity_encryption_key: str | None = None
