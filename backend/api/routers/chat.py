@@ -14,7 +14,7 @@ from api.deps import get_current_user
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 assistant_router = APIRouter(prefix="/assistant", tags=["assistant"])
-_CHAT_ROLES = {"assure"}
+_CHAT_ROLES = {"assure", "professionnel_sante"}
 _HISTORY_LIMIT = 30
 _MESSAGES_PER_CONVERSATION = 100
 

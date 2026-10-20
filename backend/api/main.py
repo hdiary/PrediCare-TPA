@@ -46,6 +46,13 @@ async def lifespan(_: FastAPI):
     db.init_pool()
     ensure_demo_users()
     ensure_seed_users()
+    app.state.rag_agent = None
+    try:
+        from rag.factory import create_agent
+
+        app.state.rag_agent = create_agent()
+    except ValueError as exc:
+        logger.warning("assistant RAG indisponible : %s", exc)
     # En arrière-plan : un MLflow lent ou absent ne doit pas retarder le démarrage de l'API
     threading.Thread(target=_initial_model_load, daemon=True).start()
     yield

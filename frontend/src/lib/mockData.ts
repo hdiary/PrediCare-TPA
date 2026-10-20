@@ -3,7 +3,6 @@ import type {
   Alert,
   PrescriptionAlert,
   AlertDetail,
-  Conversation,
   Invoice,
   InvoiceSubmissionResult,
   ModelVersion,
@@ -79,45 +78,6 @@ export const mockAlertDetail: AlertDetail = {
   ],
 };
 
-export const mockConversations: Conversation[] = [
-  {
-    id: 'CONV-001',
-    title: 'Plafond dentaire',
-    last_message: 'Votre plafond de remboursement dentaire est de 300 EUR par semestre...',
-    updated_at: '2024-10-12T10:30:00Z',
-    messages: [
-      {
-        id: 'msg-1', role: 'user', content: 'Quel est mon plafond de remboursement dentaire ?', timestamp: '2024-10-12T10:25:00Z',
-      },
-      {
-        id: 'msg-2', role: 'assistant', content: 'Votre plafond de remboursement dentaire est de **300 EUR par semestre** pour les soins conservateurs (détartrage, soins, dévitalisation). Pour l\'orthodontie, le plafond est de 600 EUR par année civile.\n\nCe plafond est réinitialisé au 1er janvier de chaque année.', timestamp: '2024-10-12T10:25:30Z',
-        sources: [
-          { document: 'Contrat Santé Plus', page: 12, excerpt: 'Plafond dentaire soins conservateurs: 300 EUR/semestre. Orthodontie: 600 EUR/an. Réinitialisation au 1er janvier.' },
-        ],
-        feedback: 'up',
-      },
-    ],
-  },
-  {
-    id: 'CONV-002',
-    title: 'Dossier septembre',
-    last_message: 'Votre dossier du 12 septembre est actuellement en cours de traitement...',
-    updated_at: '2024-10-11T15:00:00Z',
-    messages: [
-      {
-        id: 'msg-3', role: 'user', content: 'Où en est mon dossier du 12 septembre ?', timestamp: '2024-10-11T14:55:00Z',
-      },
-      {
-        id: 'msg-4', role: 'assistant', content: 'Votre dossier du **12 septembre 2024** (réf. FAC-2024-1018) est actuellement **en cours de contrôle**.\n\nIl a été réceptionné le 12/09 et est en phase de vérification. Le remboursement est généralement effectué sous 5 à 10 jours ouvrés après acceptation.', timestamp: '2024-10-11T14:55:30Z',
-        sources: [
-          { document: 'Contrat Santé Plus', page: 8, excerpt: 'Délai de traitement standard: 5-10 jours ouvrés après acceptation de la facture.' },
-        ],
-        feedback: null,
-      },
-    ],
-  },
-];
-
 export const mockServiceStatus: ServiceStatus = {
   api: 'ok',
   database: 'ok',
@@ -156,96 +116,6 @@ export const mockInvoiceResult: InvoiceSubmissionResult = {
   invoice_id: 'FAC-2024-1049',
   status: 'accepted',
   errors: [],
-};
-
-const mockProviderChatResponse = (lower: string): { answer: string; sources: { document: string; page: number; excerpt: string }[] } => {
-  if (lower.includes('rejet')) {
-    return {
-      answer: "Votre dernière facture a été **rejetée** pour le motif suivant : *numéro d'ordonnance manquant pour un acte soumis à prescription*.\n\nVous pouvez la corriger depuis **Mes factures** en ajoutant l'ordonnance, puis la redéposer.",
-      sources: [],
-    };
-  }
-  if (lower.includes('facture') || lower.includes('dossier') || lower.includes('fac-')) {
-    return {
-      answer: 'Votre facture **FAC-2024-1018** est actuellement **en cours de contrôle**.\n\nElle a été réceptionnée et passe les vérifications automatiques. Vous serez prévenu dès qu\'elle est acceptée ou si une correction est demandée.',
-      sources: [],
-    };
-  }
-  if (lower.includes('justificatif') || lower.includes('ordonnance') || lower.includes('prescription') || lower.includes('pièce') || lower.includes('piece')) {
-    return {
-      answer: 'Pour un acte soumis à prescription, joignez à la facture :\n\n- le **numéro et la date de l\'ordonnance**\n- l\'identité du **prescripteur**\n- le scan de l\'ordonnance si vous l\'avez (facultatif)\n\nUne ordonnance expirée ou ne couvrant pas les lignes facturées sera signalée au contrôle.',
-      sources: [{ document: 'Guide Réseau de Soins National', page: 6, excerpt: 'Les actes et produits soumis à prescription doivent être accompagnés de l\'ordonnance correspondante, valide à la date du soin.' }],
-    };
-  }
-  if (lower.includes('tarif') || lower.includes('consultation') || lower.includes('barème') || lower.includes('bareme')) {
-    return {
-      answer: 'Le **tarif de référence** d\'une consultation de médecine générale figure au barème des actes, avec un **tarif maximum** à ne pas dépasser. Au-delà, la facture est signalée.\n\nPrécisez l\'acte pour obtenir le tarif exact.',
-      sources: [{ document: 'Barème de Référence des Actes', page: 3, excerpt: 'Pour chaque acte : tarif minimum, tarif de référence et tarif maximum.' }],
-    };
-  }
-  return {
-    answer: 'Je peux vous renseigner sur l\'état de vos factures, les motifs de rejet, les pièces à fournir et le barème des actes. N\'hésitez pas à me poser une question plus précise.',
-    sources: [],
-  };
-};
-
-export const mockProviderConversations: Conversation[] = [
-  {
-    id: 'CONV-P01',
-    title: 'Facture rejetée',
-    last_message: 'Votre dernière facture a été rejetée pour le motif suivant...',
-    updated_at: '2024-10-14T09:10:00Z',
-    messages: [
-      { id: 'pmsg-1', role: 'user', content: 'Pourquoi ma dernière facture a-t-elle été rejetée ?', timestamp: '2024-10-14T09:05:00Z' },
-      {
-        id: 'pmsg-2', role: 'assistant',
-        content: "Votre dernière facture a été **rejetée** pour le motif suivant : *numéro d'ordonnance manquant pour un acte soumis à prescription*.\n\nVous pouvez la corriger depuis **Mes factures** en ajoutant l'ordonnance, puis la redéposer.",
-        timestamp: '2024-10-14T09:10:00Z', feedback: 'up',
-      },
-    ],
-  },
-  {
-    id: 'CONV-P02',
-    title: 'Tarif d\'une consultation',
-    last_message: 'Le tarif de référence d\'une consultation de médecine générale figure au barème...',
-    updated_at: '2024-10-09T15:40:00Z',
-    messages: [
-      { id: 'pmsg-3', role: 'user', content: 'Quel est le tarif de référence d\'une consultation ?', timestamp: '2024-10-09T15:35:00Z' },
-      {
-        id: 'pmsg-4', role: 'assistant',
-        content: 'Le **tarif de référence** d\'une consultation de médecine générale figure au barème des actes, avec un **tarif maximum** à ne pas dépasser. Au-delà, la facture est signalée.\n\nPrécisez l\'acte pour obtenir le tarif exact.',
-        sources: [{ document: 'Barème de Référence des Actes', page: 3, excerpt: 'Pour chaque acte : tarif minimum, tarif de référence et tarif maximum.' }],
-        timestamp: '2024-10-09T15:40:00Z', feedback: null,
-      },
-    ],
-  },
-];
-
-export const mockChatResponse = (message: string, role?: 'insured' | 'provider' | string): { answer: string; sources: { document: string; page: number; excerpt: string }[] } => {
-  const lower = message.toLowerCase();
-  if (role === 'provider') return mockProviderChatResponse(lower);
-  if (lower.includes('plafond') || lower.includes('dentaire')) {
-    return {
-      answer: 'Votre plafond de remboursement dentaire est de **300 EUR par semestre** pour les soins conservateurs (détartrage, soins, dévitalisation). Pour l\'orthodontie, le plafond est de 600 EUR par année civile.\n\nCe plafond est réinitialisé au 1er janvier de chaque année.',
-      sources: [{ document: 'Contrat Santé Plus', page: 12, excerpt: 'Plafond dentaire soins conservateurs: 300 EUR/semestre. Orthodontie: 600 EUR/an.' }],
-    };
-  }
-  if (lower.includes('dossier') || lower.includes('septembre') || lower.includes('etat') || lower.includes('état')) {
-    return {
-      answer: 'Votre dossier du **12 septembre 2024** (réf. FAC-2024-1018) est actuellement **en cours de contrôle**.\n\nIl a été réceptionné le 12/09 et est en phase de vérification. Le remboursement est généralement effectué sous 5 à 10 jours ouvrés après acceptation.',
-      sources: [{ document: 'Contrat Santé Plus', page: 8, excerpt: 'Délai de traitement standard: 5-10 jours ouvrés après acceptation.' }],
-    };
-  }
-  if (lower.includes('exclu') || lower.includes('exclusion')) {
-    return {
-      answer: 'Les éléments suivants sont **exclus** de votre contrat:\n\n- Médecine douce (acupuncture, homéopathie, ostéopathie hors prescription)\n- Chirurgie esthétique non reconstructrice\n- Cures thermales (sauf convention spécifique)\n- Actes expérimentaux\n\nPour plus de détails, consultez l\'article 7 de votre contrat.',
-      sources: [{ document: 'Contrat Santé Plus', page: 24, excerpt: 'Article 7 - Exclusions: médecine douce, chirurgie esthétique non reconstructrice, cures thermales, actes expérimentaux.' }],
-    };
-  }
-  return {
-    answer: 'Je peux vous renseigner sur votre contrat, vos remboursements, l\'état de vos dossiers et les exclusions de garanties. N\'hésitez pas à me poser une question plus précise.',
-    sources: [],
-  };
 };
 
 export const mockPrescriptionAlerts: PrescriptionAlert[] = [

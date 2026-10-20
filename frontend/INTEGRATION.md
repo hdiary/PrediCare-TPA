@@ -25,7 +25,7 @@ Pour avoir des comptes de démonstration, définir `DEMO_PASSWORD` côté backen
     build:
       context: ./frontend
       args:
-        VITE_MOCKS: "models,chat"   # fonctions non encore branchées
+        VITE_MOCKS: "models"   # fonctions non encore branchées
     ports: ["3000:80"]
     depends_on: [api]
 ```
@@ -46,7 +46,7 @@ Le service du backend doit s'appeler `api` et écouter sur le port 8000 (voir `n
 | Tableau de bord manager (KPI) | `/bi/kpis` | **réel**, snapshot partagé rafraîchi toutes les 5 min |
 | Supervision : métriques, dérive | `/admin/metrics` | **réel** pour latence de scoring et métriques HTTP ; PSI `N/A` sans référence d'entraînement |
 | Versions du modèle | `/admin/models` | **simulé** |
-| Assistant conversationnel | `/chat`, `/chat/history` | **simulé** (P4) |
+| Assistant RAG (assuré et prestataire) | `GET /chat/history`, `POST /chat` | **réel** : agent RAG, index vectoriel PostgreSQL/pgvector, réponses sourcées et historique persistant |
 | Inscription, mot de passe oublié, réinitialisation | `/auth/register`, `/auth/forgot-password`, `/auth/reset-password` | **simulé** : aucun compte créé, aucun e-mail envoyé (avertissement affiché) |
 | Alertes de prescription | `/prescription-alerts` | **simulé** (règles de `ml/prescription_rules.py` non exposées par l'API) |
 | Scan d'ordonnance | `/invoices/{id}/prescription-scan` | **simulé** |
@@ -58,6 +58,14 @@ Les KPI BI et les métriques système ne sont pas simulés : ils utilisent l'API
 et le dashboard indique l'horodatage du snapshot. Le coût FinOps RAG est `N/A`
 tant qu'une tarification n'est pas configurée; la dérive du modèle est `N/A`
 tant qu'une distribution de référence n'est pas disponible.
+
+Le chat est également connecté à l'API réelle : il n'utilise aucun jeu de
+conversations de démonstration. Les messages et conversations sont conservés
+dans `chat_messages` et `chat_conversations`; les documents et leurs vecteurs
+sont lus dans `rag_documents` et `rag_chunks` via `agent_login` (membre
+lecture seule de `agent_ro`). Une instance de l'agent est créée au démarrage
+de l'API. Si sa configuration RAG est absente, l'API signale l'indisponibilité
+au lieu de renvoyer une réponse fictive.
 
 ## Choix à valider par l'équipe
 

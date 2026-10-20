@@ -5,7 +5,7 @@
  *   traduction est faite ICI, pour que les pages n'aient pas à la connaître.
  * - Les fonctions pas encore disponibles côté backend restent simulées (mockData.ts). La liste est
  *   réglée par VITE_MOCKS : "all" (tout simulé, démo hors-ligne), "none" (rien de simulé), ou une
- *   liste de fonctions séparées par des virgules.
+ *   liste de fonctions séparées par des virgules. Le chat RAG utilise toujours l'API réelle.
  */
 import type {
   AuthResponse,
@@ -41,12 +41,9 @@ import {
   mockModelVersions,
   mockAuditLog,
   mockAdminSettings,
-  mockConversations,
   mockInvoiceResult,
-  mockChatResponse,
   mockUserRows,
   mockPrescriptionAlerts,
-  mockProviderConversations,
 } from "./mockData";
 
 // ---------------------------------------------------------------------------
@@ -58,9 +55,9 @@ export const BASE_URL: string = import.meta.env.VITE_API_URL || "/api";
 
 export type Feature =
   | "auth" | "alerts" | "invoices" | "settings" | "audit" | "users"
-  | "health" | "models" | "chat" | "prescriptions" | "register" | "password";
+  | "health" | "models" | "prescriptions" | "register" | "password";
 
-const DEFAULT_MOCKS = "models,chat,prescriptions,register,password";
+const DEFAULT_MOCKS = "models,prescriptions,register,password";
 const mockedFeatures = new Set(
   String(import.meta.env.VITE_MOCKS || DEFAULT_MOCKS)
     .split(",")
@@ -76,7 +73,7 @@ export function isMock(feature: Feature): boolean {
 /** Fonctions simulées en ce moment (affichées dans le bandeau « données de démonstration »). */
 export function mockedFeatureList(): Feature[] {
   const all: Feature[] = ["auth", "alerts", "invoices", "settings", "audit", "users", "health",
-    "models", "chat", "prescriptions", "register", "password"];
+    "models", "prescriptions", "register", "password"];
   return all.filter(isMock);
 }
 
@@ -758,24 +755,14 @@ export const api = {
     });
   },
 
-  async getConversations(role?: Role): Promise<{ conversations: Conversation[] }> {
-    if (isMock("chat")) {
-      await delay(300);
-      return { conversations: role === "provider" ? mockProviderConversations : mockConversations };
-    }
+  async getConversations(): Promise<{ conversations: Conversation[] }> {
     return request("/chat/history");
   },
 
   async sendMessage(
     conversationId: string | null,
     message: string,
-    role?: Role,
   ): Promise<{ conversation_id: string; answer: string; sources: { document: string; page: number; excerpt: string }[] }> {
-    if (isMock("chat")) {
-      await delay(1000);
-      const resp = mockChatResponse(message, role);
-      return { conversation_id: conversationId || "CONV-NEW", answer: resp.answer, sources: resp.sources };
-    }
     return request("/chat", { method: "POST", body: JSON.stringify({ conversation_id: conversationId, message }) });
   },
 };

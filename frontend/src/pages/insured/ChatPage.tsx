@@ -50,7 +50,6 @@ export function ChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const [error, setError] = useState('');
   const [drawerSource, setDrawerSource] = useState<ChatSource | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -58,7 +57,7 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    api.getConversations(role).then((data) => {
+    api.getConversations().then((data) => {
       setConversations(data.conversations);
       if (data.conversations.length > 0) {
         setActiveConvId(data.conversations[0].id);
@@ -73,7 +72,7 @@ export function ChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingText, typing]);
+  }, [messages, typing]);
 
   const adjustTextarea = useCallback(() => {
     const ta = textareaRef.current;
@@ -102,17 +101,8 @@ export function ChatPage() {
     setTyping(true);
 
     try {
-      const resp = await api.sendMessage(activeConvId, content, role);
+      const resp = await api.sendMessage(activeConvId, content);
       setTyping(false);
-
-      // Streaming effect
-      const words = resp.answer.split(' ');
-      let current = '';
-      for (let i = 0; i < words.length; i++) {
-        current += (i > 0 ? ' ' : '') + words[i];
-        setStreamingText(current);
-        await new Promise((r) => setTimeout(r, 20));
-      }
 
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -123,7 +113,6 @@ export function ChatPage() {
         feedback: null,
       };
       setMessages((m) => [...m, assistantMsg]);
-      setStreamingText('');
 
       setConversations((current) => {
         const existing = current.find((conversation) => conversation.id === resp.conversation_id);
@@ -138,6 +127,7 @@ export function ChatPage() {
       });
       setActiveConvId(resp.conversation_id);
     } catch (err: unknown) {
+      setMessages((current) => current.filter((message) => message.id !== userMsg.id));
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
       setTyping(false);
     } finally {
@@ -164,7 +154,6 @@ export function ChatPage() {
   const newConversation = () => {
     setMessages([]);
     setActiveConvId(null);
-    setStreamingText('');
     setError('');
   };
 
@@ -193,7 +182,6 @@ export function ChatPage() {
                   onClick={() => {
                     setActiveConvId(conv.id);
                     setMessages(conv.messages);
-                    setStreamingText('');
                   }}
                   className={`w-full text-left px-4 py-3 rounded-2xl transition-all ${
                     activeConvId === conv.id
@@ -221,7 +209,6 @@ export function ChatPage() {
               if (conv) {
                 setActiveConvId(conv.id);
                 setMessages(conv.messages);
-                setStreamingText('');
               }
             }}
             aria-label="Conversation"
@@ -257,7 +244,7 @@ export function ChatPage() {
         <Card className="flex-1 flex flex-col overflow-hidden">
           {/* Messages */}
           <div className="flex-1 overflow-y-auto scrollbar-thin p-4 md:p-8">
-            {messages.length === 0 && !streamingText && !typing ? (
+            {messages.length === 0 && !typing ? (
               <EmptyState
                 icon={<Sparkles className="w-8 h-8" />}
                 title="Comment puis-je vous aider ?"
@@ -348,20 +335,6 @@ export function ChatPage() {
                         <span className="w-2 h-2 rounded-full bg-surface-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-2 h-2 rounded-full bg-surface-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-2 h-2 rounded-full bg-surface-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Streaming message */}
-                {streamingText && !typing && (
-                  <div className="flex gap-3 animate-slide-up">
-                    <div className="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-300" />
-                    </div>
-                    <div className="max-w-[88%] md:max-w-[75%]">
-                      <div className="rounded-2xl rounded-bl-lg px-5 py-3 bg-white dark:bg-surface-700 shadow-soft">
-                        <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingText) }} />
                       </div>
                     </div>
                   </div>
