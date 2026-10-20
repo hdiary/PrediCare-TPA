@@ -78,13 +78,18 @@ def create_prescription(
 @router.get("/{ordonnance_id}/validite", response_model=PrescriptionValidityOut)
 def prescription_validity(
     ordonnance_id: str,
-    user: dict = Depends(require_role("professionnel_sante", "gestionnaire")),
+    user: dict = Depends(require_role("administrateur", "professionnel_sante")),
     conn=Depends(get_db),
 ):
     try:
         ordonnance, _, _ = load_prescription_context(conn, ordonnance_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Ordonnance introuvable") from exc
+    if (
+        user["role"] == "professionnel_sante"
+        and ordonnance["prescripteur_id"] != user.get("prestataire_id")
+    ):
+        raise HTTPException(status_code=404, detail="Ordonnance introuvable")
     expiration = ordonnance["date_prescription"] + timedelta(days=int(ordonnance["validite_jours"]))
     findings = evaluate_prescription(conn, ordonnance_id)
     date_ok = expiration >= __import__("datetime").date.today()

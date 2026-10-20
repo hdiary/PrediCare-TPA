@@ -92,6 +92,26 @@ export function AdminUsers() {
     }
   };
 
+  const changeEditRole = (role: Role) => {
+    setEditRole(role);
+    setEditAssureId('');
+    setEditPrestataireId('');
+  };
+
+  const roleChanged = !!editing && editRole !== editing.role;
+  const statusChanged = !!editing && editActive !== (editing.status === 'active');
+  const linkChanged =
+    !!editing &&
+    ((editRole === 'insured' && editAssureId !== (editing.assure_id ?? '')) ||
+      (editRole === 'provider' && editPrestataireId !== (editing.prestataire_id ?? '')));
+
+  const hasChanges = roleChanged || statusChanged || linkChanged;
+
+  const missingLink =
+    editActive &&
+    ((editRole === 'insured' && !editAssureId) ||
+      (editRole === 'provider' && !editPrestataireId));
+
   const saveEdit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editing?.user_id) return;
@@ -252,24 +272,25 @@ export function AdminUsers() {
         footer={(
           <>
             <Button variant="ghost" disabled={saving} onClick={() => setEditing(null)}>Annuler</Button>
-            <Button type="submit" form="edit-user-form" disabled={saving || !!referencesError}>
+            <Button
+              type="submit"
+              form="edit-user-form"
+              disabled={saving || !!referencesError || !hasChanges || missingLink}
+            >
               {saving ? 'Enregistrement...' : 'Enregistrer'}
             </Button>
           </>
         )}
       >
-        <form id="edit-user-form" onSubmit={saveEdit} className="space-y-4">
+        <form id="edit-user-form" onSubmit={saveEdit} className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
           {actionError && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-sm text-danger-700 dark:bg-danger-900/20 dark:text-danger-300">{actionError}</p>}
           {referencesError && <p role="alert" className="rounded-lg bg-danger-50 p-3 text-sm text-danger-700 dark:bg-danger-900/20 dark:text-danger-300">{referencesError}</p>}
+
           <label className="block text-sm font-medium text-surface-700 dark:text-surface-200">
             Rôle
             <select
               value={editRole}
-              onChange={(event) => {
-                setEditRole(event.target.value as Role);
-                setEditAssureId('');
-                setEditPrestataireId('');
-              }}
+              onChange={(event) => changeEditRole(event.target.value as Role)}
               className="mt-2 h-11 w-full rounded-xl border border-surface-300 bg-white px-3.5 text-sm dark:border-surface-600 dark:bg-surface-900"
             >
               {Object.keys(ROLE_TO_ADMIN).map((role) => (
@@ -277,9 +298,10 @@ export function AdminUsers() {
               ))}
             </select>
           </label>
+
           {editRole === 'provider' && (
             <label className="block text-sm font-medium text-surface-700 dark:text-surface-200">
-              Prestataire *
+              Prestataire {editActive && '*'}
               <select
                 required={editActive}
                 value={editPrestataireId}
@@ -293,6 +315,7 @@ export function AdminUsers() {
               </select>
             </label>
           )}
+
           {editRole === 'insured' && (
             <label className="block text-sm font-medium text-surface-700 dark:text-surface-200">
               Assuré {editActive && '*'}
@@ -309,13 +332,31 @@ export function AdminUsers() {
               </select>
             </label>
           )}
-          <label className="flex items-center gap-3 text-sm text-surface-700 dark:text-surface-200">
-            <input type="checkbox" checked={editActive} onChange={(event) => setEditActive(event.target.checked)} className="h-4 w-4 accent-primary-600" />
-            Compte actif
-          </label>
-          <p className="text-xs text-surface-500 dark:text-surface-400">
-            Un compte désactivé peut être réactivé en cochant cette option. La réactivation nécessite le rattachement correspondant au rôle.
-          </p>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-surface-700 dark:text-surface-200">Compte actif</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={editActive}
+              onClick={() => setEditActive((value) => !value)}
+              className={`relative h-6 w-11 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                editActive ? 'bg-success-500' : 'bg-surface-300 dark:bg-surface-600'
+              }`}
+            >
+              <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${editActive ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+
+          {hasChanges && (
+            <p className="rounded-lg bg-surface-100 px-3 py-2 text-xs text-surface-600 dark:bg-surface-700/50 dark:text-surface-300">
+              {[
+                roleChanged && `Rôle : ${ROLE_LABELS[editing!.role]} → ${ROLE_LABELS[editRole]}`,
+                statusChanged && (editActive ? 'Réactivation' : 'Désactivation'),
+                linkChanged && 'Rattachement modifié',
+              ].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </form>
       </Modal>
 

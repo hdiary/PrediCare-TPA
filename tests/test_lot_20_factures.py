@@ -73,11 +73,11 @@ def test_future_date_uses_real_today():
 
 @pytest.mark.parametrize("case", LOT, ids=IDS)
 def test_api_level(case, setup):
-    from test_predict_flow import manager
+    from test_predict_flow import admin
 
     client, holder = setup
     holder["conn"].existing_invoice = bool(case.get("doublon"))
-    r = client.post("/predict", json=case["facture"], headers=manager())
+    r = client.post("/predict", json=case["facture"], headers=admin())
     assert r.status_code == case["attendu_http"], f"{case['nom']} -> {r.status_code} {r.text}"
     if case["attendu_http"] == 200:
         assert r.json()["accepte"] is True
@@ -99,17 +99,17 @@ def test_api_level(case, setup):
     ],
 )
 def test_hostile_payloads_never_cause_500(payload, setup):
-    from test_predict_flow import manager
+    from test_predict_flow import admin
 
     client, _ = setup
-    r = client.post("/predict", json=payload, headers=manager())
+    r = client.post("/predict", json=payload, headers=admin())
     assert r.status_code == 422
     assert "codes" in r.json()
 
 
 def test_non_object_body_is_422(setup):
-    from test_predict_flow import manager
+    from test_predict_flow import admin
 
     client, _ = setup
-    r = client.post("/predict", json=[1, 2, 3], headers=manager())
+    r = client.post("/predict", json=[1, 2, 3], headers=admin())
     assert r.status_code == 422

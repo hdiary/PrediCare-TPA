@@ -19,7 +19,7 @@ from api.services.identity import IdentityUnavailableError, decrypt_identity
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["alerts"])
-manager_only = Depends(require_role("gestionnaire"))
+manager_only = Depends(require_role("administrateur", "gestionnaire"))
 FactureId = Path(pattern=r"^FAC-\d{8}$", description="Identifiant de la facture")
 
 
@@ -107,7 +107,7 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
 def decide(
     body: DecisionRequest,
     facture_id: str = FactureId,
-    user: dict = Depends(require_role("gestionnaire")),
+    user: dict = Depends(require_role("administrateur", "gestionnaire")),
     conn=Depends(get_db),
 ):
     with conn.transaction():
@@ -163,10 +163,10 @@ def decide(
 @router.get("/alertes/{facture_id}/identite", response_model=IdentiteOut)
 def identite(
     facture_id: str = FactureId,
-    user: dict = Depends(require_role("gestionnaire")),
+    user: dict = Depends(require_role("administrateur")),
     conn=Depends(get_db),
 ):
-    """Decrypt insured identity only for a manager and audit the access."""
+    """Decrypt insured identity only for an administrator and audit the access."""
     _alerte_ou_404(conn, facture_id)
     assure_id = repo.get_assure_de_facture(conn, facture_id)
     blob = repo.get_identite_chiffree(conn, assure_id) if assure_id else None

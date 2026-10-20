@@ -20,6 +20,8 @@ USERS = {
             prestataire_id="PRE-00214", is_active=True),
     3: dict(user_id=3, email="gest@x", role="gestionnaire", assure_id=None,
             prestataire_id=None, is_active=True),
+        4: dict(user_id=4, email="admin@x", role="administrateur", assure_id=None,
+            prestataire_id=None, is_active=True),
 }
 
 VALID = {
@@ -194,11 +196,21 @@ def pro():
     return auth(1, "professionnel_sante")
 
 
+def admin():
+    return auth(4, "administrateur")
+
+
 # ---------- /predict ----------
 
-def test_predict_manager_gets_score_and_shap(setup):
+def test_predict_manager_is_forbidden(setup):
     client, _ = setup
     r = client.post("/predict", json=valid(), headers=manager())
+    assert r.status_code == 403
+
+
+def test_predict_admin_gets_score_and_shap(setup):
+    client, _ = setup
+    r = client.post("/predict", json=valid(), headers=admin())
     assert r.status_code == 200
     body = r.json()
     assert body["score"] == pytest.approx(0.9)
@@ -225,7 +237,7 @@ def test_invalid_invoice_returns_codes_and_is_audited(setup):
     payload = valid()
     payload["devise"] = "EUR"
     payload["lignes"][0]["prix_unitaire"] = -5
-    r = client.post("/predict", json=payload, headers=manager())
+    r = client.post("/predict", json=payload, headers=admin())
     assert r.status_code == 422
     body = r.json()
     assert {"DEVISE_INVALIDE", "MONTANT_NEGATIF"} <= set(body["codes"])
@@ -238,7 +250,7 @@ def test_unknown_act_and_unknown_assure_use_database(setup):
     payload = valid()
     payload["lignes"][0]["code"] = "ZZZ-INCONNU"
     payload["assure_id"] = "ASS-0000000000"
-    r = client.post("/predict", json=payload, headers=manager())
+    r = client.post("/predict", json=payload, headers=admin())
     assert r.status_code == 422
     assert {"CODE_ACTE_INCONNU", "ASSURE_INCONNU"} <= set(r.json()["codes"])
 
@@ -247,7 +259,7 @@ def test_forbidden_leak_field_rejected(setup):
     client, _ = setup
     payload = valid()
     payload["statut"] = "PAYEE"
-    r = client.post("/predict", json=payload, headers=manager())
+    r = client.post("/predict", json=payload, headers=admin())
     assert r.status_code == 422
     assert "CHAMP_INTERDIT" in r.json()["codes"]
 
@@ -255,28 +267,28 @@ def test_forbidden_leak_field_rejected(setup):
 def test_duplicate_facture_id_409(setup):
     client, holder = setup
     holder["conn"].existing_invoice = True
-    r = client.post("/predict", json=valid(), headers=manager())
+    r = client.post("/predict", json=valid(), headers=admin())
     assert r.status_code == 409
     assert "FACTURE_DEJA_ENREGISTREE" in r.json()["codes"]
 
 
 def test_duplicate_numero_facture_is_not_looked_up(setup):
     client, holder = setup
-    assert client.post("/predict", json=valid(), headers=manager()).status_code == 200
+    assert client.post("/predict", json=valid(), headers=admin()).status_code == 200
     assert not holder["conn"].executed("NUMERO_FACTURE =")
 
 
 def test_model_unavailable_503(setup):
     client, holder = setup
     holder["registry"] = FakeRegistry(bundle=None)
-    assert client.post("/predict", json=valid(), headers=manager()).status_code == 503
+    assert client.post("/predict", json=valid(), headers=admin()).status_code == 503
 
 
 # ---------- Test S8 : journal d'audit ----------
 
 def test_s8_prediction_then_decision_are_audited(setup):
     client, holder = setup
-    assert client.post("/predict", json=valid(), headers=manager()).status_code == 200
+    assert client.post("/predict", json=valid(), headers=admin()).status_code == 200
     r = client.post("/alerts/FAC-00000001/decision", headers=manager(),
                     json={"decision": "fraude_confirmee", "commentaire": "doublon",
                           "montant_economise": 21000})
@@ -294,7 +306,7 @@ def test_s8_prediction_then_decision_are_audited(setup):
 
 def test_no_automatic_decision(setup):
     client, holder = setup
-    client.post("/predict", json=valid(), headers=manager())
+    client.post("/predict", json=valid(), headers=admin())
     assert not holder["conn"].executed("INSERT INTO DECISIONS_GESTIONNAIRE")
 
 
@@ -358,7 +370,7 @@ def test_invalid_decision_422(setup, body):
 
 def test_identity_decrypted_minimized_and_audited(setup):
     client, holder = setup
-    r = client.get("/alerts/FAC-00000001/identite", headers=manager())
+    r = client.get("/alerts/FAC-00000001/identite", headers=admin())
     assert r.status_code == 200
     body = r.json()
     assert body["nom"] == "RAKOTO"
@@ -370,3 +382,8 @@ def test_identity_decrypted_minimized_and_audited(setup):
 def test_identity_forbidden_for_provider(setup):
     client, _ = setup
     assert client.get("/alerts/FAC-00000001/identite", headers=pro()).status_code == 403
+
+
+def test_identity_forbidden_for_manager(setup):
+    client, _ = setup
+    assert client.get("/alerts/FAC-00000001/identite", headers=manager()).status_code == 403

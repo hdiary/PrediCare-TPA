@@ -206,12 +206,11 @@ export function AdminConfig() {
       </Card>
 
       {/* Save button */}
-      <div className="flex justify-end gap-3 sticky bottom-4">
-        {hasChanges && (
-          <Button variant="ghost" onClick={() => setSettings(original)}>
-            Annuler
-          </Button>
-        )}
+      {/* Save button */}
+      <div className="flex justify-end gap-3 pt-2">
+        <Button variant="ghost" onClick={() => setSettings(original)} disabled={!hasChanges || saving}>
+          Annuler
+        </Button>
         <Button onClick={handleSave} disabled={!hasChanges || saving}>
           <Save className="w-4 h-4" />
           {saving ? 'Enregistrement...' : 'Enregistrer'}

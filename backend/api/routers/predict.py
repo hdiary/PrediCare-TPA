@@ -79,7 +79,7 @@ def _reject(
 )
 def predict(
     payload: dict = Body(...),
-    user: dict = Depends(require_role("professionnel_sante", "gestionnaire")),
+    user: dict = Depends(require_role("administrateur", "professionnel_sante")),
     conn=Depends(get_db),
     registry=Depends(get_registry),
     record_rejection: bool = False,
@@ -415,7 +415,7 @@ async def predict_pdf(
     prescription: str | None = Form(None),
     prescription_scan: UploadFile | None = File(None),
     prestataire_id: str | None = Form(None),
-    user: dict = Depends(require_role("professionnel_sante", "gestionnaire")),
+    user: dict = Depends(require_role("administrateur", "professionnel_sante")),
     conn=Depends(get_db),
     registry=Depends(get_registry),
 ):

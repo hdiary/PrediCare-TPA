@@ -243,8 +243,9 @@ def _medicament_sans_ordonnance():
 
 def test_prescription_rule_is_stored_audited_and_returned(env):
     client, holder = env
-    r = client.post("/predict", json=_medicament_sans_ordonnance(), headers=MANAGER)
+    r = client.post("/predict", json=_medicament_sans_ordonnance(), headers=ADMIN)
     assert r.status_code == 200
+    assert [x["regle_code"] for x in r.json()["regles"]] == ["MEDICAMENT_SANS_ORDONNANCE"]
     assert [x["regle_code"] for x in r.json()["regles"]] == ["MEDICAMENT_SANS_ORDONNANCE"]
     assert holder["conn"].executed("INSERT INTO ALERTES_PRESCRIPTION")
     assert holder["conn"].executed("INSERT INTO EXPLICATIONS_SHAP")
@@ -260,7 +261,7 @@ def test_provider_does_not_see_rules(env):
 
 def test_clean_invoice_has_no_rule_alert(env):
     client, holder = env
-    r = client.post("/predict", json=valid(), headers=MANAGER)
+    r = client.post("/predict", json=valid(), headers=ADMIN)
     assert r.status_code == 200 and r.json()["regles"] == []
     assert not holder["conn"].executed("INSERT INTO ALERTES_PRESCRIPTION")
 
@@ -289,12 +290,12 @@ def test_threshold_change_is_immediate_on_next_predict(env):
     """Critère P3-17 : changement de seuil immédiat."""
     client, _ = env
     client.put("/admin/threshold", json={"seuil": 0.95}, headers=ADMIN)
-    r = client.post("/predict", json=valid(), headers=MANAGER)       # score fixe 0.9
+    r = client.post("/predict", json=valid(), headers=ADMIN)       # score fixe 0.9
     assert r.json()["seuil"] == 0.95 and r.json()["is_alert"] is False
     p = valid()
     p["facture_id"] = "FAC-00000003"
     client.put("/admin/threshold", json={"seuil": 0.5}, headers=ADMIN)
-    r = client.post("/predict", json=p, headers=MANAGER)
+    r = client.post("/predict", json=p, headers=ADMIN)
     assert r.json()["seuil"] == 0.5 and r.json()["is_alert"] is True
 
 
