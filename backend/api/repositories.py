@@ -656,18 +656,25 @@ def get_config_values(conn, keys: list[str]) -> dict[str, dict]:
     return {row["cle"]: row for row in rows}
 
 
-def list_audit(conn, type_evenement: str | None, limit: int, offset: int) -> list[dict]:
+def list_audit(
+    conn,
+    event_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
     where, params = "", []
-    if type_evenement:
-        where, params = "WHERE type_evenement = %s", [type_evenement]
+    if event_type:
+        where, params = "WHERE a.type_evenement = %s", [event_type]
     return conn.execute(
-        "SELECT p.facture_id, p.score, d.decision, d.date_decision, d.gestionnaire_id "
-        "FROM decisions_gestionnaire d "
-        "JOIN predictions p ON p.prediction_id = d.prediction_id "
-        "JOIN factures f ON f.facture_id = p.facture_id "
-        "WHERE f.prestataire_id = %s AND p.facture_id <> %s "
-        "ORDER BY d.date_decision DESC, d.decision_id DESC LIMIT %s",
-        (prestataire_id, hors_facture_id, limit),
+        "SELECT a.horodatage AS date, a.type_evenement, a.utilisateur_id, "
+        "(SELECT r.nom_role FROM utilisateurs_roles ur "
+        "JOIN roles r ON r.role_id = ur.role_id "
+        "WHERE ur.utilisateur_id = a.utilisateur_id "
+        "ORDER BY r.role_id LIMIT 1) AS role_acteur, "
+        "a.type_entite, a.entite_id, a.version_modele "
+        "FROM journal_audit a "
+        f"{where} ORDER BY a.horodatage DESC, a.audit_id DESC LIMIT %s OFFSET %s",
+        (*params, limit, offset),
     ).fetchall()
 
 # ---------- référentiels pour pdf_extract ----------
