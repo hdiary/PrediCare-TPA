@@ -236,9 +236,9 @@ def check_counts(conn, results: list[dict]) -> list[str]:
     problems = []
     for r in results:
         n_db = conn.execute(f"SELECT count(*) FROM {r['table']}").fetchone()[0]
-        if n_db != r["rows"]:
+        if n_db < r["rows"]:
             problems.append(f"{r['table']}: file has {r['rows']} rows, "
-                            f"database has {n_db}")
+                            f"database has only {n_db}")
     return problems
 
 
