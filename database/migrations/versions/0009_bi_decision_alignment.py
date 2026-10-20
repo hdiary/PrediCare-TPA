@@ -4,6 +4,7 @@ Revision ID: 0009_bi_decision_alignment
 Revises: 0008_bi_currency
 """
 from alembic import op
+import sqlalchemy as sa
 
 
 revision = "0009_bi_decision_alignment"
@@ -12,15 +13,33 @@ branch_labels = None
 depends_on = None
 
 
+def _pred_cols() -> dict:
+    """predictions peut etre en anglais (0002) ou en francais (0005_api_tables)."""
+    cols = {c["name"] for c in sa.inspect(op.get_bind()).get_columns("predictions")}
+
+    def pick(*names):
+        return next(n for n in names if n in cols)
+
+    return {
+        "alert": pick("is_alert", "est_alerte"),
+        "version": pick("model_version", "version_modele"),
+        "created": pick("created_at", "date"),
+    }
+
+
 def upgrade() -> None:
-    op.execute("""
+    c = _pred_cols()
+    op.execute(f"""
     CREATE OR REPLACE VIEW v_bi_factures AS
     WITH pred AS (
         SELECT DISTINCT ON (facture_id)
-               prediction_id, facture_id, score, threshold, is_alert,
-               model_version
+               prediction_id,
+               facture_id,
+               score,
+               "{c['alert']}"   AS is_alert,
+               "{c['version']}" AS model_version
         FROM predictions
-        ORDER BY facture_id, created_at DESC, prediction_id DESC
+        ORDER BY facture_id, "{c['created']}" DESC, prediction_id DESC
     ),
     dec AS (
         SELECT DISTINCT ON (prediction_id)
@@ -52,13 +71,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("""
+    c = _pred_cols()
+    op.execute(f"""
     CREATE OR REPLACE VIEW v_bi_factures AS
     WITH pred AS (
         SELECT DISTINCT ON (facture_id)
-               facture_id, score, threshold, is_alert, model_version
+               facture_id,
+               score,
+               "{c['alert']}"   AS is_alert,
+               "{c['version']}" AS model_version
         FROM predictions
-        ORDER BY facture_id, created_at DESC, prediction_id DESC
+        ORDER BY facture_id, "{c['created']}" DESC, prediction_id DESC
     ),
     dec AS (
         SELECT DISTINCT ON (facture_id)
