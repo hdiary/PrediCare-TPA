@@ -2,8 +2,12 @@
 FROM node:22-alpine AS build
 
 WORKDIR /app
+
+# Épingler la version de pnpm via corepack pour garantir la cohérence du lockfile
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 COPY . .
 
 ARG VITE_API_URL=/api
