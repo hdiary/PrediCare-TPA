@@ -37,6 +37,21 @@ CATEGORICAL = [
 ]
 
 
+def _build_code_reference(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    actes = tables["referentiel_actes"].rename(columns={"code_acte": "code"})
+    meds = tables["referentiel_medicaments"].rename(columns={"code_medicament": "code"})
+    ref = pd.concat([
+        actes[["code", "tarif_min", "tarif_reference", "tarif_max", "sexe_requis",
+               "age_min", "age_max", "ordonnance_requise", "specialite"]],
+        meds[["code", "prix_reference", "remboursable"]]
+        .rename(columns={"prix_reference": "tarif_reference"}),
+    ], ignore_index=True)
+    ref["ordonnance_requise"] = pd.to_numeric(
+        ref["ordonnance_requise"], errors="coerce"
+    )
+    return ref
+
+
 def load_tables(dataset_dir: str | Path) -> dict[str, pd.DataFrame]:
     d = Path(dataset_dir)
     return {n: pd.read_csv(d / f"{n}.csv") for n in TABLES}
@@ -67,14 +82,7 @@ def build_features(t: dict[str, pd.DataFrame]) -> pd.DataFrame:
     gar = t["garanties"].copy()
 
     # ------------------------------------------------------------------ lignes
-    actes = t["referentiel_actes"].rename(columns={"code_acte": "code"})
-    meds = t["referentiel_medicaments"].rename(columns={"code_medicament": "code"})
-    ref = pd.concat([
-        actes[["code", "tarif_min", "tarif_reference", "tarif_max", "sexe_requis",
-               "age_min", "age_max", "ordonnance_requise", "specialite"]],
-        meds[["code", "prix_reference", "remboursable"]]
-        .rename(columns={"prix_reference": "tarif_reference"}),
-    ], ignore_index=True)
+    ref = _build_code_reference(t)
 
     L = t["lignes_facture"].merge(
         f[["facture_id", "prestataire_id", "assure_id", "ordonnance_id",

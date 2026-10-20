@@ -2,10 +2,23 @@
 
     from pdf_extract import extract_document
     res = extract_document(open("FAC-00005637.pdf", "rb").read(), ref=ref)
-    res.doc_type   # "facture" | "ordonnance" | "inconnu"
-    res.data       # champs lus (sans nom du patient)
-    res.errors     # problèmes bloquants -> rejet propre de la facture
-    res.warnings   # points à vérifier par un gestionnaire
+    res.doc_type      # "facture" | "ordonnance" | "inconnu"
+    res.data          # champs lus (sans nom du patient)
+    res.codes         # codes d'invalidité déclenchés (To_do, flux 1, étape [2])
+    res.issues        # [{code, message}] -> corps de la réponse HTTP 422 / 400
+    res.errors        # messages lisibles « CODE : message »
+    res.warnings      # points à vérifier par un gestionnaire
+    res.http_status   # 400 (format) | 422 (facture invalide) | 200
+
+Suit le To_do, flux 1 « Réception facture » :
+  [1] validation syntaxique : fichier non PDF / illisible / non reconnu -> FORMAT_INVALIDE (HTTP 400) ;
+  [2] contrôle d'invalidité : les 10 codes du référentiel (feuille 4) sont émis ici
+      lorsqu'ils sont détectables à partir du seul document (et du référentiel `ref`) :
+        MONTANT_NEGATIF, CODE_ACTE_INCONNU, DATE_FUTURE, DATE_IMPOSSIBLE,
+        CHAMP_OBLIGATOIRE_MANQUANT, TOTAL_INCOHERENT, PRESTATAIRE_INCONNU,
+        ASSURE_INCONNU, DEVISE_INVALIDE, FACTURE_SANS_LIGNE.
+  Les 14 codes de fraude (étape [5]) ont besoin de l'historique en base : ils ne sont
+  PAS calculés ici ; ce module fournit seulement les champs dont ils ont besoin.
 
 Deux voies de lecture :
   1. PDF « texte » (généré par un logiciel) : lecture directe, rapide et fiable ;
@@ -25,6 +38,15 @@ from datetime import date
 
 MIN_TEXT_CHARS = 80   # en dessous : on considère que le PDF est un scan
 DATE = r"(\d{4}-\d{2}-\d{2})"
+DEVISE_OK = "MGA"     # To_do : toute devise autre que MGA -> DEVISE_INVALIDE
+
+# Codes d'invalidité du To_do (flux 1, étape [2]) + code de format (étape [1]).
+INVALIDITY_CODES = (
+    "MONTANT_NEGATIF", "CODE_ACTE_INCONNU", "DATE_FUTURE", "DATE_IMPOSSIBLE",
+    "CHAMP_OBLIGATOIRE_MANQUANT", "TOTAL_INCOHERENT", "PRESTATAIRE_INCONNU",
+    "ASSURE_INCONNU", "DEVISE_INVALIDE", "FACTURE_SANS_LIGNE",
+)
+FORMAT_CODE = "FORMAT_INVALIDE"
 
 
 @dataclass
@@ -34,15 +56,32 @@ class Extraction:
     data: dict = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    issues: list[dict] = field(default_factory=list)   # [{code, message}]
+
+    def fail(self, code: str, message: str) -> None:
+        """Enregistre un problème bloquant avec son code To_do."""
+        self.issues.append({"code": code, "message": message})
+        self.errors.append(f"{code} : {message}")
+
+    @property
+    def codes(self) -> list[str]:
+        """Codes déclenchés, sans doublon, dans l'ordre de détection."""
+        return list(dict.fromkeys(i["code"] for i in self.issues))
 
     @property
     def ok(self) -> bool:
         return not self.errors
 
+    @property
+    def http_status(self) -> int:
+        if FORMAT_CODE in self.codes:
+            return 400
+        return 422 if self.errors else 200
+
 
 # --------------------------------------------------------------- lecture brute
 def _clean(text: str) -> str:
-    return text.replace("\u202f", " ").replace("\xa0", " ")
+    return text.replace(" ", " ").replace("\xa0", " ")
 
 
 def read_text(pdf_bytes: bytes) -> tuple[str, str]:
@@ -66,7 +105,10 @@ def ocr_text(pdf_bytes: bytes) -> str:
 
 # ------------------------------------------------------------------- utilitaires
 def _int(s: str) -> int:
-    return int(re.sub(r"\D", "", s))
+    """Entier signé : « -7 900 » -> -7900."""
+    s = s.strip()
+    neg = s.startswith(("-", "−", "–"))
+    return -int(re.sub(r"\D", "", s)) if neg else int(re.sub(r"\D", "", s))
 
 
 def _norm(s: str) -> str:
@@ -91,8 +133,19 @@ def _none(v: str | None) -> str | None:
     return None if v in (None, "—", "-", "") else v
 
 
+def _devise(token: str | None) -> str | None:
+    """Normalise le symbole lu : Ar/MGA -> MGA, € -> EUR, $ -> USD."""
+    if not token:
+        return None
+    t = token.strip().upper().replace("€", "EUR").replace("$", "USD")
+    return "MGA" if t in ("AR", "MGA") else t
+
+
 # --------------------------------------------------------------------- facture
-LINE_RE = re.compile(r"^([A-Z]{2,5}-[A-Z0-9]+)\s+(.+?)\s*Ar\s+(\d[\d ]*?)\s*Ar\s*$", re.M)
+CUR = r"(Ar|MGA|EUR|USD|€|\$)"
+NUM = r"(-?\d[\d ]*?)"
+LINE_RE = re.compile(rf"^([A-Z]{{2,5}}-[A-Z0-9]+)\s+(.+?)\s*{CUR}\s+{NUM}\s*{CUR}\s*$", re.M)
+_NUMTOK = re.compile(r"^-?\d+$")
 
 
 def _split_line(before_ar: str, montant: int) -> tuple[str, int, int]:
@@ -100,16 +153,17 @@ def _split_line(before_ar: str, montant: int) -> tuple[str, int, int]:
 
     Un nombre peut finir la désignation (« boîte de 24 ») et le prix peut contenir des
     espaces (« 7 900 ») : on essaie chaque découpage et on garde celui où
-    quantité × prix unitaire = montant de la ligne."""
+    quantité × prix unitaire = montant de la ligne. Les valeurs négatives sont
+    conservées (elles déclenchent MONTANT_NEGATIF)."""
     toks = before_ar.split()
     run = 0
-    while run < len(toks) and toks[-1 - run].isdigit():
+    while run < len(toks) and _NUMTOK.match(toks[-1 - run]):
         run += 1
     nums = toks[len(toks) - run:]
     first = None
     for k in range(1, len(nums)):                 # k = nombre de morceaux du prix
         pu_tokens = nums[-k:]
-        if any(len(t) != 3 for t in pu_tokens[1:]):   # espace des milliers = groupes de 3 chiffres
+        if any(len(t) != 3 or t.startswith("-") for t in pu_tokens[1:]):   # milliers = groupes de 3 chiffres
             continue
         qte, pu = int(nums[-k - 1]), int("".join(pu_tokens))
         cand = (" ".join(toks[: len(toks) - k - 1]), qte, pu)
@@ -119,13 +173,14 @@ def _split_line(before_ar: str, montant: int) -> tuple[str, int, int]:
     return first or (before_ar, 0, 0)
 
 
-def parse_facture(text: str, ref: dict | None = None) -> Extraction:
+def parse_facture(text: str, ref: dict | None = None, today: date | None = None) -> Extraction:
+    today = today or date.today()
     r = Extraction("facture")
     d = r.data
     d["numero_facture"] = _find(r"FACTURE\s+N°\s*(\S+)", text)
-    d["date_soin"] = _find(rf"Date des soins\s+{DATE}", text)
+    d["date_soin"] = _find(r"Date des soins\s+(\S+)", text)
     d["heure_soin"] = _find(r"Heure\s+(\d{2}:\d{2})", text)
-    d["date_facture"] = _find(rf"Date de facture\s+{DATE}", text)
+    d["date_facture"] = _find(r"Date de facture\s+(\S+)", text)
     d["type_facture"] = _find(r"Type\s+([A-Z_]+)", text)
     d["assure_id"] = _find(r"N°\s*assur[eé]\s+(ASS-[0-9A-Fa-f]+)", text)
     d["ordonnance_id"] = _none(_find(r"Ordonnance\s+(ORD-\d+|—)", text))
@@ -135,42 +190,70 @@ def parse_facture(text: str, ref: dict | None = None) -> Extraction:
     d["prestataire_nif"] = _find(r"NIF\s+(\d{10})", text)
     d["prestataire_nom"] = text.strip().splitlines()[0].strip() if text.strip() else None
     d["patient_present"] = bool(_find(r"Patient\s+(.+?)\s+N°\s*assur[eé]", text))
-    total = _find(r"TOTAL\s+(\d[\d ]*?)\s*Ar", text)
-    d["montant_total"] = _int(total) if total else None
+    m_total = re.search(rf"TOTAL\s+{NUM}\s*{CUR}", text)
+    d["montant_total"] = _int(m_total.group(1)) if m_total else None
 
-    lines = []
-    for code, avant, mont in LINE_RE.findall(text):
+    lines, devises = [], set()
+    for code, avant, _cur1, mont, cur2 in LINE_RE.findall(text):
         lib, qte, pu = _split_line(avant.strip(), _int(mont))
         lines.append({"code": code, "libelle": lib.strip(), "quantite": qte,
                       "prix_unitaire": pu, "montant": _int(mont)})
+        devises.add(_devise(cur2))
+    if m_total:
+        devises.add(_devise(m_total.group(2)))
+    explicit = _find(r"Devise\s+([A-Za-z€$]{1,3})\b", text)   # champ « Devise » s'il existe
+    if explicit:
+        devises.add(_devise(explicit))
     d["lignes"] = lines
+    d["devise"] = DEVISE_OK if devises <= {DEVISE_OK} else sorted(devises - {DEVISE_OK})[0]
 
-    # ---- contrôles : rien d'incohérent n'entre dans le système
-    for champ in ("numero_facture", "date_soin", "date_facture", "type_facture", "assure_id", "montant_total"):
-        if not d.get(champ):
-            r.errors.append(f"champ illisible ou absent : {champ}")
-    if not lines:
-        r.errors.append("aucune ligne de facture reconnue")
+    # ---- [2] contrôle d'invalidité : rien d'incohérent n'entre dans le système
+    # CHAMP_OBLIGATOIRE_MANQUANT : identifiant assuré / prestataire (To_do) et champs de base
+    for champ in ("assure_id", "prestataire_nif", "numero_facture", "type_facture", "montant_total"):
+        if d.get(champ) is None:
+            r.fail("CHAMP_OBLIGATOIRE_MANQUANT", f"champ illisible ou absent : {champ}")
+    # DATE_IMPOSSIBLE / CHAMP_OBLIGATOIRE_MANQUANT sur les dates
     for dt in ("date_soin", "date_facture"):
-        if d.get(dt) and not _valid_date(d[dt]):
-            r.errors.append(f"date invalide : {dt}")
-    if _valid_date(d.get("date_soin")) and _valid_date(d.get("date_facture")) and d["date_facture"] < d["date_soin"]:
-        r.errors.append("la date de facture précède la date des soins")
+        if not d.get(dt):
+            r.fail("CHAMP_OBLIGATOIRE_MANQUANT", f"champ illisible ou absent : {dt}")
+        elif not _valid_date(d[dt]):
+            r.fail("DATE_IMPOSSIBLE", f"date invalide ou inexistante : {dt} = {d[dt]}")
+    if _valid_date(d.get("date_soin")):
+        if date.fromisoformat(d["date_soin"]) > today:
+            r.fail("DATE_FUTURE", f"date de soin dans le futur : {d['date_soin']}")
+        if _valid_date(d.get("date_facture")) and d["date_facture"] < d["date_soin"]:
+            r.fail("DATE_IMPOSSIBLE", "la date de facture précède la date des soins")
+    # FACTURE_SANS_LIGNE
+    if not lines:
+        r.fail("FACTURE_SANS_LIGNE", "aucune ligne de facture reconnue")
+    # MONTANT_NEGATIF
+    for i, l in enumerate(lines, 1):
+        if l["quantite"] < 0 or l["prix_unitaire"] < 0 or l["montant"] < 0:
+            r.fail("MONTANT_NEGATIF", f"ligne {i} : montant ou quantité négatif")
+    if d.get("montant_total") is not None and d["montant_total"] < 0:
+        r.fail("MONTANT_NEGATIF", "total de la facture négatif")
+    # TOTAL_INCOHERENT (ligne et total)
     for i, l in enumerate(lines, 1):
         if l["quantite"] * l["prix_unitaire"] != l["montant"]:
-            r.errors.append(f"ligne {i} : quantité × prix unitaire ≠ montant")
+            r.fail("TOTAL_INCOHERENT", f"ligne {i} : quantité × prix unitaire ≠ montant")
     if lines and d.get("montant_total") is not None and sum(l["montant"] for l in lines) != d["montant_total"]:
-        r.errors.append("la somme des lignes ne correspond pas au total")
+        r.fail("TOTAL_INCOHERENT", "la somme des lignes ne correspond pas au total")
+    # DEVISE_INVALIDE
+    if d["devise"] != DEVISE_OK:
+        r.fail("DEVISE_INVALIDE", f"devise {d['devise']} ≠ {DEVISE_OK}")
     d["nb_lignes"] = len(lines)
 
+    # Contrôles qui demandent le référentiel
     if ref:
         if d.get("prestataire_nif") and d["prestataire_nif"] not in ref["nif_to_prestataire"]:
-            r.errors.append("prestataire inconnu (NIF absent du référentiel)")
+            r.fail("PRESTATAIRE_INCONNU", "prestataire absent du référentiel (NIF inconnu)")
         elif d.get("prestataire_nif"):
             d["prestataire_id"] = ref["nif_to_prestataire"][d["prestataire_nif"]]
+        if d.get("assure_id") and "assure_ids" in ref and d["assure_id"] not in ref["assure_ids"]:
+            r.fail("ASSURE_INCONNU", f"assuré absent du référentiel : {d['assure_id']}")
         for l in lines:
             if l["code"] not in ref["codes"]:
-                r.errors.append(f"code inconnu du référentiel : {l['code']}")
+                r.fail("CODE_ACTE_INCONNU", f"code d'acte absent du référentiel : {l['code']}")
     return r
 
 
@@ -211,13 +294,13 @@ def parse_ordonnance(text: str, ref: dict | None = None) -> Extraction:
 
     for champ in ("ordonnance_id", "date_prescription", "validite_jours"):
         if not d.get(champ):
-            r.errors.append(f"champ illisible ou absent : {champ}")
+            r.fail("CHAMP_OBLIGATOIRE_MANQUANT", f"champ illisible ou absent : {champ}")
     if d.get("date_prescription") and not _valid_date(d["date_prescription"]):
-        r.errors.append("date de prescription invalide")
+        r.fail("DATE_IMPOSSIBLE", "date de prescription invalide")
     if not lignes:
-        r.errors.append("aucune ligne d'ordonnance reconnue")
+        r.fail("FACTURE_SANS_LIGNE", "aucune ligne d'ordonnance reconnue")
     if not d.get("prescripteur_onm") and not d.get("prescripteur_etablissement"):
-        r.errors.append("prescripteur : ni n° ONM ni établissement identifiable")   # médecin sans ONM
+        r.fail("CHAMP_OBLIGATOIRE_MANQUANT", "prescripteur : ni n° ONM ni établissement identifiable")
     if ref:
         if d.get("prescripteur_onm"):
             pid = ref["onm_to_prestataire"].get(d["prescripteur_onm"])
@@ -239,32 +322,42 @@ def detect_type(text: str) -> str:
     return "inconnu"
 
 
-def extract_document(pdf_bytes: bytes, ref: dict | None = None) -> Extraction:
-    """Point d'entrée : lit un PDF, devine son type, extrait et contrôle les champs."""
+def _format_error(message: str, **kw) -> Extraction:
+    r = Extraction(**kw)
+    r.fail(FORMAT_CODE, message)
+    return r
+
+
+def extract_document(pdf_bytes: bytes, ref: dict | None = None, today: date | None = None) -> Extraction:
+    """Point d'entrée : lit un PDF, devine son type, extrait et contrôle les champs.
+
+    `today` n'est utile qu'aux tests (contrôle DATE_FUTURE)."""
     if not pdf_bytes.startswith(b"%PDF"):
-        return Extraction(errors=["le fichier n'est pas un PDF"])
+        return _format_error("le fichier n'est pas un PDF")
     try:
         text, method = read_text(pdf_bytes)
     except Exception as e:  # PDF corrompu, protégé, OCR indisponible...
-        return Extraction(errors=[f"lecture impossible : {type(e).__name__}"])
+        return _format_error(f"lecture impossible : {type(e).__name__}")
     kind = detect_type(text)
     if kind == "facture":
-        res = parse_facture(text, ref)
+        res = parse_facture(text, ref, today)
     elif kind == "ordonnance":
         res = parse_ordonnance(text, ref)
     else:
-        return Extraction(method=method, errors=["document non reconnu (ni facture ni ordonnance)"])
+        return _format_error("document non reconnu (ni facture ni ordonnance)", method=method)
     res.method = method
     if method == "ocr":
         res.warnings.append("document lu par OCR : faire vérifier les champs par un gestionnaire")
     res.data.pop("patient_present", None)
     return res
 
+
 def build_reference(tables: dict) -> dict:
     """Référentiels pour les contrôles (à construire une fois depuis la base).
 
     `tables` : dictionnaire de listes de dicts — clés 'referentiel_actes',
-    'referentiel_medicaments', 'prestataires'.
+    'referentiel_medicaments', 'prestataires' et, pour ASSURE_INCONNU,
+    'assures' (facultatif ; chaque ligne porte 'assure_id').
     """
     acts = tables["referentiel_actes"]
     meds = tables["referentiel_medicaments"]
@@ -301,57 +394,13 @@ def build_reference(tables: dict) -> dict:
         if p.get("nom") and nom_counter.get(_norm(p["nom"])) == 1
     }
 
-    return {
+    ref = {
         "codes": {row["code"] for row in both},
         "label_to_code": {_norm(row["libelle"]): row["code"] for row in both},
         "nif_to_prestataire": nif_to_prestataire,
         "onm_to_prestataire": onm_to_prestataire,
         "name_to_prestataire": name_to_prestataire,
     }
-    """Référentiels pour les contrôles (à construire une fois depuis la base).
-
-    `tables` : dictionnaire de listes de dicts — clés 'referentiel_actes',
-    'referentiel_medicaments', 'prestataires'.
-    """
-    acts = tables["referentiel_actes"]
-    meds = tables["referentiel_medicaments"]
-    both = [
-        {"code": a["code"], "libelle": a["libelle"]} for a in acts
-    ] + [
-        {"code": m["code"], "libelle": m["libelle"]} for m in meds
-    ]
-
-    prestataires = tables["prestataires"]
-
-    nif_to_prestataire = {
-        str(p["nif"]): p["prestataire_id"]
-        for p in prestataires
-        if p.get("nif") not in (None, "", "nan")
-    }
-
-    onm_to_prestataire = {
-        p["numero_onm"]: p["prestataire_id"]
-        for p in prestataires
-        if isinstance(p.get("numero_onm"), str) and p["numero_onm"]
-    }
-
-    # Noms uniques seulement (un nom en double est ambigu → ignoré)
-    nom_counter: dict[str, int] = {}
-    for p in prestataires:
-        if p.get("nom"):
-            key = _norm(p["nom"])
-            nom_counter[key] = nom_counter.get(key, 0) + 1
-
-    name_to_prestataire = {
-        _norm(p["nom"]): p["prestataire_id"]
-        for p in prestataires
-        if p.get("nom") and nom_counter.get(_norm(p["nom"])) == 1
-    }
-
-    return {
-        "codes": {row["code"] for row in both},
-        "label_to_code": {_norm(row["libelle"]): row["code"] for row in both},
-        "nif_to_prestataire": nif_to_prestataire,
-        "onm_to_prestataire": onm_to_prestataire,
-        "name_to_prestataire": name_to_prestataire,
-    }
+    if "assures" in tables:
+        ref["assure_ids"] = {a["assure_id"] for a in tables["assures"] if a.get("assure_id")}
+    return ref

@@ -56,7 +56,8 @@ def build_features_from_tables(tables: dict[str, pd.DataFrame], payload: dict) -
     snapshot = {name: frame.copy() for name, frame in tables.items()}
     _append_invoice(snapshot, payload)
     result = build_training_features(snapshot)
-    return result[0] if isinstance(result, tuple) else result
+    features = result[0] if isinstance(result, tuple) else result
+    return features.loc[features.index == payload["facture_id"]]
 
 
 def build_features(payload: dict, conn) -> pd.DataFrame:
