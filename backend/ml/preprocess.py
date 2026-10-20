@@ -9,8 +9,10 @@ from ml.features import TABLES, build_features as build_training_features
 
 
 def _table(conn, name: str) -> pd.DataFrame:
-    rows = conn.execute(f"SELECT * FROM {name}").fetchall()
-    return pd.DataFrame([dict(row) for row in rows])
+    cursor = conn.execute(f"SELECT * FROM {name}")
+    rows = cursor.fetchall()
+    columns = [column.name for column in cursor.description]
+    return pd.DataFrame([dict(row) for row in rows], columns=columns)
 
 
 def _append_invoice(tables: dict[str, pd.DataFrame], payload: dict) -> None:
@@ -38,6 +40,8 @@ def _append_invoice(tables: dict[str, pd.DataFrame], payload: dict) -> None:
     invoices = tables["factures"]
     tables["factures"] = invoices[invoices["facture_id"] != payload["facture_id"]].copy()
     tables["factures"] = pd.concat([tables["factures"], pd.DataFrame([invoice])], ignore_index=True)
+    for column in ("nb_lignes", "montant_total", "montant_eligible"):
+        tables["factures"][column] = pd.to_numeric(tables["factures"][column], errors="raise")
     tables["lignes_facture"] = tables["lignes_facture"][
         tables["lignes_facture"]["facture_id"] != payload["facture_id"]
     ].copy()
@@ -49,6 +53,11 @@ def _append_invoice(tables: dict[str, pd.DataFrame], payload: dict) -> None:
     tables["lignes_facture"] = pd.concat(
         [tables["lignes_facture"], pd.DataFrame(lines)], ignore_index=True
     )
+    for column in ("quantite", "prix_unitaire", "montant"):
+        if column in tables["lignes_facture"]:
+            tables["lignes_facture"][column] = pd.to_numeric(
+                tables["lignes_facture"][column], errors="raise"
+            )
 
 
 def build_features_from_tables(tables: dict[str, pd.DataFrame], payload: dict) -> pd.DataFrame:
@@ -56,7 +65,8 @@ def build_features_from_tables(tables: dict[str, pd.DataFrame], payload: dict) -
     snapshot = {name: frame.copy() for name, frame in tables.items()}
     _append_invoice(snapshot, payload)
     result = build_training_features(snapshot)
-    return result[0] if isinstance(result, tuple) else result
+    features = result[0] if isinstance(result, tuple) else result
+    return features.loc[features.index == payload["facture_id"]]
 
 
 def build_features(payload: dict, conn) -> pd.DataFrame:

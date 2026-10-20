@@ -12,9 +12,12 @@ from api.security import create_access_token, hash_password, verify_password
 
 PASSWORD = "Demo2026!"
 USERS = {
-    "gestionnaire@predicare.local": dict(user_id=3, role="gestionnaire", is_active=True),
-    "admin@predicare.local": dict(user_id=4, role="administrateur", is_active=True),
-    "off@predicare.local": dict(user_id=5, role="assure", is_active=False),
+    "gestionnaire@predicare.local": dict(
+        user_id=3, identifiant="GES-123456789A", role="gestionnaire", is_active=True),
+    "admin@predicare.local": dict(
+        user_id=4, identifiant="ADM-123456789A", role="administrateur", is_active=True),
+    "off@predicare.local": dict(
+        user_id=5, identifiant="ASS-123456789A", role="assure", is_active=False),
 }
 
 
@@ -109,7 +112,11 @@ class FakeConn:
             )
         if q.startswith("SELECT") and "LOWER(U.NOM_UTILISATEUR)" in q:
             email = next(
-                (name for name in USERS if name.lower() == params[0].lower()),
+                (
+                    name for name, data in USERS.items()
+                    if name.lower() == params[0].lower()
+                    or data["identifiant"].lower() == params[1].lower()
+                ),
                 None,
             )
             data = USERS.get(email) if email else None
@@ -154,6 +161,15 @@ def test_login_success(client):
     assert body["user"]["role"] == "gestionnaire"
     payload = jwt.decode(body["access_token"], get_settings().jwt_secret, algorithms=["HS256"])
     assert payload["sub"] == "3"
+
+
+def test_login_by_pseudonymous_identifier(client):
+    response = client.post(
+        "/auth/login",
+        json={"identifier": "GES-123456789A", "password": PASSWORD},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["identifiant"] == "GES-123456789A"
 
 
 def test_v1_login_alias_works(client):
@@ -206,17 +222,18 @@ def test_login_email_is_case_insensitive(client):
 
 
 @pytest.mark.parametrize(
-    "email,password",
+    "email,password,expected_status",
     [
-        ("gestionnaire@predicare.local", "mauvais"),
-        ("inconnu@predicare.local", PASSWORD),
-        ("off@predicare.local", PASSWORD),  # compte désactivé
+        ("gestionnaire@predicare.local", "mauvais", 401),
+        ("inconnu@predicare.local", PASSWORD, 401),
+        ("off@predicare.local", PASSWORD, 403),  # compte désactivé
     ],
 )
-def test_login_failure_is_generic_401(client, email, password):
+def test_login_failure_has_expected_status(client, email, password, expected_status):
     r = login(client, email, password)
-    assert r.status_code == 401
-    assert r.json()["detail"] == "Identifiants invalides"
+    assert r.status_code == expected_status
+    if expected_status == 401:
+        assert r.json()["detail"] == "Identifiants invalides"
 
 
 def test_me_requires_token(client):

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, File, Form, UploadF
 import json as _json
 
 from api.services.pdf_extract import build_reference, extract_document
+from api.services.prescription_upload import create_prescription_from_pdf
 from api.repositories import load_reference_tables
 
 from api import repositories as repo
@@ -130,6 +131,20 @@ def predict(
         _reject(conn, user, payload,
                 [{"code": "FACTURE_DEJA_ENREGISTREE", "champ": "facture_id",
                   "message": "Cette facture a déjà été scorée"}], 409, "doublon")
+    if clean.get("ordonnance_id") and not conn.execute(
+        "SELECT 1 FROM ordonnances WHERE ordonnance_id = %s",
+        (clean["ordonnance_id"],),
+    ).fetchone():
+        _reject(
+            conn,
+            user,
+            payload,
+            [{"code": "ORDONNANCE_INCONNUE", "champ": "ordonnance_id",
+              "message": "L'ordonnance doit être enregistrée avant le dépôt de la facture."}],
+            422,
+            "validation",
+            record_rejection,
+        )
 
     calculation = None
     fraud_findings = []
@@ -402,6 +417,7 @@ def _pdf_to_payload(extracted: dict, prestataire_id: str | None,
 async def predict_pdf(
     file: UploadFile = File(...),
     prescription: str | None = Form(None),
+    prescription_scan: UploadFile | None = File(None),
     prestataire_id: str | None = Form(None),
     user: dict = Depends(require_role("professionnel_sante", "gestionnaire")),
     conn=Depends(get_db),
@@ -443,14 +459,37 @@ async def predict_pdf(
     payload = _pdf_to_payload(
         extraction.data, prestataire_id or user.get("prestataire_id"), contrat_id)
 
-    # 4. Si une ordonnance a été fournie côté front, la rattacher
+    # 4. Parse and persist an attached prescription before linking the invoice.
+    prescription_data = {}
     if prescription:
         try:
-            rx = _json.loads(prescription)
-            if isinstance(rx, dict) and rx.get("prescription_id"):
-                payload["ordonnance_id"] = rx["prescription_id"]
-        except _json.JSONDecodeError:
-            pass
+            parsed_prescription = _json.loads(prescription)
+        except _json.JSONDecodeError as exc:
+            raise HTTPException(status_code=422, detail="Les informations d'ordonnance sont invalides.") from exc
+        if not isinstance(parsed_prescription, dict):
+            raise HTTPException(status_code=422, detail="Les informations d'ordonnance sont invalides.")
+        prescription_data = parsed_prescription
+
+    if prescription_scan:
+        if not prescription_scan.filename or not prescription_scan.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Le scan d'ordonnance doit être un PDF.")
+        prescription_content = await prescription_scan.read()
+        if len(prescription_content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Le scan ne doit pas dépasser 10 Mo.")
+        ordonnance = create_prescription_from_pdf(
+            conn,
+            prescription_content,
+            ref,
+            assure_id=payload["assure_id"],
+            prescripteur_id=payload.get("prestataire_id") or user.get("prestataire_id"),
+            type_facture=payload["type_facture"],
+            submitted_by=user["user_id"],
+            expected_id=prescription_data.get("prescription_id"),
+            expected_date=prescription_data.get("prescription_date"),
+        )
+        payload["ordonnance_id"] = ordonnance["ordonnance_id"]
+    elif prescription_data.get("prescription_id"):
+        payload["ordonnance_id"] = prescription_data["prescription_id"]
 
     # 5. Réutiliser la logique existante
     return predict(payload=payload, user=user, conn=conn, registry=registry)

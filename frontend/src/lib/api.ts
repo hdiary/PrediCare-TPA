@@ -28,7 +28,9 @@ import type {
   InvoiceSubmissionResult,
   UserRow,
   PrescriptionAlert,
-  RegisterPayload,
+  AdminUserCreatePayload,
+  UserReferences,
+  CreatedUserCredentials,
   AlertDecisionValue,
 } from "./types";
 
@@ -55,9 +57,9 @@ export const BASE_URL: string = import.meta.env.VITE_API_URL || "/api";
 
 export type Feature =
   | "auth" | "alerts" | "invoices" | "settings" | "audit" | "users"
-  | "health" | "models" | "prescriptions" | "register" | "password";
+  | "health" | "models" | "prescriptions" | "password";
 
-const DEFAULT_MOCKS = "models,prescriptions,register,password";
+const DEFAULT_MOCKS = "models,prescriptions,password";
 const mockedFeatures = new Set(
   String(import.meta.env.VITE_MOCKS || DEFAULT_MOCKS)
     .split(",")
@@ -73,7 +75,7 @@ export function isMock(feature: Feature): boolean {
 /** Fonctions simulées en ce moment (affichées dans le bandeau « données de démonstration »). */
 export function mockedFeatureList(): Feature[] {
   const all: Feature[] = ["auth", "alerts", "invoices", "settings", "audit", "users", "health",
-    "models", "prescriptions", "register", "password"];
+    "models", "prescriptions", "password"];
   return all.filter(isMock);
 }
 
@@ -146,7 +148,8 @@ async function request<T>(path: string, options: RequestInit = {}, opts: { auth?
 // ---------------------------------------------------------------------------
 
 interface ApiUser {
-  user_id: number; email: string; role: string; assure_id?: string | null; prestataire_id?: string | null;
+  user_id: number; identifiant?: string | null; email: string | null; role: string;
+  assure_id?: string | null; prestataire_id?: string | null;
 }
 
 const ROLE_FROM_API: Record<string, Role> = {
@@ -155,15 +158,16 @@ const ROLE_FROM_API: Record<string, Role> = {
   gestionnaire: "manager",
   administrateur: "admin",
 };
-const ROLE_PREFIX: Record<Role, string> = { insured: "ASS", provider: "PRE", manager: "GST", admin: "ADM" };
+const ROLE_PREFIX: Record<Role, string> = { insured: "ASS", provider: "PDS", manager: "GES", admin: "ADM" };
 
 /** Le frontend affiche un pseudonyme : identifiant métier si le compte en a un, sinon RÔLE-numéro. */
 function mapUser(u: ApiUser): { role: Role; display_name: string; pseudonym: string; email: string } {
   const role = ROLE_FROM_API[u.role];
   if (!role) throw new Error(`Rôle inconnu : ${u.role}`);
-  const pseudonym = u.assure_id || u.prestataire_id || `${ROLE_PREFIX[role]}-${String(u.user_id).padStart(4, "0")}`;
-  const local = u.email.split("@")[0];
-  return { role, pseudonym, email: u.email, display_name: local.charAt(0).toUpperCase() + local.slice(1) };
+  const pseudonym = u.identifiant || u.assure_id || u.prestataire_id ||
+    `${ROLE_PREFIX[role]}-${String(u.user_id).padStart(4, "0")}`;
+  const local = u.email?.includes("@") ? u.email.split("@")[0] : pseudonym;
+  return { role, pseudonym, email: u.email ?? "", display_name: local.charAt(0).toUpperCase() + local.slice(1) };
 }
 
 let cachedMe: { pseudonym: string; role: Role; prestataireId: string | null } | null = null;
@@ -250,29 +254,39 @@ function newFactureId(): string {
 // ---------------------------------------------------------------------------
 
 export const api = {
-  async login(email: string, password: string): Promise<AuthResponse> {
+  async login(identifier: string, password: string): Promise<AuthResponse> {
     if (isMock("auth")) {
       await delay(600);
-      const account = MOCK_ACCOUNTS.find((a) => a.email === email && a.password === password);
+      const account = MOCK_ACCOUNTS.find(
+        (a) => (a.email.toLowerCase() === identifier.toLowerCase() ||
+          a.pseudonym.toLowerCase() === identifier.toLowerCase()) && a.password === password,
+      );
       if (!account) throw new Error("Email ou mot de passe incorrect");
       return {
         access_token: "mock-jwt-" + account.role,
         role: account.role,
         display_name: account.display_name,
         pseudonym: account.pseudonym,
+        email: account.email,
       };
     }
     try {
       const data = await request<{ access_token: string; user: ApiUser }>(
         "/auth/login",
-        { method: "POST", body: JSON.stringify({ email, password }) },
+        { method: "POST", body: JSON.stringify({ identifier, password }) },
         { auth: false },
       );
       const u = mapUser(data.user);
       cachedMe = { pseudonym: u.pseudonym, role: u.role, prestataireId: null };
-      return { access_token: data.access_token, role: u.role, display_name: u.display_name, pseudonym: u.pseudonym };
+      return {
+        access_token: data.access_token,
+        role: u.role,
+        display_name: u.display_name,
+        pseudonym: u.pseudonym,
+        email: u.email,
+      };
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) throw new Error("Email ou mot de passe incorrect");
+      if (e instanceof ApiError && e.status === 401) throw new Error("Identifiant ou mot de passe incorrect");
       throw e;
     }
   },
@@ -369,6 +383,8 @@ export const api = {
         const form = new FormData();
         form.append("file", file);
         if (prescriptionJson) form.append("prescription", prescriptionJson);
+        const prescriptionScan = data.get("prescription_scan");
+        if (prescriptionScan instanceof File) form.append("prescription_scan", prescriptionScan);
         if (me.role === "provider" && me.prestataireId) form.append("prestataire_id", me.prestataireId);
 
         const res = await fetch(`${BASE_URL}/predict/pdf`, {
@@ -494,30 +510,29 @@ export const api = {
     throw new Error("Dépôt impossible");
   },
 
-  /** Scan de l'ordonnance : pas encore de route côté backend (simulé par défaut). */
-  async uploadPrescriptionScan(invoiceId: string, scan: File): Promise<void> {
-    if (isMock("prescriptions")) {
-      await delay(500);
-      return;
-    }
+  async createPrescriptionFromScan(
+    insuredId: string,
+    invoiceType: string,
+    scan: File,
+    expected: InvoicePrescription,
+  ): Promise<string> {
     const formData = new FormData();
     formData.append("scan", scan);
-    const res = await fetch(`${BASE_URL}/invoices/${encodeURIComponent(invoiceId)}/prescription-scan`, {
+    formData.append("assure_id", insuredId);
+    formData.append("type_facture", invoiceType);
+    formData.append("expected_id", expected.prescription_id);
+    formData.append("expected_date", expected.prescription_date);
+    const res = await fetch(`${BASE_URL}/ordonnances/pdf`, {
       method: "POST",
       headers: { ...authHeaders() },
       body: formData,
     });
-    if (!res.ok) throw new Error("Erreur lors de l'envoi de l'ordonnance");
-  },
-
-  // ---- Comptes : routes publiques (sans jeton), pas encore de routes côté backend ----
-  async register(payload: RegisterPayload): Promise<{ status: "pending" }> {
-    if (isMock("register")) {
-      await delay(900);
-      // Réponse identique que l'e-mail existe déjà ou non : on ne révèle pas quels comptes existent.
-      return { status: "pending" };
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw parseErrorBody(body, res.status);
     }
-    return request("/auth/register", { method: "POST", body: JSON.stringify(payload) }, { auth: false });
+    const response = await res.json() as { ordonnance_id: string };
+    return response.ordonnance_id;
   },
 
   async requestPasswordReset(email: string): Promise<void> {
@@ -754,6 +769,41 @@ export const api = {
       const u = mapUser(r);
       return { pseudonym: u.pseudonym, display_name: u.display_name, role: u.role, email: u.email, status: r.is_active ? "active" : "inactive" };
     });
+  },
+
+  async getUserReferences(): Promise<UserReferences> {
+    if (isMock("users")) throw new Error("Les référentiels ne sont pas disponibles en mode démonstration.");
+    return request("/admin/users/references");
+  },
+
+  async createUser(payload: AdminUserCreatePayload): Promise<CreatedUserCredentials> {
+    if (isMock("users")) throw new Error("La création de comptes nécessite l’API active.");
+    const row = await request<ApiUser & {
+      is_active: boolean;
+      mot_de_passe_provisoire: string;
+      email_envoye: boolean;
+    }>("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        email: payload.email.trim() || null,
+        numero_cin: payload.numero_cin.trim() || null,
+      }),
+    });
+    const user = mapUser(row);
+    return {
+      user_id: row.user_id,
+      identifier: user.pseudonym,
+      temporary_password: row.mot_de_passe_provisoire,
+      email_sent: row.email_envoye,
+      user: {
+        pseudonym: user.pseudonym,
+        display_name: user.display_name,
+        role: user.role,
+        email: row.email,
+        status: row.is_active ? "active" : "inactive",
+      },
+    };
   },
 
   async getConversations(): Promise<{ conversations: Conversation[] }> {

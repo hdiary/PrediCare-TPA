@@ -5,7 +5,7 @@ import { api } from './api';
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<User>;
+  login: (identifier: string, password: string) => Promise<User>;
   logout: () => void;
 }
 
@@ -41,14 +41,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const res = await api.login(email, password);
+  const login = useCallback(async (identifier: string, password: string) => {
+    const res = await api.login(identifier, password);
     localStorage.setItem('predicare_token', res.access_token);
     if (res.refresh_token) {
       localStorage.setItem('predicare_refresh_token', res.refresh_token);
     }
-    setUser({ role: res.role, display_name: res.display_name, pseudonym: res.pseudonym, email });
-    const loggedIn: User = { role: res.role, display_name: res.display_name, pseudonym: res.pseudonym, email };
+    const loggedIn: User = {
+      role: res.role,
+      display_name: res.display_name,
+      pseudonym: res.pseudonym,
+      email: res.email,
+    };
     setUser(loggedIn);
     return loggedIn;
   }, []);

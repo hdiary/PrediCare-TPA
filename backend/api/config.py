@@ -47,8 +47,25 @@ class Settings(BaseSettings):
     admin_email: str = "admin@predicare.local"
     admin_initial_password: str | None = None
 
+    # Identifiants pseudonymisés des comptes créés par l'administration.
+    pseudo_hmac_key: str | None = None
+
     # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
     identity_encryption_key: str | None = None
+    identity_key_version: int = 1
+
+    # E-mails transactionnels
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "no-reply@predicare.local"
+    smtp_starttls: bool = True
+    app_public_url: str = "http://localhost:5173"
+    password_reset_path: str = "/reinitialiser-mot-de-passe"
+    password_reset_ttl_minutes: int = 30
+    password_reset_max_per_hour: int = 3
+    dev_log_reset_link: bool = False
 
     # Alertes n8n (P3-13)
     n8n_webhook_url: str | None = None      # ex. http://n8n:5678/webhook/predicare-alert

@@ -1,15 +1,48 @@
 """Prescription creation and validity checks."""
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from api import repositories as repo
 from api.db import get_db
 from api.deps import require_role
 from api.schemas_domain import PrescriptionCreate, PrescriptionValidityOut
 from api.services.prescription_anomalies import evaluate_prescription, load_prescription_context
+from api.repositories import load_reference_tables
+from api.services.pdf_extract import build_reference
+from api.services.prescription_upload import create_prescription_from_pdf
 
 router = APIRouter(prefix="/ordonnances", tags=["ordonnances"])
+
+
+@router.post("/pdf", status_code=201, response_model=dict)
+async def create_prescription_from_scan(
+    scan: UploadFile = File(...),
+    assure_id: str = Form(...),
+    type_facture: str = Form(...),
+    expected_id: str | None = Form(None),
+    expected_date: str | None = Form(None),
+    user: dict = Depends(require_role("professionnel_sante")),
+    conn=Depends(get_db),
+):
+    if not scan.filename or not scan.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Seul le format PDF est accepté.")
+    content = await scan.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 10 Mo.")
+    if not user.get("prestataire_id"):
+        raise HTTPException(status_code=403, detail="Prestataire absent du JWT")
+    return create_prescription_from_pdf(
+        conn,
+        content,
+        build_reference(load_reference_tables(conn)),
+        assure_id=assure_id,
+        prescripteur_id=user["prestataire_id"],
+        type_facture=type_facture,
+        submitted_by=user["user_id"],
+        expected_id=expected_id,
+        expected_date=expected_date,
+    )
 
 
 @router.post("", status_code=201, response_model=dict)

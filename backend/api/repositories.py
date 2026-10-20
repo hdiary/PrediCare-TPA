@@ -370,6 +370,15 @@ def insert_alert(conn, *, facture_id: str, codes: list[str], priority: str = "MO
     return row["alerte_id"] if row else 0
 
 
+# ---------- comptes utilisateurs ----------
+
+_COLS_UTILISATEUR = (
+    "utilisateur_id, identifiant, email, role, assure_id, prestataire_id, actif, "
+    "derniere_connexion, mot_de_passe_hash, tentatives_echouees, verrouille_jusqua"
+)
+_CHAMPS_MODIFIABLES = {"identifiant", "role", "assure_id", "prestataire_id", "actif"}
+
+
 def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
         "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "
@@ -380,7 +389,7 @@ def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
 
 
 _USER_SELECT = (
-    "u.utilisateur_id, u.nom_utilisateur AS email, r.nom_role AS role, "
+    "u.utilisateur_id, u.identifiant, u.nom_utilisateur AS email, r.nom_role AS role, "
     "u.assure_id, u.prestataire_id, u.est_actif AS actif, "
     "u.derniere_connexion, u.tentatives_echouees, u.verrouille_jusqua"
 )
@@ -389,7 +398,7 @@ _USER_FROM = (
     "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
     "JOIN roles r ON r.role_id = ur.role_id"
 )
-_CHAMPS_MODIFIABLES = {"role", "assure_id", "prestataire_id", "actif"}
+_CHAMPS_MODIFIABLES = {"identifiant", "role", "assure_id", "prestataire_id", "actif"}
 
 
 def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | None,
@@ -403,8 +412,8 @@ def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | No
         clauses.append("u.est_actif = %s")
         params.append(actif)
     if q:
-        clauses.append("u.nom_utilisateur ILIKE %s")
-        params.append(f"%{q}%")
+        clauses.append("(u.nom_utilisateur ILIKE %s OR u.identifiant ILIKE %s)")
+        params.extend((f"%{q}%", f"%{q}%"))
     where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
     params.extend((limit, offset))
     return conn.execute(
@@ -437,7 +446,7 @@ def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
 
 def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
                        assure_id: str | None, prestataire_id: str | None,
-                       actif: bool) -> dict | None:
+                       actif: bool, identifiant: str | None = None) -> dict | None:
     """Crée un compte ; retourne None si le nom d'utilisateur existe déjà."""
     role_row = conn.execute(
         "SELECT role_id FROM roles WHERE nom_role = %s", (role,)
@@ -446,10 +455,10 @@ def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
         raise ValueError(f"Rôle inconnu : {role}")
     created = conn.execute(
         "INSERT INTO utilisateurs "
-        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, est_actif) "
-        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING "
+        "(identifiant, nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, est_actif) "
+        "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING "
         "RETURNING utilisateur_id",
-        (email, password_hash, assure_id, prestataire_id, actif),
+        (identifiant, email, password_hash, assure_id, prestataire_id, actif),
     ).fetchone()
     if created is None:
         return None
@@ -481,6 +490,7 @@ def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
             (user_id, role_row["role_id"]),
         )
     columns = {
+        "identifiant": "identifiant",
         "assure_id": "assure_id",
         "prestataire_id": "prestataire_id",
         "actif": "est_actif",

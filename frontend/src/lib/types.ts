@@ -13,6 +13,7 @@ export interface AuthResponse {
   role: Role;
   display_name: string;
   pseudonym: string;
+  email: string;
 }
 
 export interface Invoice {
@@ -249,30 +250,40 @@ export interface InvoicePrescription {
   diagnosis?: string;
 }
 
-/** Rôles ouverts à l'inscription ; gestionnaire et administrateur sont créés par un administrateur. */
-export type SignupRole = 'insured' | 'provider';
-
-export interface RegisterPayload {
-  role: SignupRole;
-  email: string;
-  password: string;
-  consent: boolean;
-  // assuré
-  first_name?: string;
-  last_name?: string;
-  policy_number?: string;
-  birth_date?: string;
-  // professionnel de santé
-  organization_name?: string;
-  provider_code?: string;
-  tax_id?: string;
-  onm_number?: string;
-}
-
 export interface UserRow {
   pseudonym: string;
   display_name: string;
   role: Role;
-  email: string;
+  email: string | null;
   status: 'active' | 'inactive';
+}
+
+export type AdminAccountRole = 'assure' | 'professionnel_sante' | 'gestionnaire' | 'administrateur';
+
+export interface CreatedUserCredentials {
+  user_id: number;
+  identifier: string;
+  temporary_password: string;
+  email_sent: boolean;
+  user: UserRow;
+}
+
+export interface AdminUserCreatePayload {
+  role: AdminAccountRole;
+  nom: string;
+  prenoms: string;
+  sexe: 'F' | 'M';
+  date_naissance: string;
+  telephone: string;
+  email: string;
+  adresse: string;
+  ville: string;
+  numero_cin: string;
+  assure_id?: string;
+  prestataire_id?: string;
+}
+
+export interface UserReferences {
+  assures: { assure_id: string; contrat_id: string; rang_beneficiaire: string }[];
+  prestataires: { prestataire_id: string; nom: string; ville: string }[];
 }

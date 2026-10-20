@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api import db
-from api.bootstrap import ensure_demo_users, ensure_seed_users
+from api.bootstrap import ensure_demo_users, ensure_seed_users, ensure_user_identifiers
 from api.config import get_settings
 from api.routers import admin, alerts, auth, bi, chat, factures, health, model, predict, ordonnances
 from api.services.metrics import http_metrics
@@ -46,6 +46,7 @@ async def lifespan(_: FastAPI):
     db.init_pool()
     ensure_demo_users()
     ensure_seed_users()
+    ensure_user_identifiers()
     app.state.rag_agent = None
     try:
         from rag.factory import create_agent

@@ -67,6 +67,8 @@ export function Input({
   required = false,
   icon,
   id,
+  pattern,
+  maxLength,
 }: {
   label?: string;
   type?: string;
@@ -77,6 +79,8 @@ export function Input({
   required?: boolean;
   icon?: ReactNode;
   id?: string;
+  pattern?: string;
+  maxLength?: number;
 }) {
   return (
     <div className="w-full">
@@ -94,6 +98,8 @@ export function Input({
           onChange={onChange}
           placeholder={placeholder}
           required={required}
+          pattern={pattern}
+          maxLength={maxLength}
           className={`w-full rounded-xl border bg-white dark:bg-surface-900 text-surface-900 dark:text-surface-100 placeholder-surface-400 dark:placeholder-surface-500 h-11 px-3.5 text-sm ${icon ? 'pl-10' : ''} ${error ? 'border-danger-400' : 'border-surface-300 dark:border-surface-600'} focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20`}
         />
       </div>

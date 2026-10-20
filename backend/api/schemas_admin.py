@@ -1,9 +1,10 @@
 """Schémas de l'écran d'administration (seuil d'alerte et canaux de notification)."""
-import re
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from api.schemas import Email
 
 
 class AuditEntryOut(BaseModel):
@@ -30,12 +31,25 @@ StatutCompte = Literal["actifs", "inactifs", "tous"]
 
 
 class UserCreate(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
-    password: str = Field(min_length=8, max_length=256)
+    nom: str = Field(min_length=1, max_length=100)
+    prenoms: str = Field(min_length=1, max_length=150)
+    sexe: Literal["F", "M"]
+    date_naissance: date
+    telephone: str = Field(min_length=3, max_length=30)
+    email: Email | None = None
+    adresse: str = Field(min_length=1, max_length=255)
+    ville: str = Field(min_length=1, max_length=100)
+    numero_cin: str | None = Field(default=None, pattern=r"^\d{12}$")
     role: Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"]
     assure_id: str | None = None
     prestataire_id: str | None = None
-    is_active: bool = True
+
+    @field_validator("date_naissance")
+    @classmethod
+    def date_is_not_future(cls, value: date) -> date:
+        if value > date.today():
+            raise ValueError("La date de naissance ne peut pas être dans le futur")
+        return value
 
 
 class UserUpdate(BaseModel):
@@ -47,12 +61,18 @@ class UserUpdate(BaseModel):
 
 class UserRowOut(BaseModel):
     user_id: int
-    email: str
+    identifiant: str | None = None
+    email: str | None = None
     role: str
     assure_id: str | None = None
     prestataire_id: str | None = None
     is_active: bool
     last_login: str | None = None
+
+
+class UserCreatedOut(UserRowOut):
+    mot_de_passe_provisoire: str
+    email_envoye: bool
 
 
 def _controle_rattachement(role: str, assure_id: str | None, prestataire_id: str | None) -> None:

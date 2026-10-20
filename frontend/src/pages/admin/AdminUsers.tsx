@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Users, Search } from 'lucide-react';
-import { Card, Badge, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Search, Users } from 'lucide-react';
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Skeleton } from '@/components/ui';
 import { ROLE_LABELS } from '@/lib/format';
-import { api } from '@/lib/api';
+import { api, isMock } from '@/lib/api';
 import type { Role, UserRow } from '@/lib/types';
 
 const ROLE_BADGE_COLORS: Record<Role, string> = {
@@ -13,47 +14,60 @@ const ROLE_BADGE_COLORS: Record<Role, string> = {
 };
 
 export function AdminUsers() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api.getUsers().then((rows) => { setUsers(rows); setLoading(false); })
-      .catch(() => { setError(true); setLoading(false); });
-  }, []);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  const filtered = users.filter((u) => {
-    const matchSearch = u.pseudonym.toLowerCase().includes(search.toLowerCase()) ||
-      u.display_name.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchSearch && matchRole;
-  });
+  useEffect(() => {
+    api.getUsers()
+      .then(setUsers)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
 
   if (loading) return <Skeleton className="h-96" />;
   if (error) return <ErrorState message="Impossible de charger les utilisateurs." />;
 
+  const term = search.toLowerCase();
+  const filtered = users.filter((user) => (
+    (user.pseudonym.toLowerCase().includes(term) ||
+      user.display_name.toLowerCase().includes(term) ||
+      (user.email ?? '').toLowerCase().includes(term)) &&
+    (roleFilter === 'all' || user.role === roleFilter)
+  ));
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-surface-800 dark:text-surface-100 mb-1">Utilisateurs</h2>
-        <p className="text-sm text-surface-500 dark:text-surface-400">Comptes utilisateurs (pseudonymes uniquement).</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="mb-1 text-xl font-bold text-surface-800 dark:text-surface-100">Utilisateurs</h2>
+          <p className="text-sm text-surface-500 dark:text-surface-400">
+            Comptes utilisateurs et identifiants pseudonymisés.
+          </p>
+        </div>
+        {!isMock('users') && (
+          <Button onClick={() => navigate('/admin/utilisateurs/nouveau')}>
+            <Plus className="h-4 w-4" /> Créer un compte
+          </Button>
+        )}
       </div>
 
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex flex-col gap-3 md:flex-row">
         <div className="flex-1">
           <Input
-            placeholder="Rechercher par pseudonyme ou nom d'affichage..."
+            placeholder="Rechercher par identifiant, e-mail ou nom d’affichage..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            icon={<Search className="w-4 h-4" />}
+            onChange={(event) => setSearch(event.target.value)}
+            icon={<Search className="h-4 w-4" />}
           />
         </div>
         <select
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-700 dark:text-surface-200 px-4 py-2.5 text-sm focus:border-primary-500"
+          onChange={(event) => setRoleFilter(event.target.value)}
+          className="rounded-xl border border-surface-300 bg-white px-4 py-2.5 text-sm text-surface-700 dark:border-surface-600 dark:bg-surface-900 dark:text-surface-200"
         >
           <option value="all">Tous les rôles</option>
           <option value="insured">Assurés</option>
@@ -65,33 +79,27 @@ export function AdminUsers() {
 
       <Card className="overflow-hidden">
         {filtered.length === 0 ? (
-          <EmptyState
-            icon={<Users className="w-8 h-8" />}
-            title="Aucun utilisateur"
-            description="Aucun utilisateur ne correspond à vos critères."
-          />
+          <EmptyState icon={<Users className="h-8 w-8" />} title="Aucun utilisateur" description="Aucun utilisateur ne correspond à vos critères." />
         ) : (
           <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full">
               <thead>
-                <tr className="bg-surface-100 dark:bg-surface-700/50 text-left text-xs font-semibold text-surface-500 dark:text-surface-300 uppercase tracking-wider">
-                  <th className="px-6 py-3.5">Pseudonyme</th>
-                  <th className="px-6 py-3.5">Nom d'affichage</th>
+                <tr className="bg-surface-100 text-left text-xs font-semibold uppercase tracking-wider text-surface-500 dark:bg-surface-700/50 dark:text-surface-300">
+                  <th className="px-6 py-3.5">Identifiant</th>
+                  <th className="px-6 py-3.5">Nom d’affichage</th>
                   <th className="px-6 py-3.5">Rôle</th>
                   <th className="px-6 py-3.5">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
                 {filtered.map((user) => (
-                  <tr key={user.pseudonym} className="hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-mono font-medium text-surface-700 dark:text-surface-200">{user.pseudonym}</td>
+                  <tr key={user.pseudonym} className="transition-colors hover:bg-surface-50 dark:hover:bg-surface-700/50">
+                    <td className="px-6 py-4 font-mono text-sm font-medium text-surface-700 dark:text-surface-200">{user.pseudonym}</td>
                     <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300">{user.display_name}</td>
-                    <td className="px-6 py-4">
-                      <Badge className={ROLE_BADGE_COLORS[user.role]}>{ROLE_LABELS[user.role]}</Badge>
-                    </td>
+                    <td className="px-6 py-4"><Badge className={ROLE_BADGE_COLORS[user.role]}>{ROLE_LABELS[user.role]}</Badge></td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 text-sm ${user.status === 'active' ? 'text-success-600' : 'text-surface-400'}`}>
-                        <span className={`w-2 h-2 rounded-full ${user.status === 'active' ? 'bg-success-500' : 'bg-surface-300 dark:bg-surface-600'}`} />
+                        <span className={`h-2 w-2 rounded-full ${user.status === 'active' ? 'bg-success-500' : 'bg-surface-300 dark:bg-surface-600'}`} />
                         {user.status === 'active' ? 'Actif' : 'Inactif'}
                       </span>
                     </td>

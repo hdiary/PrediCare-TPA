@@ -19,7 +19,7 @@ from api.db import get_db
 from api.deps import get_current_user
 from api.schemas import (
     ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, LogoutRequest,
-    MessageResponse, RefreshRequest, RegisterRequest, ResetPasswordRequest,
+    MessageResponse, RefreshRequest, ResetPasswordRequest,
     TokenResponse, UserOut,
 )
 from api.security import (
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _authenticate(conn, email: str, password: str) -> dict:
+def _authenticate(conn, identifier: str, password: str) -> dict:
     settings = get_settings()
     if len(password.encode("utf-8")) > 72:
         raise HTTPException(
@@ -48,8 +48,9 @@ def _authenticate(conn, email: str, password: str) -> dict:
         "FROM utilisateurs u "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
-        "WHERE lower(u.nom_utilisateur) = lower(%s)",
-        (email.strip(),),
+        "WHERE lower(u.nom_utilisateur) = lower(%s) "
+        "OR lower(u.identifiant) = lower(%s)",
+        (identifier.strip(), identifier.strip()),
     ).fetchone()
 
     if row and row["verrouille"]:
@@ -143,7 +144,7 @@ def _token_response(
         refresh_expires_in=max(
             0, int((refresh_expires_at - datetime.now(refresh_expires_at.tzinfo)).total_seconds())
         ),
-        user=UserOut(**{k: row[k] for k in UserOut.model_fields}),
+        user=UserOut(**{k: row.get(k) for k in UserOut.model_fields}),
     )
 
 
@@ -157,8 +158,8 @@ def _invalid_credentials() -> HTTPException:
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, conn=Depends(get_db)):
-    """Connexion JSON, utilisée par le frontend."""
-    return _token_response(_authenticate(conn, body.email, body.password), conn)
+    """Connexion par identifiant pseudonymisé ou adresse e-mail."""
+    return _token_response(_authenticate(conn, body.identifier, body.password), conn)
 
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=True)
@@ -182,8 +183,8 @@ def refresh(body: RefreshRequest, conn=Depends(get_db)):
         raise _invalid_credentials() from None
 
     row = conn.execute(
-        "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, r.nom_role AS role, "
-        "u.assure_id, u.prestataire_id "
+        "SELECT u.utilisateur_id AS user_id, u.identifiant, "
+        "u.nom_utilisateur AS email, r.nom_role AS role, u.assure_id, u.prestataire_id "
         "FROM auth_sessions s JOIN utilisateurs u ON u.utilisateur_id = s.user_id "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
@@ -243,37 +244,17 @@ def logout(
 
 @router.get("/me", response_model=UserOut)
 def me(user: dict = Depends(get_current_user)):
-    return UserOut(**{k: user[k] for k in UserOut.model_fields})
+    return UserOut(**{k: user.get(k) for k in UserOut.model_fields})
 
 
-# ---------- inscription, mot de passe oublié, changement de mot de passe ----------
+# ---------- création admin, mot de passe oublié, changement de mot de passe ----------
 
-@router.post("/register", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
-def register(body: RegisterRequest, conn=Depends(get_db)):
-    """Demande de compte (assuré ou professionnel de santé).
-
-    Le compte est créé INACTIF et sans rattachement : un administrateur doit le valider et le
-    lier à l'assuré ou au prestataire (PATCH /admin/users/{id}). Le rattachement n'est jamais
-    pris dans la requête. La réponse est identique si l'adresse existe déjà (pas d'énumération
-    de comptes).
-    """
-    if not get_settings().registration_enabled:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Les inscriptions sont désactivées")
-    # Le hachage est toujours calculé : même durée que l'adresse existe ou non
-    password_hash = hash_password(body.password)
-    created = repo.create_utilisateur(
-        conn, email=body.email, password_hash=password_hash, role=body.role,
-        assure_id=None, prestataire_id=None, actif=False,
-    )
-    if created:
-        write_audit_compte(conn, event_type="compte_demande", actor_id=None,
-                           entity_id=created["utilisateur_id"], output_data={"role": body.role})
-        logger.info("register_ok", extra={"user_id": created["utilisateur_id"],
-                                          "role": body.role})
-    return MessageResponse(
-        detail="Demande enregistrée. Un administrateur doit valider votre compte "
-               "avant votre première connexion."
+@router.post("/register", status_code=status.HTTP_403_FORBIDDEN)
+def register():
+    """L'inscription publique est désactivée : seul un administrateur crée un compte."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="La création de compte est réservée à un administrateur",
     )
 
 

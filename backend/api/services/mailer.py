@@ -63,3 +63,18 @@ def send_reset_email(user_id: int, to: str, token: str) -> bool:
     ok = send_mail(to, "PrediCare TPA - Réinitialisation de votre mot de passe", corps)
     logger.info("password_reset_mail", extra={"user_id": user_id, "sent": ok})
     return ok
+
+
+def send_account_credentials(to: str, identifier: str, password: str) -> bool:
+    """Envoie les identifiants initiaux sans jamais les écrire dans les journaux."""
+    body = (
+        "Bonjour,\n\n"
+        "Votre compte PrediCare TPA a été créé par un administrateur.\n\n"
+        f"Identifiant : {identifier}\n"
+        f"Mot de passe provisoire : {password}\n\n"
+        "Connectez-vous avec votre identifiant ou votre adresse e-mail. "
+        "Pour votre sécurité, modifiez ce mot de passe après votre première connexion.\n"
+    )
+    sent = send_mail(to, "PrediCare TPA - Vos identifiants de connexion", body)
+    logger.info("account_credentials_mail", extra={"sent": sent})
+    return sent

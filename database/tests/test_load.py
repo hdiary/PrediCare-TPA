@@ -48,7 +48,8 @@ def run(cmd, env_extra=None, check=True, cwd=None):
 
 def load(clean, secure, *extra, check=True):
     return run([sys.executable, "load.py", "--clean-dir", str(clean),
-                "--secure-dir", str(secure), *extra], check=check)
+                "--secure-dir", str(secure), "--include-operational-data",
+                *extra], check=check)
 
 
 @pytest.fixture(scope="module")
@@ -126,7 +127,8 @@ def test_force_reload_inserts_and_updates_nothing(db, pipeline):
 
 
 def test_is_initialised(db, pipeline):
-    r = run([sys.executable, "load.py", "--is-initialised"], check=False)
+    r = run([sys.executable, "load.py", "--is-initialised",
+             "--include-operational-data"], check=False)
     assert r.returncode == 0 and "initialised" in r.stdout
 
 
@@ -274,5 +276,6 @@ def test_zzz_downgrade_to_base_then_upgrade(db):
     assert left == 0
     run(["alembic", "upgrade", "head"], cwd=ALEMBIC_DIR)
     assert count(db, "ingestion_log") == 0
-    r = run([sys.executable, "load.py", "--is-initialised"], check=False)
+    r = run([sys.executable, "load.py", "--is-initialised",
+             "--include-operational-data"], check=False)
     assert r.returncode == 2
