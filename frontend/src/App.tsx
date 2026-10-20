@@ -38,7 +38,6 @@ const AdminConfig = lazyPage(() => import('@/pages/admin/AdminConfig'), 'AdminCo
 const AdminModels = lazyPage(() => import('@/pages/admin/AdminModels'), 'AdminModels');
 const AdminAuditLog = lazyPage(() => import('@/pages/admin/AdminAuditLog'), 'AdminAuditLog');
 const AdminUsers = lazyPage(() => import('@/pages/admin/AdminUsers'), 'AdminUsers');
-const RegisterPage = lazyPage(() => import('@/pages/RegisterPage'), 'RegisterPage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/ForgotPasswordPage'), 'ForgotPasswordPage');
 const ResetPasswordPage = lazyPage(() => import('@/pages/ResetPasswordPage'), 'ResetPasswordPage');
 
@@ -67,7 +66,6 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<RootRedirect />} />
                 <Route path="/login" element={<LoginRoute />} />
-                <Route path="/inscription" element={<RegisterPage />} />
                 <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
                 <Route path="/reinitialiser-mot-de-passe" element={<ResetPasswordPage />} />
                 <Route path="/acces-refuse" element={<AccessDeniedPage />} />

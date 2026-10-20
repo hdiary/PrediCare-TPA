@@ -370,10 +370,42 @@ def insert_alert(conn, *, facture_id: str, codes: list[str], priority: str = "MO
     return row["alerte_id"] if row else 0
 
 
+# ---------- comptes utilisateurs ----------
+
+_COLS_UTILISATEUR = (
+    "utilisateur_id, identifiant, email, role, assure_id, prestataire_id, actif, "
+    "derniere_connexion, mot_de_passe_hash, tentatives_echouees, verrouille_jusqua"
+)
+_CHAMPS_MODIFIABLES = {"identifiant", "role", "assure_id", "prestataire_id", "actif"}
+
+
 def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
+        "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "
+        "FROM alertes_prescription WHERE prediction_id = %s "
+        "ORDER BY alerte_regle_id",
+        (prediction_id,),
+    ).fetchall()
+
+
+def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | None,
+                      limit: int, offset: int) -> list[dict]:
+    filters = []
+    params = []
+    if role is not None:
+        filters.append("role = %s")
+        params.append(role)
+    if actif is not None:
+        filters.append("actif = %s")
+        params.append(actif)
+    if q:
+        filters.append("email ILIKE %s")
+        params.append(f"%{q}%")
+    clause = "WHERE " + " AND ".join(filters) if filters else ""
+    params.extend((limit, offset))
+    return conn.execute(
         f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs {clause} "
-        f"ORDER BY utilisateur_id{pagination}",
+        "ORDER BY utilisateur_id LIMIT %s OFFSET %s",
         params,
     ).fetchall()
 
@@ -399,13 +431,14 @@ def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
 
 def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
                        assure_id: str | None, prestataire_id: str | None,
-                       actif: bool) -> dict | None:
+                       actif: bool, identifiant: str | None = None) -> dict | None:
     """Crée un compte ; retourne None si l'adresse existe déjà (aucune erreur levée)."""
     return conn.execute(
-        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, prestataire_id, "
-        "actif) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING "
+        "INSERT INTO utilisateurs (identifiant, email, mot_de_passe_hash, role, assure_id, "
+        "prestataire_id, actif) VALUES (%s, %s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT DO NOTHING "
         f"RETURNING {_COLS_UTILISATEUR}",
-        (email, password_hash, role, assure_id, prestataire_id, actif),
+        (identifiant, email, password_hash, role, assure_id, prestataire_id, actif),
     ).fetchone()
 
 

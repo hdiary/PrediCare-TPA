@@ -47,7 +47,9 @@ Le service du backend doit s'appeler `api` et écouter sur le port 8000 (voir `n
 | Supervision : métriques, dérive | `/admin/metrics` | **réel** pour latence de scoring et métriques HTTP ; PSI `N/A` sans référence d'entraînement |
 | Versions du modèle | `/admin/models` | **simulé** |
 | Assistant RAG (assuré et prestataire) | `GET /chat/history`, `POST /chat` | **réel** : agent RAG, index vectoriel PostgreSQL/pgvector, réponses sourcées et historique persistant |
-| Inscription, mot de passe oublié, réinitialisation | `/auth/register`, `/auth/forgot-password`, `/auth/reset-password` | **simulé** : aucun compte créé, aucun e-mail envoyé (avertissement affiché) |
+| Création de comptes | `POST /admin/users` | **réel** : réservé à l'administrateur, identifiant pseudonymisé, mot de passe initial transmis par SMTP |
+| Connexion | `POST /auth/login` | **réel** : identifiant pseudonymisé ou adresse e-mail |
+| Mot de passe oublié, réinitialisation | `/auth/forgot-password`, `/auth/reset-password` | Réel si SMTP est configuré |
 | Alertes de prescription | `/prescription-alerts` | **simulé** (règles de `ml/prescription_rules.py` non exposées par l'API) |
 | Scan d'ordonnance | `/invoices/{id}/prescription-scan` | **simulé** |
 

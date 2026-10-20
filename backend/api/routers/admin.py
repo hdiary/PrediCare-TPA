@@ -3,6 +3,9 @@ gestion des comptes utilisateurs.
 
 À compléter : supervision détaillée et dérive.
 """
+import secrets
+import string
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import ValidationError
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
@@ -34,8 +37,14 @@ from api.schemas_admin import (
     _controle_rattachement,
 )
 from api.security import generate_reset_token, hash_password
-from api.services.mailer import send_reset_email
+from api.services.identity import (
+    IdentityUnavailableError,
+    decrypt_account_identity,
+    encrypt_account_identity,
+)
+from api.services.mailer import send_account_credentials, send_reset_email
 from api.services.model_registry import ModelUnavailableError, get_registry
+from api.services.pseudonym import PseudonymConfigurationError, pseudonymise_account
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_only = Depends(require_role("administrateur"))
@@ -350,7 +359,8 @@ UserId = Path(ge=1, le=2_147_483_647, description="Identifiant du compte")
 def _user_out(r: dict) -> dict:
     """Compte vu par l'API (jamais le hachage du mot de passe)."""
     return {
-        "user_id": r["utilisateur_id"], "email": r["email"], "role": r["role"],
+        "user_id": r["utilisateur_id"], "identifiant": r.get("identifiant"),
+        "email": r["email"], "role": r["role"],
         "assure_id": r["assure_id"], "prestataire_id": r["prestataire_id"],
         "is_active": r["actif"],
         "last_login": r["derniere_connexion"].isoformat() if r["derniere_connexion"] else None,
@@ -402,6 +412,20 @@ def list_users(
     return [_user_out(r) for r in rows]
 
 
+@router.get("/users/references", dependencies=[admin_only])
+def user_references(conn=Depends(get_db)):
+    """Référentiels métier disponibles pour le rattachement des nouveaux comptes."""
+    assures = conn.execute(
+        "SELECT assure_id, contrat_id, rang_beneficiaire FROM assures "
+        "WHERE date_radiation IS NULL ORDER BY assure_id LIMIT 2000"
+    ).fetchall()
+    prestataires = conn.execute(
+        "SELECT prestataire_id, nom, ville FROM prestataires "
+        "WHERE statut = 'ACTIF' ORDER BY prestataire_id LIMIT 2000"
+    ).fetchall()
+    return {"assures": assures, "prestataires": prestataires}
+
+
 @router.get("/users/{user_id}", response_model=UserRowOut, dependencies=[admin_only])
 def get_user(user_id: int = UserId, conn=Depends(get_db)):
     return _user_out(_compte_ou_404(conn, user_id))
@@ -413,17 +437,53 @@ def create_user(
     admin: dict = Depends(require_role("administrateur")),
     conn=Depends(get_db),
 ):
-    """Crée un compte (tout rôle). L'administrateur choisit le mot de passe initial."""
+    """Crée un compte rattaché, pseudonymise son identifiant et envoie le mot de passe."""
+    try:
+        _controle_rattachement(body.role, body.assure_id, body.prestataire_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     _verifier_references(conn, body.assure_id, body.prestataire_id)
+    try:
+        identifier = pseudonymise_account(body.numero_cin, body.role)
+        encrypted_identity = encrypt_account_identity(
+            body.model_dump(exclude={"role", "assure_id", "prestataire_id"})
+        )
+    except PseudonymConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except IdentityUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    alphabet = string.ascii_letters + string.digits + "!@#$%&*+-_"
+    password = "".join(secrets.choice(alphabet) for _ in range(16))
+    while not (any(c.isalpha() for c in password) and any(c.isdigit() for c in password)):
+        password = "".join(secrets.choice(alphabet) for _ in range(16))
     created = repo.create_utilisateur(
-        conn, email=body.email, password_hash=hash_password(body.password), role=body.role,
-        assure_id=body.assure_id, prestataire_id=body.prestataire_id, actif=body.is_active,
+        email=body.email, password_hash=hash_password(password), role=body.role,
+        assure_id=body.assure_id, prestataire_id=body.prestataire_id, actif=True,
+        identifiant=identifier,
     )
     if created is None:
-        raise HTTPException(status_code=409, detail="Un compte existe déjà avec cette adresse")
+        raise HTTPException(
+            status_code=409,
+            detail="Un compte existe déjà pour cette adresse ou cette identité",
+        )
+    conn.execute(
+        "INSERT INTO utilisateurs_identites "
+        "(utilisateur_id, donnees_chiffrees, key_version) VALUES (%s, %s, %s)",
+        (
+            created["utilisateur_id"],
+            encrypted_identity,
+            get_settings().identity_key_version,
+        ),
+    )
     write_audit_compte(conn, event_type="compte_cree", actor_id=admin["user_id"],
                        entity_id=created["utilisateur_id"],
-                       output_data={"role": body.role, "is_active": body.is_active})
+                       output_data={"role": body.role, "identifiant": identifier})
+    if not send_account_credentials(body.email, identifier, password):
+        raise HTTPException(
+            status_code=503,
+            detail="E-mail non envoyé ; vérifiez la configuration SMTP avant de réessayer",
+        )
     return _user_out(created)
 
 
@@ -448,6 +508,7 @@ def update_user(
     presta_final = body.prestataire_id if "prestataire_id" in sent else (
         None if role_change else cible["prestataire_id"])
     actif_final = cible["actif"] if body.is_active is None else body.is_active
+    identifier_final = cible.get("identifiant")
 
     if actif_final:   # un compte inactif (refusé, désactivé) peut rester non rattaché
         try:
@@ -460,9 +521,29 @@ def update_user(
         assure_final if assure_final != cible["assure_id"] else None,
         presta_final if presta_final != cible["prestataire_id"] else None,
     )
+    if role_change:
+        stored_identity = conn.execute(
+            "SELECT donnees_chiffrees FROM utilisateurs_identites WHERE utilisateur_id = %s",
+            (user_id,),
+        ).fetchone()
+        try:
+            cin = (
+                decrypt_account_identity(stored_identity["donnees_chiffrees"]).get("numero_cin")
+                if stored_identity else cible["email"]
+            )
+            identifier_final = pseudonymise_account(cin, role_final)
+        except (IdentityUnavailableError, PseudonymConfigurationError) as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        duplicate = conn.execute(
+            "SELECT 1 AS exists FROM utilisateurs "
+            "WHERE identifiant = %s AND utilisateur_id <> %s",
+            (identifier_final, user_id),
+        ).fetchone()
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Cet identifiant est déjà attribué")
 
-    voulu = {"role": role_final, "assure_id": assure_final, "prestataire_id": presta_final,
-             "actif": actif_final}
+    voulu = {"identifiant": identifier_final, "role": role_final, "assure_id": assure_final,
+             "prestataire_id": presta_final, "actif": actif_final}
     champs = {k: v for k, v in voulu.items() if v != cible[k]}
     if not champs:
         return _user_out(cible)

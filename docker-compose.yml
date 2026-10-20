@@ -197,6 +197,16 @@ services:
       DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       JWT_SECRET: ${JWT_SECRET:-cbdf0b301c8f45e529883ddba77e032165aa5274ceb34582bdacf22de5d8b301}
+      PSEUDO_HMAC_KEY: ${PSEUDO_HMAC_KEY:-}
+      IDENTITY_ENCRYPTION_KEY: ${IDENTITY_ENCRYPTION_KEY:-}
+      IDENTITY_KEY_VERSION: ${IDENTITY_KEY_VERSION:-1}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@predicare.local}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:5173}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
       # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}

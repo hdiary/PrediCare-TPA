@@ -2,7 +2,7 @@
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, AfterValidator, BaseModel, ConfigDict, Field
 
 Role = Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"]
 # Rôles qu'une personne peut demander elle-même ; gestionnaire et administrateur
@@ -57,12 +57,17 @@ class MessageResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
+    identifier: str = Field(
+        min_length=3,
+        max_length=254,
+        validation_alias=AliasChoices("identifier", "email"),
+    )
     password: str = Field(min_length=1, max_length=128)
 
 
 class UserOut(BaseModel):
     user_id: int
+    identifiant: str | None = None
     email: str
     role: Role
     assure_id: str | None = None

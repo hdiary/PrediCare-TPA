@@ -7,6 +7,7 @@ On ne renvoie que nom, prénoms, téléphone et email (minimisation).
 import base64
 import json
 import re
+from datetime import date
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -35,3 +36,25 @@ def decrypt_identity(blob) -> dict:
     except InvalidToken as exc:
         raise IdentityUnavailableError("la clé ne correspond pas aux données") from exc
     return {k: data.get(k) for k in ("nom", "prenoms", "telephone", "email")}
+
+
+def encrypt_account_identity(fields: dict) -> bytes:
+    """Chiffre les champs personnels avant leur insertion en base."""
+    data = dict(fields)
+    if isinstance(data.get("date_naissance"), date):
+        data["date_naissance"] = data["date_naissance"].isoformat()
+    try:
+        return _fernet().encrypt(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise IdentityUnavailableError("identité invalide") from exc
+
+
+def decrypt_account_identity(blob) -> dict:
+    """Déchiffre une identité de compte pour les opérations d'administration internes."""
+    try:
+        data = json.loads(_fernet().decrypt(bytes(blob)))
+    except InvalidToken as exc:
+        raise IdentityUnavailableError("la clé ne correspond pas aux données du compte") from exc
+    if not isinstance(data, dict):
+        raise IdentityUnavailableError("identité de compte invalide")
+    return data

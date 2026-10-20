@@ -44,9 +44,10 @@ backend/api/
 | `GET /admin/config`, `PATCH /admin/config` | administrateur | Lire ou modifier les paramètres applicatifs |
 | `GET /admin/ping` | administrateur | Test du contrôle d'accès |
 | `GET /admin/users` | administrateur | Liste des comptes (`role`, `statut=actifs\|inactifs\|tous`, `q`, `limit`, `offset`) |
+| `GET /admin/users/references` | administrateur | Assurés et prestataires disponibles pour rattachement |
 | `GET /admin/users/{id}` | administrateur | Détail d'un compte |
-| `POST /admin/users` | administrateur | Crée un compte, tout rôle |
-| `PATCH /admin/users/{id}` | administrateur | Rôle, rattachement, activation (valide une inscription) |
+| `POST /admin/users` | administrateur | Crée un compte et envoie les identifiants par e-mail |
+| `PATCH /admin/users/{id}` | administrateur | Modifie le rôle, le rattachement ou l'état du compte |
 | `DELETE /admin/users/{id}` | administrateur | Désactive le compte (jamais supprimé) |
 | `POST /admin/users/{id}/unlock` | administrateur | Lève le verrouillage après échecs de connexion |
 | `POST /admin/users/{id}/reset-password` | administrateur | Envoie un lien de réinitialisation à l'utilisateur |
@@ -55,7 +56,7 @@ L'identifiant d'une alerte est le `facture_id` (une prédiction par facture).
 
 ## 3. Authentification
 
-1. `POST /auth/login` avec `{"email": "...", "password": "..."}` retourne un jeton d'accès, un jeton de rafraîchissement et leurs durées.
+1. `POST /auth/login` avec `{"identifier": "...", "password": "..."}` accepte l'identifiant pseudonymisé ou l'adresse e-mail et retourne les jetons.
 2. Les routes protégées utilisent l'en-tête `Authorization` avec le jeton d'accès.
 3. `POST /auth/refresh` avec `{"refresh_token": "..."}` effectue une rotation à usage unique du jeton de rafraîchissement.
 4. `POST /auth/logout` révoque la session courante ; les jetons liés à cette session ne sont plus acceptés.
@@ -75,11 +76,13 @@ Protéger un endpoint : `dependencies=[Depends(require_role("gestionnaire"))]`.
 
 **Contrôle d'accès (S1)** : le rôle est relu en base à chaque requête, donc un jeton falsifié ou un rôle modifié n'ouvre aucun droit. Un rôle non autorisé reçoit **403**, l'absence de jeton **401**.
 
-### Comptes : inscription, mot de passe, gestion
+### Comptes : création admin, mot de passe, gestion
 
-**Inscription** (`POST /auth/register`, `{"email", "password", "role"}`) : seuls `assure` et `professionnel_sante` sont demandables. Le compte est créé **inactif et non rattaché** (le rattachement n'est jamais pris dans la requête, cf. règle ci-dessus). Tant qu'un administrateur ne l'a pas validé, la connexion avec le bon mot de passe renvoie **403** (« Compte inactif ou en attente de validation »). Réponse 202 identique si l'adresse existe déjà. `REGISTRATION_ENABLED=false` ferme l'inscription.
+La création publique est désactivée (`POST /auth/register` renvoie **403**). Seul un administrateur connecté peut utiliser `POST /admin/users`. Les champs personnels reprennent `identites_pii.csv` : nom, prénoms, sexe, date de naissance, téléphone, e-mail, adresse, ville et CIN. L'assuré doit être rattaché à une fiche assuré existante (contrat et rang affichés) ; le professionnel de santé à une fiche prestataire active. Les champs personnels sont chiffrés dans `utilisateurs_identites`.
 
-Valider : `GET /admin/users?statut=inactifs`, puis `PATCH /admin/users/{id}` avec `{"is_active": true, "assure_id": "ASS-..."}` (ou `prestataire_id`). Un compte actif `assure` ou `professionnel_sante` doit être rattaché à un assuré ou à un prestataire existant ; `gestionnaire` et `administrateur` ne le sont à rien. Changer de rôle efface les rattachements non renvoyés. Un administrateur ne peut ni se désactiver ni se rétrograder.
+L'identifiant est calculé par HMAC-SHA256 avec `PSEUDO_HMAC_KEY`, sur le CIN normalisé, et prend la forme `<PREFIXE>-<10 caractères hexadécimaux majuscules>` (`ASS`, `PDS`, `GES` ou `ADM`). La même clé doit être conservée entre déploiements. Les comptes historiques sans CIN reçoivent à l'initialisation un identifiant basé sur leur e-mail.
+
+Le mot de passe initial est généré par le serveur (16 caractères) et envoyé avec l'identifiant à l'adresse du compte. La création échoue explicitement si le SMTP n'est pas configuré ou si l'envoi échoue. Configurer `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` et `SMTP_STARTTLS`.
 
 **Mot de passe** : 10 à 128 caractères, au moins une lettre et un chiffre.
 
@@ -191,7 +194,7 @@ pytest tests -q
 
 Les tests des comptes (`tests/test_comptes.py`) et ceux du frontend s'exécutent contre un vrai PostgreSQL si `TEST_DATABASE_URL` est défini (sinon ignorés).
 
-Couverture : authentification et rôles, inscription, mot de passe oublié et changé, gestion des comptes, un test par code de rejet, audit (S8), absence de décision automatique, identités, et les tests de sécurité **S1** et **S12** (`tests/test_security_s1_s12.py`).
+Couverture : authentification par e-mail ou identifiant et rôles, blocage de l'inscription publique, création admin des comptes, mot de passe oublié et changé, gestion des comptes, un test par code de rejet, audit (S8), absence de décision automatique, identités, et les tests de sécurité **S1** et **S12** (`tests/test_security_s1_s12.py`).
 
 
 
@@ -200,5 +203,5 @@ Couverture : authentification et rôles, inscription, mot de passe oublié et ch
 - Notification n8n quand une alerte est créée (fin de `predict.py`) ; import de factures en lot ; intégration des métriques et de la dérive.
 - Lecture des identités avec le rôle SQL `identity_reader` (le contrat le prévoit) plutôt qu'avec le compte propriétaire.
 - Connexion de l'API avec un rôle à droits limités.
-- Comptes : un jeton JWT déjà émis reste valide jusqu'à son expiration après un changement de mot de passe (réduire `JWT_EXPIRE_MINUTES` ou ajouter un identifiant de session) ; pas de `logout` ni de `refresh` ; pas de limite par adresse IP sur `/auth/register` ni `/auth/forgot-password` (à poser au reverse proxy).
+- Comptes : un jeton JWT déjà émis reste valide jusqu'à son expiration après un changement de mot de passe ; pas de limite par adresse IP sur `/auth/forgot-password` (à poser au reverse proxy).
 - Si `journal_audit.type_evenement` porte une contrainte CHECK dans vos migrations, y ajouter les nouveaux types (l'échec est journalisé sans bloquer l'opération sur le compte).

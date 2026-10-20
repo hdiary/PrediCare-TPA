@@ -21,7 +21,7 @@ export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -36,7 +36,7 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const loggedIn = await login(email, password);
+      const loggedIn = await login(identifier, password);
       // La page demandée n'est reprise que si elle appartient au rôle connecté.
       const home = getRoleHome(loggedIn.role);
       navigate(from && from.startsWith(home) ? from : home);
@@ -48,7 +48,7 @@ export function LoginPage() {
   };
 
   const fillDemo = (accountEmail: string, accountPassword: string) => {
-    setEmail(accountEmail);
+    setIdentifier(accountEmail);
     setPassword(accountPassword);
     setError('');
   };
@@ -122,11 +122,10 @@ export function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <Input
-                label="Adresse email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="vous@exemple.fr"
+                label="Identifiant ou adresse e-mail"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="ASS-… ou vous@exemple.fr"
                 required
                 icon={<Mail className="w-4 h-4" />}
               />
@@ -174,14 +173,7 @@ export function LoginPage() {
             </form>
 
             <p className="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
-              {USE_MOCK_AUTH ? (
-                <>
-                  Pas encore de compte ?{' '}
-                  <Link to="/inscription" className="text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 underline">Créer un compte</Link>
-                </>
-              ) : (
-                "La création de compte est gérée par un administrateur."
-              )}
+              La création de compte est réservée à un administrateur.
             </p>
           </div>
 

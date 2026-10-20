@@ -12,9 +12,12 @@ from api.security import create_access_token, hash_password, verify_password
 
 PASSWORD = "Demo2026!"
 USERS = {
-    "gestionnaire@predicare.local": dict(user_id=3, role="gestionnaire", is_active=True),
-    "admin@predicare.local": dict(user_id=4, role="administrateur", is_active=True),
-    "off@predicare.local": dict(user_id=5, role="assure", is_active=False),
+    "gestionnaire@predicare.local": dict(
+        user_id=3, identifiant="GES-123456789A", role="gestionnaire", is_active=True),
+    "admin@predicare.local": dict(
+        user_id=4, identifiant="ADM-123456789A", role="administrateur", is_active=True),
+    "off@predicare.local": dict(
+        user_id=5, identifiant="ASS-123456789A", role="assure", is_active=False),
 }
 
 
@@ -108,8 +111,12 @@ class FakeConn:
                 else None
             )
         if q.startswith("SELECT") and "WHERE EMAIL" in q:
-            data = USERS.get(params[0])
-            return FakeCursor(self._row(params[0], data) if data else None)
+            account = next(
+                ((email, data) for email, data in USERS.items()
+                 if email == params[0] or data["identifiant"] == params[1]),
+                None,
+            )
+            return FakeCursor(self._row(*account) if account else None)
         if q.startswith("SELECT") and "WHERE UTILISATEUR_ID" in q:
             for email, data in USERS.items():
                 if data["user_id"] == params[0]:
@@ -150,6 +157,15 @@ def test_login_success(client):
     assert body["user"]["role"] == "gestionnaire"
     payload = jwt.decode(body["access_token"], get_settings().jwt_secret, algorithms=["HS256"])
     assert payload["sub"] == "3"
+
+
+def test_login_by_pseudonymous_identifier(client):
+    response = client.post(
+        "/auth/login",
+        json={"identifier": "GES-123456789A", "password": PASSWORD},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["identifiant"] == "GES-123456789A"
 
 
 def test_v1_login_alias_works(client):

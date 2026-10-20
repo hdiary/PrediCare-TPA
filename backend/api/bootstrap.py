@@ -6,6 +6,7 @@ import psycopg
 from api.config import get_settings
 from api.db import get_pool
 from api.security import hash_password
+from api.services.pseudonym import PseudonymConfigurationError, pseudonymise_account
 
 logger = logging.getLogger(__name__)
 
@@ -149,3 +150,27 @@ def ensure_seed_users() -> None:
         logger.error("tables manquantes : appliquer les migrations (utilisateurs...)")
     except Exception:  # noqa: BLE001
         logger.exception("seed_users_failed")
+
+
+def ensure_user_identifiers() -> None:
+    """Attribue un identifiant aux anciens comptes, qui n'ont pas de CIN conservé."""
+    pool = get_pool()
+    if pool is None:
+        return
+    try:
+        with pool.connection(timeout=10) as conn:
+            users = conn.execute(
+                "SELECT utilisateur_id, email, role FROM utilisateurs "
+                "WHERE identifiant IS NULL ORDER BY utilisateur_id"
+            ).fetchall()
+            for user in users:
+                identifier = pseudonymise_account(user["email"], user["role"])
+                conn.execute(
+                    "UPDATE utilisateurs SET identifiant = %s "
+                    "WHERE utilisateur_id = %s AND identifiant IS NULL",
+                    (identifier, user["utilisateur_id"]),
+                )
+    except PseudonymConfigurationError:
+        logger.error("user_identifiers_skipped: PSEUDO_HMAC_KEY absent ou invalide")
+    except Exception:  # noqa: BLE001
+        logger.exception("user_identifiers_failed")

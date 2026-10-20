@@ -18,6 +18,7 @@ pytestmark = pytest.mark.skipif(not BASE_URL, reason="TEST_DATABASE_URL non déf
 MDP = "Mot-de-passe-test-1"
 NOUVEAU = "Autre-mot-de-passe-2"
 MAILS: list[tuple[int, str, str]] = []   # (user_id, destinataire, jeton)
+CREATED_CREDENTIALS: list[tuple[str, str, str]] = []
 
 
 def _db():
@@ -52,8 +53,20 @@ def client():
         MAILS.append((user_id, to, token))
         return True
 
+    def collecte_identifiants(to, identifier, password):
+        CREATED_CREDENTIALS.append((to, identifier, password))
+        return True
+
     auth_mod.send_reset_email = collecte
     admin_mod.send_reset_email = collecte
+    admin_mod.send_account_credentials = collecte_identifiants
+    admin_mod.pseudonymise_account = lambda cin, role: (
+        {"assure": "ASS", "professionnel_sante": "PDS",
+         "gestionnaire": "GES", "administrateur": "ADM"}[role]
+        + "-" + cin[-10:]
+    )
+    admin_mod.encrypt_account_identity = lambda fields: b"encrypted-test-identity"
+    admin_mod.decrypt_account_identity = lambda blob: {"numero_cin": "123456789012"}
     with TestClient(app) as tc:
         yield tc
 
@@ -61,6 +74,7 @@ def client():
 @pytest.fixture(autouse=True)
 def _vider_mails():
     MAILS.clear()
+    CREATED_CREDENTIALS.clear()
 
 
 def _login(client, email, mdp=MDP):
@@ -79,58 +93,63 @@ def _user_id(email):
                          (email,)).fetchone()["i"]
 
 
-# ---------- inscription ----------
+def _account_payload(email, role="gestionnaire", cin="123456789012", **link):
+    return {
+        "nom": "Rakoto",
+        "prenoms": "Soa",
+        "sexe": "F",
+        "date_naissance": "1985-03-04",
+        "telephone": "0340000000",
+        "email": email,
+        "adresse": "Lot 10",
+        "ville": "Antananarivo",
+        "numero_cin": cin,
+        "role": role,
+        **link,
+    }
 
-def test_inscription_cree_un_compte_inactif_puis_validation_par_admin(client):
-    r = client.post("/auth/register",
-                    json={"email": "Nouveau@C.mg", "password": MDP, "role": "assure"})
-    assert r.status_code == 202
-    # Même réponse si l'adresse existe déjà : pas d'énumération de comptes
-    r2 = client.post("/auth/register",
-                     json={"email": "nouveau@c.mg", "password": MDP, "role": "assure"})
-    assert r2.status_code == 202 and r2.json() == r.json()
 
-    assert _login(client, "nouveau@c.mg", "mauvais").status_code == 401
-    attente = _login(client, "nouveau@c.mg")
-    assert attente.status_code == 403   # bon mot de passe, compte en attente
-
+def _create_admin_user(client, email, role="gestionnaire", cin="123456789012", **link):
     admin = _auth(client, "admin@c.mg")
-    inactifs = client.get("/admin/users?statut=inactifs", headers=admin).json()
-    nouveau = next(u for u in inactifs if u["email"] == "nouveau@c.mg")
-    assert nouveau["is_active"] is False and nouveau["assure_id"] is None
-
-    url = f"/admin/users/{nouveau['user_id']}"
-    # Activation impossible sans rattachement à un assuré
-    assert client.patch(url, json={"is_active": True}, headers=admin).status_code == 422
-    assert client.patch(url, json={"is_active": True, "assure_id": "ASS-AAAAAAAAAA"},
-                        headers=admin).status_code == 422   # inconnu en base
-    ok = client.patch(url, json={"is_active": True, "assure_id": "ASS-1111111111"},
-                      headers=admin)
-    assert ok.status_code == 200 and ok.json()["is_active"] is True
-
-    me = client.get("/auth/me", headers=_auth(client, "nouveau@c.mg")).json()
-    assert me["role"] == "assure" and me["assure_id"] == "ASS-1111111111"
+    payload = _account_payload(email, role, cin, **link)
+    response = client.post("/admin/users", headers=admin, json=payload)
+    return response
 
 
-@pytest.mark.parametrize("corps", [
-    {"email": "x@c.mg", "password": MDP, "role": "gestionnaire"},     # rôle non demandable
-    {"email": "x@c.mg", "password": MDP, "role": "administrateur"},
-    {"email": "x@c.mg", "password": "court1", "role": "assure"},        # trop court
-    {"email": "x@c.mg", "password": "uniquementdeslettres", "role": "assure"},
-    {"email": "pas-un-email", "password": MDP, "role": "assure"},
-])
-def test_inscription_refuse_les_demandes_invalides(client, corps):
-    assert client.post("/auth/register", json=corps).status_code == 422
+# ---------- création des comptes ----------
+
+def test_inscription_publique_desactivee(client):
+    assert client.post("/auth/register", json={}).status_code == 403
 
 
-def test_inscription_ignore_un_rattachement_fourni_par_le_client(client):
-    r = client.post("/auth/register", json={
-        "email": "triche@c.mg", "password": MDP, "role": "assure", "assure_id": "ASS-1111111111"})
-    assert r.status_code == 202
+def test_admin_cree_un_compte_pseudonymise_et_envoie_les_identifiants(client):
+    assert client.get("/admin/users", headers=_auth(client, "gest@c.mg")).status_code == 403
+
+    created = _create_admin_user(
+        client,
+        "nouveau@c.mg",
+        role="assure",
+        cin="123456789012",
+        assure_id="ASS-1111111111",
+    )
+    assert created.status_code == 201, created.text
+    account = created.json()
+    assert account["identifiant"] == "ASS-3456789012"
+    assert account["assure_id"] == "ASS-1111111111" and account["is_active"]
+    assert len(CREATED_CREDENTIALS) == 1
+    to, identifier, password = CREATED_CREDENTIALS[0]
+    assert (to, identifier) == ("nouveau@c.mg", account["identifiant"])
+    assert len(password) == 16 and any(c.isalpha() for c in password) and any(c.isdigit() for c in password)
+    assert _login(client, identifier, password).status_code == 200
+    assert _login(client, to, password).status_code == 200
+
     with _db() as c:
-        row = c.execute("SELECT assure_id, actif FROM utilisateurs "
-                        "WHERE email='triche@c.mg'").fetchone()
-    assert row["assure_id"] is None and row["actif"] is False
+        identity = c.execute(
+            "SELECT donnees_chiffrees FROM utilisateurs_identites "
+            "WHERE utilisateur_id=%s",
+            (account["user_id"],),
+        ).fetchone()
+    assert identity["donnees_chiffrees"] == b"encrypted-test-identity"
 
 
 # ---------- mot de passe oublié ----------
@@ -192,7 +211,12 @@ def test_limite_de_demandes_par_heure(client):
 
 
 def test_compte_inactif_ne_recoit_aucun_lien(client):
-    client.post("/auth/register", json={"email": "attente@c.mg", "password": MDP, "role": "assure"})
+    with _db() as c:
+        c.execute(
+            "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, actif) "
+            "VALUES (%s, %s, 'assure', false)",
+            ("attente@c.mg", hash_password(MDP)),
+        )
     assert client.post("/auth/forgot-password", json={"email": "attente@c.mg"}).status_code == 202
     assert MAILS == []
 
@@ -200,28 +224,28 @@ def test_compte_inactif_ne_recoit_aucun_lien(client):
 # ---------- changement de mot de passe ----------
 
 def test_changement_de_mot_de_passe(client):
-    client.post("/admin/users", headers=_auth(client, "admin@c.mg"),
-                json={"email": "chg@c.mg", "password": MDP, "role": "gestionnaire"})
-    h = _auth(client, "chg@c.mg")
+    assert _create_admin_user(client, "chg@c.mg", cin="523456789012").status_code == 201
+    initial_password = CREATED_CREDENTIALS[-1][2]
+    h = _auth(client, "chg@c.mg", initial_password)
     url = "/auth/change-password"
     assert client.post(url, headers=h, json={
         "current_password": "faux", "new_password": NOUVEAU}).status_code == 400
     assert client.post(url, headers=h, json={
-        "current_password": MDP, "new_password": MDP}).status_code == 400
+        "current_password": initial_password, "new_password": initial_password}).status_code == 400
     assert client.post(url, headers=h, json={
         "current_password": MDP, "new_password": "court"}).status_code == 422
     assert client.post(url, json={
         "current_password": MDP, "new_password": NOUVEAU}).status_code == 401   # sans jeton
     assert client.post(url, headers=h, json={
-        "current_password": MDP, "new_password": NOUVEAU}).status_code == 200
-    assert _login(client, "chg@c.mg", MDP).status_code == 401
+        "current_password": initial_password, "new_password": NOUVEAU}).status_code == 200
+    assert _login(client, "chg@c.mg", initial_password).status_code == 401
     assert _login(client, "chg@c.mg", NOUVEAU).status_code == 200
 
 
 def test_changement_de_mot_de_passe_verrouille_apres_echecs(client):
-    client.post("/admin/users", headers=_auth(client, "admin@c.mg"),
-                json={"email": "brute@c.mg", "password": MDP, "role": "gestionnaire"})
-    h = _auth(client, "brute@c.mg")
+    assert _create_admin_user(client, "brute@c.mg", cin="623456789012").status_code == 201
+    initial_password = CREATED_CREDENTIALS[-1][2]
+    h = _auth(client, "brute@c.mg", initial_password)
     codes = [client.post("/auth/change-password", headers=h, json={
         "current_password": "faux", "new_password": NOUVEAU}).status_code for _ in range(6)]
     assert codes[:5] == [400] * 5 and codes[5] == 429
@@ -233,24 +257,28 @@ def test_gestion_reservee_a_l_administrateur(client):
     for email in ("gest@c.mg", "assure@c.mg", "pro@c.mg"):
         h = _auth(client, email)
         assert client.get("/admin/users", headers=h).status_code == 403
-        assert client.post("/admin/users", headers=h, json={
-            "email": "z@c.mg", "password": MDP, "role": "gestionnaire"}).status_code == 403
+        assert client.post("/admin/users", headers=h, json=_account_payload(
+            "z@c.mg", cin="723456789012",
+        )).status_code == 403
     assert client.get("/admin/users").status_code == 401
 
 
 def test_creation_modification_desactivation(client):
     admin = _auth(client, "admin@c.mg")
-    corps = {"email": "Cree@C.mg", "password": MDP, "role": "professionnel_sante",
-             "prestataire_id": "PRE-00999"}
+    corps = _account_payload(
+        "Cree@C.mg", role="professionnel_sante", cin="823456789012",
+        prestataire_id="PRE-00999",
+    )
     cree = client.post("/admin/users", headers=admin, json=corps)
     assert cree.status_code == 201
     u = cree.json()
     assert u["email"] == "cree@c.mg" and u["prestataire_id"] == "PRE-00999" and u["is_active"]
+    assert u["identifiant"].startswith("PDS-")
     assert "password" not in u and "mot_de_passe_hash" not in u
     assert client.post("/admin/users", headers=admin, json=corps).status_code == 409
 
     # Rattachements incohérents ou inconnus
-    base = {"email": "y@c.mg", "password": MDP}
+    base = _account_payload("y@c.mg", cin="923456789012")
     assert client.post("/admin/users", headers=admin, json={
         **base, "role": "assure"}).status_code == 422
     assert client.post("/admin/users", headers=admin, json={
@@ -266,6 +294,7 @@ def test_creation_modification_desactivation(client):
     maj = client.patch(url, headers=admin, json={"role": "gestionnaire"})
     assert maj.status_code == 200
     assert maj.json()["role"] == "gestionnaire" and maj.json()["prestataire_id"] is None
+    assert maj.json()["identifiant"].startswith("GES-")
 
     token = _auth(client, "cree@c.mg")
     assert client.get("/auth/me", headers=token).status_code == 200
@@ -292,14 +321,15 @@ def test_un_admin_ne_peut_pas_se_couper_l_acces(client):
 
 def test_deverrouillage_et_lien_de_reinitialisation_par_admin(client):
     admin = _auth(client, "admin@c.mg")
-    client.post("/admin/users", headers=admin,
-                json={"email": "lock@c.mg", "password": MDP, "role": "gestionnaire"})
+    created = _create_admin_user(client, "lock@c.mg", cin="223456789012")
+    assert created.status_code == 201
+    initial_password = CREATED_CREDENTIALS[-1][2]
     uid = _user_id("lock@c.mg")
     for _ in range(5):
         assert _login(client, "lock@c.mg", "faux").status_code == 401
     assert _login(client, "lock@c.mg").status_code == 429
     assert client.post(f"/admin/users/{uid}/unlock", headers=admin).status_code == 200
-    assert _login(client, "lock@c.mg").status_code == 200
+    assert _login(client, "lock@c.mg", initial_password).status_code == 200
 
     envoi = client.post(f"/admin/users/{uid}/reset-password", headers=admin)
     assert envoi.status_code == 202 and "token" not in envoi.text
@@ -311,22 +341,25 @@ def test_deverrouillage_et_lien_de_reinitialisation_par_admin(client):
 
 def test_operations_sur_les_comptes_sont_auditees_sans_donnees_personnelles(client):
     admin = _auth(client, "admin@c.mg")
-    client.post("/auth/register", json={"email": "aud@c.mg", "password": MDP, "role": "assure"})
+    created = _create_admin_user(
+        client, "aud@c.mg", role="assure", cin="323456789012",
+        assure_id="ASS-1111111111",
+    )
+    assert created.status_code == 201
     uid = _user_id("aud@c.mg")
-    client.patch(f"/admin/users/{uid}", headers=admin,
-                 json={"is_active": True, "assure_id": "ASS-1111111111"})
     client.post("/auth/forgot-password", json={"email": "aud@c.mg"})
     client.post("/auth/reset-password", json={"token": MAILS[-1][2], "new_password": NOUVEAU})
     h = _auth(client, "aud@c.mg", NOUVEAU)
     client.post("/auth/change-password", headers=h,
                 json={"current_password": NOUVEAU, "new_password": MDP})
     client.delete(f"/admin/users/{uid}", headers=admin)
-    client.post("/admin/users", headers=admin,
-                json={"email": "aud2@c.mg", "password": MDP, "role": "gestionnaire"})
+    assert _create_admin_user(
+        client, "aud2@c.mg", role="gestionnaire", cin="423456789012",
+    ).status_code == 201
 
     types = {e["event_type"] for e in client.get("/admin/audit-log?limit=500",
                                                  headers=admin).json()}
-    assert {"compte_demande", "compte_cree", "compte_modifie", "compte_desactive",
+    assert {"compte_cree", "compte_desactive",
             "mdp_reinitialisation_demandee", "mdp_reinitialise", "mdp_modifie"} <= types
     with _db() as c:
         lignes = c.execute("SELECT entree::text AS e, sortie::text AS s FROM journal_audit "

@@ -31,7 +31,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) 
         raise _UNAUTHORIZED from None
 
     user = conn.execute(
-        "SELECT utilisateur_id AS user_id, email, role, assure_id, prestataire_id, "
+        "SELECT utilisateur_id AS user_id, identifiant, email, role, assure_id, prestataire_id, "
         "actif AS is_active FROM utilisateurs WHERE utilisateur_id = %s",
         (user_id,),
     ).fetchone()
