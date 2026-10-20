@@ -44,7 +44,10 @@ from api.services.identity import (
     decrypt_account_identity,
     encrypt_account_identity,
 )
-from api.services.mailer import send_account_credentials, send_reset_email
+from api.services.mailer import (
+    configured_alert_recipients, send_account_credentials, send_mail, send_reset_email,
+    smtp_is_configured,
+)
 from api.services.model_registry import ModelUnavailableError, get_registry
 from api.services.pseudonym import PseudonymConfigurationError, pseudonymise_account
 from api.services.pseudonym import ROLE_PREFIXES
@@ -155,6 +158,38 @@ def patch_admin_config(
             detail="Configuration invalide",
         ) from exc
     return config_service.update_admin_settings(conn, user, validated)
+
+
+@router.post("/email/test", response_model=MessageOut)
+def test_email_configuration(
+    user: dict = Depends(require_role("administrateur")),
+    conn=Depends(get_db),
+):
+    enabled, recipients = configured_alert_recipients(conn)
+    if not enabled or not recipients:
+        raise HTTPException(
+            status_code=409,
+            detail="Activez les notifications e-mail et renseignez au moins un destinataire.",
+        )
+    if not smtp_is_configured():
+        raise HTTPException(status_code=503, detail="Le relais SMTP n'est pas configuré.")
+    sent = send_mail(
+        recipients,
+        "PrediCare TPA - Test de configuration e-mail",
+        "Ce message confirme que le relais SMTP et les destinataires sont opérationnels.",
+    )
+    if not sent:
+        raise HTTPException(status_code=502, detail="L'envoi SMTP a échoué. Vérifiez la configuration du relais.")
+    write_audit(
+        conn,
+        event_type="notification_email_test",
+        actor_id=user["user_id"],
+        entity_type="configuration",
+        entity_id="notif_email",
+        input_data={},
+        output_data={"reussie": True, "destinataires": len(recipients)},
+    )
+    return MessageOut(detail="E-mail de test envoyé.")
 
 
 # ---------- seuil d'alerte ----------

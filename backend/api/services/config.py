@@ -33,9 +33,9 @@ def get_admin_settings(conn) -> AdminSettings:
                 ),
             },
             "email": {
-                "enabled": rows.get("notif_email", {}).get("valeur", "true").lower() == "true",
+                "enabled": rows.get("notif_email", {}).get("valeur", "false").lower() == "true",
                 "address": rows.get("notif_email_destinataire", {}).get(
-                    "valeur", "gestionnaire@predicare.local"
+                    "valeur", settings.admin_email
                 ),
             },
         },

@@ -3,11 +3,21 @@ import { Menu, Bell, Moon, Sun, X, LogOut } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+import { formatDateTime, formatMGA, INVOICE_STATUS_LABELS } from '@/lib/format';
 import { Logo } from './Logo';
 import { NAV_BY_ROLE } from './Sidebar';
 import { ROLE_LABELS } from '@/lib/format';
 import type { Role } from '@/lib/types';
 import type { ReactNode } from 'react';
+
+interface WorkspaceNotification {
+  id: string;
+  title: string;
+  detail: string;
+  date: string;
+  href: string;
+}
 
 const PAGE_TITLES: Record<string, string> = {
   '/assurant': 'Mon assistant',
@@ -58,12 +68,49 @@ export function TopBar({ onToggleMobileSidebar }: { onToggleMobileSidebar: () =>
   const location = useLocation();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<WorkspaceNotification[]>([]);
 
   const pageTitle = PAGE_TITLES[location.pathname] || 'PrediCare TPA';
 
   useEffect(() => {
     setShowMobileMenu(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        if (user.role === 'manager' || user.role === 'admin') {
+          const result = await api.getAlerts({ status: 'pending' });
+          if (active) setNotifications(result.items.slice(0, 5).map((alert) => ({
+            id: alert.id,
+            title: 'Alerte à examiner',
+            detail: `${alert.id} · score ${alert.score.toFixed(2)} · ${formatMGA(alert.amount)}`,
+            date: alert.created_at,
+            href: user.role === 'manager' ? `/gestionnaire/alertes/${alert.id}` : '/admin',
+          })));
+          return;
+        }
+        const result = await api.getInvoices();
+        if (active) setNotifications(result.items.slice(0, 5).map((invoice) => ({
+          id: invoice.id,
+          title: INVOICE_STATUS_LABELS[invoice.status] || 'Mise à jour de facture',
+          detail: `${invoice.id} · ${formatMGA(invoice.amount)}`,
+          date: invoice.date,
+          href: user.role === 'provider' ? '/professionnel/factures' : '/assurant/remboursements',
+        })));
+      } catch {
+        if (active) setNotifications([]);
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [user]);
 
   if (!user) return null;
   const mobileNav = MOBILE_NAV_BY_ROLE[user.role] || [];
@@ -89,22 +136,33 @@ export function TopBar({ onToggleMobileSidebar }: { onToggleMobileSidebar: () =>
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
+              aria-label={`Notifications${notifications.length ? `, ${notifications.length} éléments` : ''}`}
+              aria-expanded={showNotifications}
               className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 relative"
             >
               <Bell className="w-5 h-5 text-surface-600 dark:text-surface-300" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-kraft-500 rounded-full" />
+              {notifications.length > 0 && <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-danger-600 text-white text-[10px] leading-4 text-center">{notifications.length}</span>}
             </button>
             {showNotifications && (
-              <div className="absolute right-0 top-12 w-72 max-w-[calc(100vw-2rem)] rounded-3xl bg-white dark:bg-surface-700 border border-primary-100 dark:border-surface-600 shadow-float p-4 z-50">
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-200 mb-2">Notifications</p>
-                <div className="space-y-2">
-                  <div className="text-xs text-surface-500 p-2 rounded-lg bg-surface-50 dark:bg-surface-800">
-                    <span className="font-medium text-kraft-700">Nouvelle alerte</span> · ALT-001 · Score 0.92
+              <div className="absolute right-0 top-12 w-80 max-w-[calc(100vw-2rem)] rounded-xl bg-white dark:bg-surface-700 border border-surface-300 dark:border-surface-600 shadow-float p-3 z-50">
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-200 px-2 pb-2">Notifications récentes</p>
+                {notifications.length === 0 ? (
+                  <p className="text-xs text-surface-500 p-3">Aucune notification récente.</p>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y divide-surface-200 dark:divide-surface-600">
+                    {notifications.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => { setShowNotifications(false); navigate(item.href); }}
+                        className="w-full text-left px-2 py-3 hover:bg-surface-50 dark:hover:bg-surface-800"
+                      >
+                        <span className="block text-xs font-semibold text-surface-700 dark:text-surface-100">{item.title}</span>
+                        <span className="block text-xs text-surface-500 mt-1">{item.detail}</span>
+                        <span className="block text-[11px] text-surface-400 mt-1">{formatDateTime(item.date)}</span>
+                      </button>
+                    ))}
                   </div>
-                  <div className="text-xs text-surface-500 p-2 rounded-lg bg-surface-50 dark:bg-surface-800">
-                    <span className="font-medium text-success-600">Facture payée</span> · FAC-2024-1042
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>

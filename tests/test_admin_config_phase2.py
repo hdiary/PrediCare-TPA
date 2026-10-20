@@ -32,7 +32,7 @@ class ConfigConnection:
             "notif_slack": "true",
             "notif_slack_canal": "#alertes-fraude",
             "notif_email": "true",
-            "notif_email_destinataire": "gestionnaire@predicare.local",
+            "notif_email_destinataire": "gestionnaire@predicare.local; audit@predicare.local",
         }
         self.audit_events = []
 
@@ -112,7 +112,7 @@ def test_admin_can_read_and_update_configuration():
                     "slack": {"enabled": False, "channel": "#fraude"},
                     "email": {
                         "enabled": True,
-                        "address": "gestionnaire@example.org",
+                        "address": "gestionnaire@example.org; audit@example.org",
                     },
                 },
             },
@@ -121,7 +121,9 @@ def test_admin_can_read_and_update_configuration():
         assert response.json()["alert_threshold"] == 0.68
         assert connection.values["seuil_alerte"] == "0.68"
         assert connection.values["notif_slack"] == "false"
-        assert connection.values["notif_email_destinataire"] == "gestionnaire@example.org"
+        assert connection.values["notif_email_destinataire"] == (
+            "gestionnaire@example.org; audit@example.org"
+        )
         assert connection.audit_events == [
             "configuration_modifiee",
             "configuration_modifiee",
@@ -137,6 +139,32 @@ def test_admin_can_read_and_update_configuration():
         app.dependency_overrides.clear()
 
 
+def test_admin_email_test_sends_to_configured_recipients(monkeypatch):
+    connection = ConfigConnection()
+    app.dependency_overrides[get_db] = lambda: connection
+    token, _ = create_access_token(ROLE_IDS["administrateur"], "administrateur")
+    headers = {"Authorization": f"Bearer {token}"}
+    captured = {}
+    monkeypatch.setattr("api.routers.admin.smtp_is_configured", lambda: True)
+    monkeypatch.setattr(
+        "api.routers.admin.send_mail",
+        lambda recipients, subject, body: captured.update(
+            recipients=recipients, subject=subject, body=body
+        ) or True,
+    )
+    client = TestClient(app)
+
+    try:
+        response = client.post("/admin/email/test", headers=headers)
+        assert response.status_code == 200
+        assert captured["recipients"] == [
+            "gestionnaire@predicare.local", "audit@predicare.local"
+        ]
+        assert connection.audit_events[-1] == "notification_email_test"
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_only_administrator_can_access_configuration():
     connection = ConfigConnection()
     app.dependency_overrides[get_db] = lambda: connection
@@ -147,6 +175,7 @@ def test_only_administrator_can_access_configuration():
             token, _ = create_access_token(ROLE_IDS[role], role)
             headers = {"Authorization": f"Bearer {token}"}
             assert client.get("/admin/config", headers=headers).status_code == 403
+            assert client.post("/admin/email/test", headers=headers).status_code == 403
             assert client.patch(
                 "/admin/config",
                 headers=headers,

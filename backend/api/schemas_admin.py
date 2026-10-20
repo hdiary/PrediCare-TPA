@@ -105,7 +105,10 @@ class EmailChannelSettings(BaseModel):
     address: str = Field(
         min_length=3,
         max_length=254,
-        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        pattern=(
+            r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+"
+            r"(?:\s*[,;]\s*[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+)*$"
+        ),
     )
 
 
@@ -131,7 +134,10 @@ class EmailChannelSettingsPatch(BaseModel):
         default=None,
         min_length=3,
         max_length=254,
-        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        pattern=(
+            r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+"
+            r"(?:\s*[,;]\s*[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+)*$"
+        ),
     )
 
 

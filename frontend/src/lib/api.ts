@@ -27,7 +27,6 @@ import type {
   Conversation,
   InvoicePrescription,
   InvoiceSubmissionResult,
-  InvoicePrescription,
   UserRow,
   PrescriptionAlert,
   AdminUserCreatePayload,
@@ -58,8 +57,16 @@ import {
 export const BASE_URL: string = import.meta.env.VITE_API_URL || "/api";
 
 export type Feature =
-  | "auth" | "alerts" | "invoices" | "settings" | "audit" | "users"
-  | "health" | "models" | "prescriptions" | "password";
+  | "auth"
+  | "alerts"
+  | "invoices"
+  | "settings"
+  | "audit"
+  | "users"
+  | "health"
+  | "models"
+  | "prescriptions"
+  | "password";
 
 const DEFAULT_MOCKS = "models,prescriptions,password";
 const mockedFeatures = new Set(
@@ -76,8 +83,18 @@ export function isMock(feature: Feature): boolean {
 
 /** Fonctions simulées en ce moment (affichées dans le bandeau « données de démonstration »). */
 export function mockedFeatureList(): Feature[] {
-  const all: Feature[] = ["auth", "alerts", "invoices", "settings", "audit", "users", "health",
-    "models", "prescriptions", "password"];
+  const all: Feature[] = [
+    "auth",
+    "alerts",
+    "invoices",
+    "settings",
+    "audit",
+    "users",
+    "health",
+    "models",
+    "prescriptions",
+    "password",
+  ];
   return all.filter(isMock);
 }
 
@@ -92,7 +109,11 @@ export class ApiError extends Error {
   status: number;
   /** Erreurs de validation par champ (rejet d'une facture, requête invalide). */
   errors: { field: string; message: string; code?: string }[];
-  constructor(message: string, status: number, errors: ApiError["errors"] = []) {
+  constructor(
+    message: string,
+    status: number,
+    errors: ApiError["errors"] = [],
+  ) {
     super(message);
     this.status = status;
     this.errors = errors;
@@ -107,21 +128,28 @@ function authHeaders(): Record<string, string> {
 /** Extrait un message lisible et les erreurs par champ d'une réponse d'erreur du backend. */
 function parseErrorBody(body: unknown, status: number): ApiError {
   const b = (body ?? {}) as {
-    detail?: unknown; erreurs?: { code: string; champ: string; message: string }[];
+    detail?: unknown;
+    erreurs?: { code: string; champ: string; message: string }[];
     errors?: { field: string; message: string }[];
   };
   const errors: ApiError["errors"] = [];
   if (Array.isArray(b.erreurs)) {
     // Facture rejetée : codes du contrat de données (section 9.1)
-    for (const e of b.erreurs) errors.push({ field: e.champ, message: e.message, code: e.code });
+    for (const e of b.erreurs)
+      errors.push({ field: e.champ, message: e.message, code: e.code });
   } else if (Array.isArray(b.errors)) {
-    for (const e of b.errors) errors.push({ field: e.field, message: e.message });
+    for (const e of b.errors)
+      errors.push({ field: e.field, message: e.message });
   }
   const message = typeof b.detail === "string" ? b.detail : `Erreur ${status}`;
   return new ApiError(message, status, errors);
 }
 
-async function request<T>(path: string, options: RequestInit = {}, opts: { auth?: boolean } = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  opts: { auth?: boolean } = {},
+): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -138,7 +166,8 @@ async function request<T>(path: string, options: RequestInit = {}, opts: { auth?
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const err = parseErrorBody(body, res.status);
-    if (res.status === 403 && err.message === `Erreur 403`) err.message = "Accès refusé";
+    if (res.status === 403 && err.message === `Erreur 403`)
+      err.message = "Accès refusé";
     throw err;
   }
   if (res.status === 204) return undefined as T;
@@ -150,11 +179,19 @@ async function request<T>(path: string, options: RequestInit = {}, opts: { auth?
 // ---------------------------------------------------------------------------
 
 interface ApiUser {
-  user_id: number; identifiant?: string | null; email: string | null; role: string;
-  assure_id?: string | null; prestataire_id?: string | null;
+  user_id: number;
+  identifiant?: string | null;
+  email: string | null;
+  role: string;
+  assure_id?: string | null;
+  prestataire_id?: string | null;
 }
 
-type AdminRole = "assure" | "professionnel_sante" | "gestionnaire" | "administrateur";
+type AdminRole =
+  | "assure"
+  | "professionnel_sante"
+  | "gestionnaire"
+  | "administrateur";
 
 const ROLE_FROM_API: Record<string, Role> = {
   assure: "insured",
@@ -162,7 +199,12 @@ const ROLE_FROM_API: Record<string, Role> = {
   gestionnaire: "manager",
   administrateur: "admin",
 };
-const ROLE_PREFIX: Record<Role, string> = { insured: "ASS", provider: "PDS", manager: "GES", admin: "ADM" };
+const ROLE_PREFIX: Record<Role, string> = {
+  insured: "ASS",
+  provider: "PDS",
+  manager: "GES",
+  admin: "ADM",
+};
 const ROLE_TO_API: Record<Role, AdminRole> = {
   insured: "assure",
   provider: "professionnel_sante",
@@ -171,16 +213,33 @@ const ROLE_TO_API: Record<Role, AdminRole> = {
 };
 
 /** Le frontend affiche un pseudonyme : identifiant métier si le compte en a un, sinon RÔLE-numéro. */
-function mapUser(u: ApiUser): { role: Role; display_name: string; pseudonym: string; email: string } {
+function mapUser(u: ApiUser): {
+  role: Role;
+  display_name: string;
+  pseudonym: string;
+  email: string;
+} {
   const role = ROLE_FROM_API[u.role];
   if (!role) throw new Error(`Rôle inconnu : ${u.role}`);
-  const pseudonym = u.identifiant || u.assure_id || u.prestataire_id ||
+  const pseudonym =
+    u.identifiant ||
+    u.assure_id ||
+    u.prestataire_id ||
     `${ROLE_PREFIX[role]}-${String(u.user_id).padStart(4, "0")}`;
   const local = u.email?.includes("@") ? u.email.split("@")[0] : pseudonym;
-  return { role, pseudonym, email: u.email ?? "", display_name: local.charAt(0).toUpperCase() + local.slice(1) };
+  return {
+    role,
+    pseudonym,
+    email: u.email ?? "",
+    display_name: local.charAt(0).toUpperCase() + local.slice(1),
+  };
 }
 
-let cachedMe: { pseudonym: string; role: Role; prestataireId: string | null } | null = null;
+let cachedMe: {
+  pseudonym: string;
+  role: Role;
+  prestataireId: string | null;
+} | null = null;
 
 async function currentUser() {
   if (!cachedMe) {
@@ -188,7 +247,11 @@ async function currentUser() {
     const me = mapUser(raw);
     // prestataireId = vrai rattachement en base (null si le compte n'est lié à aucun prestataire).
     // Ne jamais envoyer le pseudonyme d'affichage (ex. « PRE-0004 ») comme identifiant métier.
-    cachedMe = { pseudonym: me.pseudonym, role: me.role, prestataireId: raw.prestataire_id ?? null };
+    cachedMe = {
+      pseudonym: me.pseudonym,
+      role: me.role,
+      prestataireId: raw.prestataire_id ?? null,
+    };
   }
   return cachedMe;
 }
@@ -206,15 +269,25 @@ const INVOICE_STATUS_FROM_API: Record<string, Invoice["status"]> = {
   REJETEE: "rejected",
 };
 const INVOICE_STATUS_TO_API: Record<string, string | null> = {
-  reviewing: "EN_COURS", pending: "EN_ATTENTE_GESTIONNAIRE",
-  paid: "PAYEE", rejected: "REJETEE",
-  received: null, accepted: null, // statuts sans équivalent côté backend
+  reviewing: "EN_COURS",
+  pending: "EN_ATTENTE_GESTIONNAIRE",
+  paid: "PAYEE",
+  rejected: "REJETEE",
+  received: null,
+  accepted: null, // statuts sans équivalent côté backend
 };
 
 /** Le backend ne classe pas encore les alertes par type : toute alerte du modèle est de type « tarification ». */
 function alertTypeOf(a: { type_alerte?: string | null }): AlertType {
-  const known: AlertType[] = ["tarification", "doublon_prescription", "inadequation_prescription", "surconsommation"];
-  return known.includes(a.type_alerte as AlertType) ? (a.type_alerte as AlertType) : "tarification";
+  const known: AlertType[] = [
+    "tarification",
+    "doublon_prescription",
+    "inadequation_prescription",
+    "surconsommation",
+  ];
+  return known.includes(a.type_alerte as AlertType)
+    ? (a.type_alerte as AlertType)
+    : "tarification";
 }
 
 /** « ecart_prix_moyen » -> « Écart prix moyen » (pas de dictionnaire fourni par le modèle). */
@@ -224,15 +297,28 @@ function prettyFeature(name: string): string {
 }
 
 interface ApiLine {
-  code: string; libelle?: string | null; quantite: number; prix_unitaire: number; montant: number;
+  code: string;
+  libelle?: string | null;
+  quantite: number;
+  prix_unitaire: number;
+  montant: number;
 }
 const mapLine = (l: ApiLine) => ({
-  code: l.code, label: l.libelle || l.code, quantity: l.quantite, unit_price: l.prix_unitaire, amount: l.montant,
+  code: l.code,
+  label: l.libelle || l.code,
+  quantity: l.quantite,
+  unit_price: l.prix_unitaire,
+  amount: l.montant,
 });
 
 interface ApiAlertSummary {
-  facture_id: string; score: number; date: string; montant_total?: number | null;
-  prestataire_id?: string | null; assure_id?: string | null; derniere_decision?: string | null;
+  facture_id: string;
+  score: number;
+  date: string;
+  montant_total?: number | null;
+  prestataire_id?: string | null;
+  assure_id?: string | null;
+  derniere_decision?: string | null;
 }
 const mapAlertSummary = (a: ApiAlertSummary): Alert => ({
   id: a.facture_id,
@@ -242,7 +328,9 @@ const mapAlertSummary = (a: ApiAlertSummary): Alert => ({
   provider_pseudo: a.prestataire_id ?? "—",
   insured_pseudo: a.assure_id ?? "—",
   created_at: a.date,
-  status: a.derniere_decision ? DECISION_TO_STATUS[a.derniere_decision] ?? "pending" : "pending",
+  status: a.derniere_decision
+    ? (DECISION_TO_STATUS[a.derniere_decision] ?? "pending")
+    : "pending",
   type: alertTypeOf({}),
 });
 
@@ -270,8 +358,10 @@ export const api = {
     if (isMock("auth")) {
       await delay(600);
       const account = MOCK_ACCOUNTS.find(
-        (a) => (a.email.toLowerCase() === identifier.toLowerCase() ||
-          a.pseudonym.toLowerCase() === identifier.toLowerCase()) && a.password === password,
+        (a) =>
+          (a.email.toLowerCase() === identifier.toLowerCase() ||
+            a.pseudonym.toLowerCase() === identifier.toLowerCase()) &&
+          a.password === password,
       );
       if (!account) throw new Error("Email ou mot de passe incorrect");
       return {
@@ -298,31 +388,51 @@ export const api = {
         email: u.email,
       };
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) throw new Error("Identifiant ou mot de passe incorrect");
+      if (e instanceof ApiError && e.status === 401)
+        throw new Error("Identifiant ou mot de passe incorrect");
       throw e;
     }
   },
 
-  async getMe(): Promise<{ role: Role; display_name: string; pseudonym: string; email: string }> {
+  async getMe(): Promise<{
+    role: Role;
+    display_name: string;
+    pseudonym: string;
+    email: string;
+  }> {
     if (isMock("auth")) {
       await delay(200);
       const token = localStorage.getItem(TOKEN_KEY);
       const account = MOCK_ACCOUNTS.find((a) => "mock-jwt-" + a.role === token);
       if (!account) throw new Error("Non authentifié");
-      return { role: account.role, display_name: account.display_name, pseudonym: account.pseudonym, email: account.email };
+      return {
+        role: account.role,
+        display_name: account.display_name,
+        pseudonym: account.pseudonym,
+        email: account.email,
+      };
     }
     const raw = await request<ApiUser>("/auth/me");
     const me = mapUser(raw);
-    cachedMe = { pseudonym: me.pseudonym, role: me.role, prestataireId: raw.prestataire_id ?? null };
+    cachedMe = {
+      pseudonym: me.pseudonym,
+      role: me.role,
+      prestataireId: raw.prestataire_id ?? null,
+    };
     return me;
   },
 
   /** Factures dans le périmètre du compte (prestataire : les siennes ; assuré : les siennes ; gestionnaire : toutes). */
-  async getInvoices(filters?: { mine?: boolean; status?: string; page?: number }): Promise<{ items: Invoice[]; total: number }> {
+  async getInvoices(filters?: {
+    mine?: boolean;
+    status?: string;
+    page?: number;
+  }): Promise<{ items: Invoice[]; total: number }> {
     if (isMock("invoices")) {
       await delay(400);
       let items = [...mockInvoices];
-      if (filters?.status && filters.status !== "all") items = items.filter((i) => i.status === filters.status);
+      if (filters?.status && filters.status !== "all")
+        items = items.filter((i) => i.status === filters.status);
       return { items, total: items.length };
     }
     const params = new URLSearchParams({ limit: "200" });
@@ -333,8 +443,15 @@ export const api = {
     }
     const data = await request<{
       items: {
-        facture_id: string; date_soin: string; montant_total: number; montant_pris_en_charge?: number | null;
-        statut: string; prestataire_id: string; prestataire_nom?: string | null; assure_id: string; lignes: ApiLine[];
+        facture_id: string;
+        date_soin: string;
+        montant_total: number;
+        montant_pris_en_charge?: number | null;
+        statut: string;
+        prestataire_id: string;
+        prestataire_nom?: string | null;
+        assure_id: string;
+        lignes: ApiLine[];
       }[];
       total: number;
     }>(`/invoices?${params}`);
@@ -361,7 +478,9 @@ export const api = {
    * - Fichier JSON : parse puis POST /predict (contrat de données, section 11.1).
    * Une facture rejetée par la validation n'est PAS une erreur technique : on renvoie status "rejected" avec les motifs.
    */
-  async submitInvoice(data: FormData | Record<string, unknown>): Promise<InvoiceSubmissionResult> {
+  async submitInvoice(
+    data: FormData | Record<string, unknown>,
+  ): Promise<InvoiceSubmissionResult> {
     if (isMock("invoices")) {
       await delay(1200);
       return mockInvoiceResult;
@@ -380,7 +499,9 @@ export const api = {
       const isJson = /\.json$/i.test(file.name);
 
       if (!isPdf && !isJson) {
-        throw new Error("Format non pris en charge : déposez un fichier PDF ou JSON.");
+        throw new Error(
+          "Format non pris en charge : déposez un fichier PDF ou JSON.",
+        );
       }
 
       // Récupérer l'ordonnance si fournie (JSON sérialisé)
@@ -396,8 +517,10 @@ export const api = {
         form.append("file", file);
         if (prescriptionJson) form.append("prescription", prescriptionJson);
         const prescriptionScan = data.get("prescription_scan");
-        if (prescriptionScan instanceof File) form.append("prescription_scan", prescriptionScan);
-        if (me.role === "provider" && me.prestataireId) form.append("prestataire_id", me.prestataireId);
+        if (prescriptionScan instanceof File)
+          form.append("prescription_scan", prescriptionScan);
+        if (me.role === "provider" && me.prestataireId)
+          form.append("prestataire_id", me.prestataireId);
 
         const res = await fetch(`${BASE_URL}/predict/pdf`, {
           method: "POST",
@@ -413,7 +536,10 @@ export const api = {
               invoice_id: "—",
               status: "rejected",
               errors: err.errors.length
-                ? err.errors.map((x) => ({ field: x.field, message: x.message }))
+                ? err.errors.map((x) => ({
+                    field: x.field,
+                    message: x.message,
+                  }))
                 : [{ field: "", message: err.message }],
             };
           }
@@ -428,9 +554,10 @@ export const api = {
         };
         return {
           invoice_id: r.facture_id,
-          status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
-            ? "pending"
-            : "accepted",
+          status:
+            r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+              ? "pending"
+              : "accepted",
           errors: [],
           warnings: r.avertissements ?? [],
         };
@@ -443,17 +570,24 @@ export const api = {
       } catch {
         throw new Error("Le fichier JSON est illisible.");
       }
-      if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+      if (
+        typeof payload !== "object" ||
+        payload === null ||
+        Array.isArray(payload)
+      ) {
         throw new Error("Le fichier JSON doit contenir un objet facture.");
       }
       if (prescriptionJson && !payload.ordonnance_id) {
         try {
-          payload.ordonnance_id = (JSON.parse(prescriptionJson) as { prescription_id?: string }).prescription_id;
+          payload.ordonnance_id = (
+            JSON.parse(prescriptionJson) as { prescription_id?: string }
+          ).prescription_id;
         } catch {
           /* champ facultatif illisible : ignoré */
         }
       }
-      if (me.role === "provider" && me.prestataireId) payload.prestataire_id = me.prestataireId;
+      if (me.role === "provider" && me.prestataireId)
+        payload.prestataire_id = me.prestataireId;
 
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!payload.facture_id) payload.facture_id = newFactureId();
@@ -468,14 +602,18 @@ export const api = {
           });
           return {
             invoice_id: r.facture_id,
-            status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
-              ? "pending"
-              : "accepted",
+            status:
+              r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+                ? "pending"
+                : "accepted",
             errors: [],
           };
         } catch (e) {
-          if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
-          const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
+          if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status))
+            throw e;
+          const doublon = e.errors.some(
+            (x) => x.code === "FACTURE_DEJA_ENREGISTREE",
+          );
           if (doublon && attempt === 0) continue;
           return {
             invoice_id: String(payload.facture_id ?? "—"),
@@ -497,7 +635,12 @@ export const api = {
       contract_id: string;
       invoice_number: string;
       invoice_type: string;
-      lines: { code: string; label?: string; quantity: number; unit_price: number }[];
+      lines: {
+        code: string;
+        label?: string;
+        quantity: number;
+        unit_price: number;
+      }[];
       prescription?: { prescription_id?: string };
     };
 
@@ -518,7 +661,8 @@ export const api = {
     if (d.prescription?.prescription_id) {
       payload.ordonnance_id = d.prescription.prescription_id.trim();
     }
-    if (me.role === "provider" && me.prestataireId) payload.prestataire_id = me.prestataireId;
+    if (me.role === "provider" && me.prestataireId)
+      payload.prestataire_id = me.prestataireId;
 
     for (let attempt = 0; attempt < 2; attempt++) {
       if (!payload.facture_id) payload.facture_id = newFactureId();
@@ -533,14 +677,18 @@ export const api = {
         });
         return {
           invoice_id: r.facture_id,
-          status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
-            ? "pending"
-            : "accepted",
+          status:
+            r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+              ? "pending"
+              : "accepted",
           errors: [],
         };
       } catch (e) {
-        if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
-        const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
+        if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status))
+          throw e;
+        const doublon = e.errors.some(
+          (x) => x.code === "FACTURE_DEJA_ENREGISTREE",
+        );
         if (doublon && attempt === 0) continue;
         return {
           invoice_id: String(payload.facture_id ?? "—"),
@@ -575,7 +723,7 @@ export const api = {
       const body = await res.json().catch(() => ({}));
       throw parseErrorBody(body, res.status);
     }
-    const response = await res.json() as { ordonnance_id: string };
+    const response = (await res.json()) as { ordonnance_id: string };
     return response.ordonnance_id;
   },
 
@@ -584,47 +732,75 @@ export const api = {
       await delay(700);
       return;
     }
-    await request("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }, { auth: false });
+    await request(
+      "/auth/forgot-password",
+      { method: "POST", body: JSON.stringify({ email }) },
+      { auth: false },
+    );
   },
 
   async resetPassword(token: string, password: string): Promise<void> {
     if (isMock("password")) {
       await delay(700);
-      if (token === "expire") throw new Error("Ce lien a expiré ou a déjà été utilisé. Refaites une demande.");
+      if (token === "expire")
+        throw new Error(
+          "Ce lien a expiré ou a déjà été utilisé. Refaites une demande.",
+        );
       return;
     }
-    await request("/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password }) }, { auth: false });
+    await request(
+      "/auth/reset-password",
+      { method: "POST", body: JSON.stringify({ token, password }) },
+      { auth: false },
+    );
   },
 
   /** Alertes de prescription (règles de backend/ml/prescription_rules.py, pas encore exposées par l'API). */
-  async getPrescriptionAlerts(filters?: { rule?: string; minSeverity?: number }): Promise<{ items: PrescriptionAlert[]; total: number }> {
+  async getPrescriptionAlerts(filters?: {
+    rule?: string;
+    minSeverity?: number;
+  }): Promise<{ items: PrescriptionAlert[]; total: number }> {
     if (isMock("prescriptions")) {
       await delay(400);
       let items = [...mockPrescriptionAlerts];
-      if (filters?.rule && filters.rule !== "all") items = items.filter((x) => x.rule === filters.rule);
-      if (filters?.minSeverity) items = items.filter((x) => x.severity >= (filters.minSeverity || 0));
+      if (filters?.rule && filters.rule !== "all")
+        items = items.filter((x) => x.rule === filters.rule);
+      if (filters?.minSeverity)
+        items = items.filter((x) => x.severity >= (filters.minSeverity || 0));
       return { items, total: items.length };
     }
     const params = new URLSearchParams();
-    if (filters?.rule && filters.rule !== "all") params.set("rule", filters.rule);
-    if (filters?.minSeverity) params.set("min_severity", String(filters.minSeverity));
+    if (filters?.rule && filters.rule !== "all")
+      params.set("rule", filters.rule);
+    if (filters?.minSeverity)
+      params.set("min_severity", String(filters.minSeverity));
     return request(`/prescription-alerts?${params}`);
   },
 
-  async getAlerts(filters?: { status?: string; minScore?: number; page?: number }): Promise<{ items: Alert[]; total: number }> {
+  async getAlerts(filters?: {
+    status?: string;
+    minScore?: number;
+    page?: number;
+  }): Promise<{ items: Alert[]; total: number }> {
     if (isMock("alerts")) {
       await delay(400);
       let items = [...mockAlerts];
-      if (filters?.status && filters.status !== "all") items = items.filter((a) => a.status === filters.status);
-      if (filters?.minScore) items = items.filter((a) => a.score >= (filters.minScore || 0));
+      if (filters?.status && filters.status !== "all")
+        items = items.filter((a) => a.status === filters.status);
+      if (filters?.minScore)
+        items = items.filter((a) => a.score >= (filters.minScore || 0));
       return { items, total: items.length };
     }
     // Le backend sait filtrer « en attente / traitées / toutes » ; les 3 états de décision se filtrent ici.
     const statut = filters?.status === "pending" ? "en_attente" : "toutes";
-    const rows = await request<ApiAlertSummary[]>(`/alerts?statut=${statut}&limit=200`);
+    const rows = await request<ApiAlertSummary[]>(
+      `/alerts?statut=${statut}&limit=200`,
+    );
     let items = rows.map(mapAlertSummary);
-    if (filters?.status && filters.status !== "all") items = items.filter((a) => a.status === filters.status);
-    if (filters?.minScore) items = items.filter((a) => a.score >= (filters.minScore || 0));
+    if (filters?.status && filters.status !== "all")
+      items = items.filter((a) => a.status === filters.status);
+    if (filters?.minScore)
+      items = items.filter((a) => a.score >= (filters.minScore || 0));
     return { items, total: items.length };
   },
 
@@ -632,15 +808,64 @@ export const api = {
     if (isMock("alerts")) {
       await delay(500);
       const a = mockAlertDetail;
-      return { prediction: { facture_id: id, score: a.score, version_modele: null, date: a.created_at, montant_total: a.amount, nb_regles: a.prescription_flags.length, derniere_decision: null, date_decision: null, type: 'FRAUDE', priorite: a.score >= .8 ? 'HAUTE' : 'MOYENNE', statut: 'EN_ATTENTE', codes: a.prescription_flags, etat_notification: null, tentatives_notification: 0, prestataire_id: a.provider_pseudo, assure_id: a.insured_pseudo }, facture: { lignes: a.invoice_lines }, shap: { top: a.top_factors.map(f => ({ variable: f.label_fr, contribution: f.impact })) }, codes_fraude: a.prescription_flags, regles: [], decisions: [] };
+      return {
+        prediction: {
+          facture_id: id,
+          score: a.score,
+          version_modele: null,
+          date: a.created_at,
+          montant_total: a.amount,
+          nb_regles: a.prescription_flags.length,
+          derniere_decision: null,
+          date_decision: null,
+          type: "FRAUDE",
+          priorite: a.score >= 0.8 ? "HAUTE" : "MOYENNE",
+          statut: "EN_ATTENTE",
+          codes: a.prescription_flags,
+          etat_notification: null,
+          tentatives_notification: 0,
+          prestataire_id: a.provider_pseudo,
+          assure_id: a.insured_pseudo,
+        },
+        facture: { lignes: a.invoice_lines },
+        shap: {
+          top: a.top_factors.map((f) => ({
+            variable: f.label_fr,
+            contribution: f.impact,
+          })),
+        },
+        codes_fraude: a.prescription_flags,
+        regles: [],
+        decisions: [],
+      };
     }
     const d = await request<{
       prediction: { facture_id: string; score: number; date: string };
-      shap: { top?: { variable: string; valeur?: number | string | null; contribution: number }[] } | null;
-      decisions: { decision: string; date_decision: string; gestionnaire_id: number }[];
-      facture: { prestataire_id: string; assure_id: string; montant_total: number } | null;
+      shap: {
+        top?: {
+          variable: string;
+          valeur?: number | string | null;
+          contribution: number;
+        }[];
+      } | null;
+      decisions: {
+        decision: string;
+        date_decision: string;
+        gestionnaire_id: number;
+      }[];
+      facture: {
+        prestataire_id: string;
+        assure_id: string;
+        montant_total: number;
+      } | null;
       lignes: ApiLine[];
-      historique_prestataire: { facture_id: string; score: number; decision: string; date_decision: string; gestionnaire_id: number }[];
+      historique_prestataire: {
+        facture_id: string;
+        score: number;
+        decision: string;
+        date_decision: string;
+        gestionnaire_id: number;
+      }[];
     }>(`/alerts/${encodeURIComponent(id)}`);
     const last = d.decisions[0]?.decision;
     return {
@@ -651,11 +876,13 @@ export const api = {
       provider_pseudo: d.facture?.prestataire_id ?? "—",
       insured_pseudo: d.facture?.assure_id ?? "—",
       created_at: d.prediction.date,
-      status: last ? DECISION_TO_STATUS[last] ?? "pending" : "pending",
+      status: last ? (DECISION_TO_STATUS[last] ?? "pending") : "pending",
       type: alertTypeOf({}),
       top_factors: (d.shap?.top ?? []).map((f) => ({
         feature: f.variable,
-        label_fr: prettyFeature(f.variable) + (f.valeur !== null && f.valeur !== undefined ? ` (${f.valeur})` : ""),
+        label_fr:
+          prettyFeature(f.variable) +
+          (f.valeur !== null && f.valeur !== undefined ? ` (${f.valeur})` : ""),
         impact: f.contribution,
         direction: f.contribution >= 0 ? "positive" : "negative",
       })),
@@ -663,7 +890,10 @@ export const api = {
       invoice_lines: d.lignes.map(mapLine),
       provider_history: d.historique_prestataire.map((h) => ({
         ts: h.date_decision,
-        decision: (DECISION_TO_STATUS[h.decision] ?? "rejected") as "validated" | "rejected" | "investigating",
+        decision: (DECISION_TO_STATUS[h.decision] ?? "rejected") as
+          | "validated"
+          | "rejected"
+          | "investigating",
         actor_pseudo: `GST-${String(h.gestionnaire_id).padStart(4, "0")}`,
         score: h.score,
       })),
@@ -679,21 +909,34 @@ export const api = {
   ): Promise<{ id: string; status: string; decided_at: string }> {
     if (isMock("alerts")) {
       await delay(800);
-      return { id, status: decision === "VALIDER" || decision === "CONFIRMER_FRAUDE" ? "validated" : "rejected", decided_at: new Date().toISOString() };
+      return {
+        id,
+        status:
+          decision === "VALIDER" || decision === "CONFIRMER_FRAUDE"
+            ? "validated"
+            : "rejected",
+        decided_at: new Date().toISOString(),
+      };
     }
     const fraude = decision === "VALIDER" || decision === "CONFIRMER_FRAUDE";
-    const r = await request<{ facture_id: string; decision: string; date_decision: string }>(
-      `/alerts/${encodeURIComponent(id)}/decision`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          decision: fraude ? "fraude_confirmee" : "faux_positif",
-          commentaire: comment || null,
-          montant_economise: fraude && amount !== undefined ? Math.round(amount) : null,
-        }),
-      },
-    );
-    return { id: r.facture_id, status: DECISION_TO_STATUS[r.decision] ?? "pending", decided_at: r.date_decision };
+    const r = await request<{
+      facture_id: string;
+      decision: string;
+      date_decision: string;
+    }>(`/alerts/${encodeURIComponent(id)}/decision`, {
+      method: "POST",
+      body: JSON.stringify({
+        decision: fraude ? "fraude_confirmee" : "faux_positif",
+        commentaire: comment || null,
+        montant_economise:
+          fraude && amount !== undefined ? Math.round(amount) : null,
+      }),
+    });
+    return {
+      id: r.facture_id,
+      status: DECISION_TO_STATUS[r.decision] ?? "pending",
+      decided_at: r.date_decision,
+    };
   },
 
   async getKPIs(period?: string): Promise<KPIData> {
@@ -731,7 +974,13 @@ export const api = {
         vector_db: unknown,
       };
     } catch {
-      return { api: "down", database: unknown, model: unknown, n8n: unknown, vector_db: unknown };
+      return {
+        api: "down",
+        database: unknown,
+        model: unknown,
+        n8n: unknown,
+        vector_db: unknown,
+      };
     }
   },
 
@@ -739,12 +988,18 @@ export const api = {
     return request(`/admin/metrics${period ? `?period=${period}` : ""}`);
   },
 
-  async getModelVersions(): Promise<{ active: string; versions: ModelVersion[] }> {
+  async getModelVersions(): Promise<{
+    active: string;
+    versions: ModelVersion[];
+  }> {
     if (isMock("models")) {
       await delay(400);
       return { active: "v2.3.0", versions: mockModelVersions };
     }
-    const result = await request<{ actuelle: string | null; versions: ModelVersion[] }>("/model/versions");
+    const result = await request<{
+      actuelle: string | null;
+      versions: ModelVersion[];
+    }>("/model/versions");
     return { active: result.actuelle ?? "", versions: result.versions };
   },
 
@@ -753,18 +1008,30 @@ export const api = {
       await delay(800);
       return { active: version };
     }
-    const result = await request<{ version: string }>(`/model/activate/${encodeURIComponent(version)}`, { method: "POST" });
+    const result = await request<{ version: string }>(
+      `/model/activate/${encodeURIComponent(version)}`,
+      { method: "POST" },
+    );
     return { active: result.version };
   },
 
-  async getAuditLog(filters?: { action?: string; actor?: string }): Promise<{ items: AuditLogEntry[] }> {
+  async getAuditLog(filters?: {
+    action?: string;
+    actor?: string;
+  }): Promise<{ items: AuditLogEntry[] }> {
     if (isMock("audit")) {
       await delay(400);
       return { items: mockAuditLog };
     }
-    const rows = await request<{ ts: string; event_type: string; actor: string; entity: string; model_version?: string | null }[]>(
-      "/admin/audit-log?limit=500",
-    );
+    const rows = await request<
+      {
+        ts: string;
+        event_type: string;
+        actor: string;
+        entity: string;
+        model_version?: string | null;
+      }[]
+    >("/admin/audit-log?limit=500");
     let items = rows.map((r) => ({
       ts: r.ts,
       actor_pseudo: r.actor,
@@ -772,8 +1039,14 @@ export const api = {
       object: r.entity,
       model_version: r.model_version ?? "—",
     }));
-    if (filters?.action) items = items.filter((i) => i.action.toLowerCase().includes(filters.action!.toLowerCase()));
-    if (filters?.actor) items = items.filter((i) => i.actor_pseudo.toLowerCase().includes(filters.actor!.toLowerCase()));
+    if (filters?.action)
+      items = items.filter((i) =>
+        i.action.toLowerCase().includes(filters.action!.toLowerCase()),
+      );
+    if (filters?.actor)
+      items = items.filter((i) =>
+        i.actor_pseudo.toLowerCase().includes(filters.actor!.toLowerCase()),
+      );
     return { items };
   },
 
@@ -797,45 +1070,62 @@ export const api = {
       });
     } catch (e) {
       // 422 : afficher le motif précis (ex. adresse e-mail invalide) plutôt qu'un message générique
-      if (e instanceof ApiError && e.status === 422 && e.errors.length) throw new Error(e.errors[0].message);
+      if (e instanceof ApiError && e.status === 422 && e.errors.length)
+        throw new Error(e.errors[0].message);
       throw e;
     }
     return settings;
   },
 
-  async getUsers(filters: {
-    role?: Role | "all";
-    status?: "active" | "inactive" | "all";
-    search?: string;
-    limit?: number;
-    offset?: number;
-  } = {}): Promise<{ items: UserRow[]; total: number }> {
+  async sendAdminEmailTest(): Promise<{ detail: string }> {
+    return request<{ detail: string }>("/admin/email/test", { method: "POST" });
+  },
+
+  async getUsers(
+    filters: {
+      role?: Role | "all";
+      status?: "active" | "inactive" | "all";
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<{ items: UserRow[]; total: number }> {
     if (isMock("users")) {
       await delay(300);
       let items = [...mockUserRows];
-      if (filters.role && filters.role !== "all") items = items.filter((user) => user.role === filters.role);
-      if (filters.status && filters.status !== "all") items = items.filter((user) => user.status === filters.status);
+      if (filters.role && filters.role !== "all")
+        items = items.filter((user) => user.role === filters.role);
+      if (filters.status && filters.status !== "all")
+        items = items.filter((user) => user.status === filters.status);
       if (filters.search) {
         const term = filters.search.toLowerCase();
-        items = items.filter((user) => [user.pseudonym, user.display_name, user.email ?? ""]
-          .some((value) => value.toLowerCase().includes(term)));
+        items = items.filter((user) =>
+          [user.pseudonym, user.display_name, user.email ?? ""].some((value) =>
+            value.toLowerCase().includes(term),
+          ),
+        );
       }
       const limit = filters.limit ?? 25;
       const offset = filters.offset ?? 0;
-      return { items: items.slice(offset, offset + limit), total: items.length };
+      return {
+        items: items.slice(offset, offset + limit),
+        total: items.length,
+      };
     }
     const params = new URLSearchParams({
       limit: String(filters.limit ?? 25),
       offset: String(filters.offset ?? 0),
     });
-    if (filters.role && filters.role !== "all") params.set("role", ROLE_TO_API[filters.role]);
+    if (filters.role && filters.role !== "all")
+      params.set("role", ROLE_TO_API[filters.role]);
     if (filters.status && filters.status !== "all") {
       params.set("statut", filters.status === "active" ? "actifs" : "inactifs");
     }
     if (filters.search?.trim()) params.set("q", filters.search.trim());
-    const page = await request<{ items: (ApiUser & { is_active: boolean })[]; total: number }>(
-      `/admin/users/page?${params}`,
-    );
+    const page = await request<{
+      items: (ApiUser & { is_active: boolean })[];
+      total: number;
+    }>(`/admin/users/page?${params}`);
     return {
       total: page.total,
       items: page.items.map((r) => {
@@ -855,17 +1145,25 @@ export const api = {
   },
 
   async getUserReferences(): Promise<UserReferences> {
-    if (isMock("users")) throw new Error("Les référentiels ne sont pas disponibles en mode démonstration.");
+    if (isMock("users"))
+      throw new Error(
+        "Les référentiels ne sont pas disponibles en mode démonstration.",
+      );
     return request("/admin/users/references");
   },
 
-  async createUser(payload: AdminUserCreatePayload): Promise<CreatedUserCredentials> {
-    if (isMock("users")) throw new Error("La création de comptes nécessite l’API active.");
-    const row = await request<ApiUser & {
-      is_active: boolean;
-      mot_de_passe_provisoire: string;
-      email_envoye: boolean;
-    }>("/admin/users", {
+  async createUser(
+    payload: AdminUserCreatePayload,
+  ): Promise<CreatedUserCredentials> {
+    if (isMock("users"))
+      throw new Error("La création de comptes nécessite l’API active.");
+    const row = await request<
+      ApiUser & {
+        is_active: boolean;
+        mot_de_passe_provisoire: string;
+        email_envoye: boolean;
+      }
+    >("/admin/users", {
       method: "POST",
       body: JSON.stringify({
         ...payload,
@@ -889,13 +1187,17 @@ export const api = {
     };
   },
 
-  async updateUser(userId: number, payload: {
-    role: Role;
-    is_active: boolean;
-    assure_id?: string | null;
-    prestataire_id?: string | null;
-  }): Promise<void> {
-    if (isMock("users")) throw new Error("La modification de comptes nécessite l’API active.");
+  async updateUser(
+    userId: number,
+    payload: {
+      role: Role;
+      is_active: boolean;
+      assure_id?: string | null;
+      prestataire_id?: string | null;
+    },
+  ): Promise<void> {
+    if (isMock("users"))
+      throw new Error("La modification de comptes nécessite l’API active.");
     await request(`/admin/users/${userId}`, {
       method: "PATCH",
       body: JSON.stringify({
@@ -908,7 +1210,8 @@ export const api = {
   },
 
   async deactivateUser(userId: number): Promise<void> {
-    if (isMock("users")) throw new Error("La désactivation de comptes nécessite l’API active.");
+    if (isMock("users"))
+      throw new Error("La désactivation de comptes nécessite l’API active.");
     await request(`/admin/users/${userId}`, { method: "DELETE" });
   },
 
@@ -919,7 +1222,14 @@ export const api = {
   async sendMessage(
     conversationId: string | null,
     message: string,
-  ): Promise<{ conversation_id: string; answer: string; sources: { document: string; page: number; excerpt: string }[] }> {
-    return request("/chat", { method: "POST", body: JSON.stringify({ conversation_id: conversationId, message }) });
+  ): Promise<{
+    conversation_id: string;
+    answer: string;
+    sources: { document: string; page: number; excerpt: string }[];
+  }> {
+    return request("/chat", {
+      method: "POST",
+      body: JSON.stringify({ conversation_id: conversationId, message }),
+    });
   },
 };

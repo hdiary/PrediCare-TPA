@@ -4,23 +4,29 @@ Sans SMTP_HOST, rien n'est envoyé. En développement, DEV_LOG_RESET_LINK=true �
 réinitialisation dans les journaux pour pouvoir tester sans serveur de messagerie.
 """
 import logging
+import re
 import smtplib
 import ssl
 from email.message import EmailMessage
+from typing import Iterable
 
+from api import repositories as repo
 from api.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def send_mail(to: str, subject: str, body: str) -> bool:
+def send_mail(to: str | Iterable[str], subject: str, body: str) -> bool:
     """Envoie un e-mail texte. Retourne False (sans lever) si SMTP absent ou en échec."""
     s = get_settings()
     if not s.smtp_host:
         return False
     msg = EmailMessage()
     msg["From"] = s.smtp_from
-    msg["To"] = to
+    recipients = [to] if isinstance(to, str) else list(to)
+    if not recipients:
+        return False
+    msg["To"] = recipients[0] if len(recipients) == 1 else "undisclosed-recipients:;"
     msg["Subject"] = subject
     msg.set_content(body)
     try:
@@ -34,11 +40,42 @@ def send_mail(to: str, subject: str, body: str) -> bool:
                 smtp.starttls(context=ssl.create_default_context())
             if s.smtp_user and s.smtp_password:
                 smtp.login(s.smtp_user, s.smtp_password)
-            smtp.send_message(msg)
+            smtp.send_message(msg, to_addrs=recipients)
         return True
     except Exception as exc:  # noqa: BLE001 - un SMTP en panne ne doit jamais faire échouer l'API
         logger.warning("mail_send_failed: %s", type(exc).__name__)
         return False
+
+
+def smtp_is_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.smtp_host and settings.smtp_from)
+
+
+def configured_alert_recipients(conn) -> tuple[bool, list[str]]:
+    rows = repo.get_config_values(conn, ["notif_email", "notif_email_destinataire"])
+    enabled = rows.get("notif_email", {}).get("valeur", "false").lower() == "true"
+    address = rows.get("notif_email_destinataire", {}).get("valeur", "")
+    recipients = [value.strip() for value in re.split(r"[,;]", address) if value.strip()]
+    return enabled, recipients
+
+
+def send_alert_email(conn, alert: dict) -> bool:
+    """Send a minimal fraud-alert message to the administrators' configured recipients."""
+    enabled, recipients = configured_alert_recipients(conn)
+    if not enabled or not recipients:
+        return False
+    subject = f"PrediCare TPA - Alerte facture {alert.get('facture_id', '')}"
+    codes = ", ".join(alert.get("codes_fraude") or []) or "Aucun code détaillé"
+    body = (
+        "Une facture nécessite une vérification dans l'espace gestionnaire PrediCare TPA.\n\n"
+        f"Facture : {alert.get('facture_id', '—')}\n"
+        f"Score : {alert.get('score', '—')} (seuil : {alert.get('seuil', '—')})\n"
+        f"Montant : {alert.get('montant_total', '—')} MGA\n"
+        f"Codes : {codes}\n\n"
+        "Aucune identité d'assuré n'est incluse dans cet e-mail."
+    )
+    return send_mail(recipients, subject, body)
 
 
 def send_reset_email(user_id: int, to: str, token: str) -> bool:

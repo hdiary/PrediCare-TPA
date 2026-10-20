@@ -12,6 +12,7 @@ export function AdminConfig() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   useEffect(() => {
     api.getAdminSettings().then((data) => {
@@ -37,6 +38,18 @@ export function AdminConfig() {
       showToast(err instanceof Error && err.message ? err.message : 'Erreur lors de l\'enregistrement', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const result = await api.sendAdminEmailTest();
+      showToast(result.detail, 'success');
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : "Échec de l'envoi du test", 'error');
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -191,7 +204,8 @@ export function AdminConfig() {
             <div className="ml-12">
               <label className="text-xs text-surface-400 mb-1 block">Adresses de réception (séparées par des virgules)</label>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
                 value={settings.channels.email.address}
                 onChange={(e) => setSettings({
                   ...settings,
@@ -200,6 +214,16 @@ export function AdminConfig() {
                 placeholder="gestion@exemple.mg, alertes@exemple.mg"
                 className="w-full rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 px-3 py-2 text-sm focus:border-primary-500"
               />
+              <div className="mt-3 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleTestEmail}
+                  disabled={testingEmail || saving || hasChanges || !settings.channels.email.address.trim()}
+                >
+                  <Mail className="w-4 h-4" />
+                  {testingEmail ? 'Envoi du test...' : 'Tester l’envoi'}
+                </Button>
+              </div>
             </div>
           )}
         </div>
