@@ -5,6 +5,8 @@
 #   2. alembic upgrade head              (idempotent)
 #   3. if every file is already loaded -> stop here (restart = no work)
 #   4. clean.py -> encrypt_identities.py -> load.py
+#      Default load imports references only; invoices and prescriptions are
+#      created from API submissions, never from historical dataset files.
 #   5. delete the plaintext personal data
 #
 # Environment (see .env.example):

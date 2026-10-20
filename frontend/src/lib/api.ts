@@ -382,6 +382,8 @@ export const api = {
         const form = new FormData();
         form.append("file", file);
         if (prescriptionJson) form.append("prescription", prescriptionJson);
+        const prescriptionScan = data.get("prescription_scan");
+        if (prescriptionScan instanceof File) form.append("prescription_scan", prescriptionScan);
         if (me.role === "provider" && me.prestataireId) form.append("prestataire_id", me.prestataireId);
 
         const res = await fetch(`${BASE_URL}/predict/pdf`, {
@@ -507,20 +509,29 @@ export const api = {
     throw new Error("Dépôt impossible");
   },
 
-  /** Scan de l'ordonnance : pas encore de route côté backend (simulé par défaut). */
-  async uploadPrescriptionScan(invoiceId: string, scan: File): Promise<void> {
-    if (isMock("prescriptions")) {
-      await delay(500);
-      return;
-    }
+  async createPrescriptionFromScan(
+    insuredId: string,
+    invoiceType: string,
+    scan: File,
+    expected: InvoicePrescription,
+  ): Promise<string> {
     const formData = new FormData();
     formData.append("scan", scan);
-    const res = await fetch(`${BASE_URL}/invoices/${encodeURIComponent(invoiceId)}/prescription-scan`, {
+    formData.append("assure_id", insuredId);
+    formData.append("type_facture", invoiceType);
+    formData.append("expected_id", expected.prescription_id);
+    formData.append("expected_date", expected.prescription_date);
+    const res = await fetch(`${BASE_URL}/ordonnances/pdf`, {
       method: "POST",
       headers: { ...authHeaders() },
       body: formData,
     });
-    if (!res.ok) throw new Error("Erreur lors de l'envoi de l'ordonnance");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw parseErrorBody(body, res.status);
+    }
+    const response = await res.json() as { ordonnance_id: string };
+    return response.ordonnance_id;
   },
 
   async requestPasswordReset(email: string): Promise<void> {

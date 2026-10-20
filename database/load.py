@@ -12,6 +12,9 @@ Prerequisite: `alembic upgrade head` (tables must exist).
 
 Guarantees
 ----------
+* By default, loads reference and identity data only. Historical operational
+  records (invoices, prescription records, and invoice labels) are excluded.
+  Use --include-operational-data only for explicit archive/demo imports.
 * Idempotent. Each file's SHA-256 is recorded in ingestion_log together with
   its name; a file whose (name, hash) is already there is skipped. Running
   the loader twice changes nothing.
@@ -29,6 +32,7 @@ Environment: DATABASE_URL=postgresql://user:password@host:5432/dbname
 Usage
 -----
     python load.py --clean-dir data/clean --secure-dir data/secure
+    python load.py --include-operational-data  # explicit archive/demo import
     python load.py --is-initialised      # exit 0 if all files already loaded
     python load.py --wait 60 --wait-only # wait for the database, then exit
 Exit codes: 0 ok, 1 error, 2 (--is-initialised) not initialised,
@@ -93,6 +97,17 @@ SOURCES = [
     Source("labels_prestataires", "clean", "labels_prestataires.parquet",
            ("prestataire_id",), optional=True),
 ]
+
+OPERATIONAL_TABLES = frozenset({
+    "ordonnances", "ordonnance_lignes", "factures", "lignes_facture",
+    "labels_fraude",
+})
+
+
+def selected_sources(include_operational_data: bool = False) -> list[Source]:
+    if include_operational_data:
+        return SOURCES
+    return [src for src in SOURCES if src.table not in OPERATIONAL_TABLES]
 
 
 class LoadError(Exception):
@@ -237,14 +252,16 @@ def check_no_pii(conn) -> list[str]:
     return [f"{t}.{c}" for t, c in rows]
 
 
-def is_initialised(conn, clean_dir: Path, secure_dir: Path) -> bool:
+def is_initialised(conn, clean_dir: Path, secure_dir: Path,
+                   include_operational_data: bool = False) -> bool:
     try:
         done = {r[0] for r in conn.execute(
             "SELECT DISTINCT fichier FROM ingestion_log "
             "WHERE statut = 'OK'").fetchall()}
     except psycopg.errors.UndefinedTable:
         return False
-    required = {s.filename for s in SOURCES if not s.optional}
+    required = {s.filename for s in selected_sources(include_operational_data)
+                if not s.optional}
     return required <= done
 
 def create_database_if_not_exists(conn, db_name):
@@ -263,6 +280,8 @@ def main(argv=None) -> int:
     p.add_argument("--secure-dir", default="data/secure")
     p.add_argument("--force", action="store_true",
                    help="reload even if the file hash is already logged")
+    p.add_argument("--include-operational-data", action="store_true",
+                   help="also load historical invoices, prescriptions, and invoice labels")
     p.add_argument("--skip-identities", action="store_true",
                    help="do not load identites_chiffrees (e.g. no key yet)")
     p.add_argument("--is-initialised", action="store_true",
@@ -284,7 +303,8 @@ def main(argv=None) -> int:
             print("database reachable")
             return 0
         if args.is_initialised:
-            ok = is_initialised(conn, clean_dir, secure_dir)
+            ok = is_initialised(
+                conn, clean_dir, secure_dir, args.include_operational_data)
             print("initialised" if ok else "not initialised")
             return 0 if ok else 2
 
@@ -292,7 +312,7 @@ def main(argv=None) -> int:
         results = []
         print(f"load.py  clean={clean_dir}  secure={secure_dir}")
         try:
-            for src in SOURCES:
+            for src in selected_sources(args.include_operational_data):
                 if src.table == "identites_chiffrees" and args.skip_identities:
                     print(f"  {src.table:<26} skipped (--skip-identities)")
                     continue

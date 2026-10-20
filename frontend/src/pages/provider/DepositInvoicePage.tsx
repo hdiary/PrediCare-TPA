@@ -74,8 +74,8 @@ export function DepositInvoicePage() {
       showToast('Le scan ne doit pas dépasser 10 Mo', 'error');
       return;
     }
-    if (!f.name.match(/\.(pdf|jpe?g|png)$/i)) {
-      showToast("Format accepté pour l'ordonnance : PDF, JPG ou PNG", 'error');
+    if (!f.name.match(/\.pdf$/i)) {
+      showToast("Seul le format PDF est accepté pour l'ordonnance", 'error');
       return;
     }
     setRxScan(f);
@@ -125,12 +125,23 @@ export function DepositInvoicePage() {
     setSubmitting(true);
     try {
       let res: InvoiceSubmissionResult;
+      let invoicePrescription = prescription;
       if (mode === 'upload' && file) {
         const formData = new FormData();
         formData.append('file', file);
         if (prescription) formData.append('prescription', JSON.stringify(prescription));
+        if (prescription && rxScan) formData.append('prescription_scan', rxScan);
         res = await api.submitInvoice(formData);
       } else {
+        if (prescription && rxScan) {
+          const ordonnanceId = await api.createPrescriptionFromScan(
+            insuredPseudo.trim(),
+            invoiceType,
+            rxScan,
+            prescription,
+          );
+          invoicePrescription = { ...prescription, prescription_id: ordonnanceId };
+        }
         res = await api.submitInvoice({
           insured_pseudo: insuredPseudo,
           care_date: careDate,
@@ -139,11 +150,8 @@ export function DepositInvoicePage() {
           invoice_number: invoiceNumber,
           invoice_type: invoiceType,
           lines,
-          ...(prescription ? { prescription } : {}),
+          ...(invoicePrescription ? { prescription: invoicePrescription } : {}),
         });
-      }
-      if (res.status === 'accepted' && prescription && rxScan) {
-        await api.uploadPrescriptionScan(res.invoice_id, rxScan);
       }
       setResult(res); // résultat réel : accepté, ou rejeté avec les motifs renvoyés par l'API
       setStep('result');

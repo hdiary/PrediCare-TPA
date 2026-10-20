@@ -1,6 +1,25 @@
 import pandas as pd
+from types import SimpleNamespace
 
 from ml import features, preprocess
+
+
+def test_table_preserves_columns_when_database_table_is_empty():
+    class EmptyCursor:
+        description = [SimpleNamespace(name="facture_id"), SimpleNamespace(name="numero_facture")]
+
+        def fetchall(self):
+            return []
+
+    class EmptyConnection:
+        def execute(self, query):
+            assert query == "SELECT * FROM factures"
+            return EmptyCursor()
+
+    table = preprocess._table(EmptyConnection(), "factures")
+
+    assert table.empty
+    assert table.columns.tolist() == ["facture_id", "numero_facture"]
 
 
 def test_code_reference_keeps_nullable_boolean_flag_numeric():
@@ -36,10 +55,16 @@ def test_build_features_from_tables_returns_only_the_submitted_invoice(monkeypat
         {"feature": [1.0, 2.0, 3.0]},
         index=["FAC-HISTORIQUE-1", facture_id, "FAC-HISTORIQUE-2"],
     )
+    captured_tables = {}
+
+    def fake_build_features(tables):
+        captured_tables.update(tables)
+        return feature_rows, pd.DataFrame(index=feature_rows.index)
+
     monkeypatch.setattr(
         preprocess,
         "build_training_features",
-        lambda _: (feature_rows, pd.DataFrame(index=feature_rows.index)),
+        fake_build_features,
     )
     tables = {name: pd.DataFrame() for name in preprocess.TABLES}
     tables["factures"] = pd.DataFrame(columns=["facture_id"])
@@ -72,3 +97,5 @@ def test_build_features_from_tables_returns_only_the_submitted_invoice(monkeypat
 
     assert result.index.tolist() == [facture_id]
     assert result.iloc[0]["feature"] == 2.0
+    assert pd.api.types.is_numeric_dtype(captured_tables["factures"]["montant_total"])
+    assert pd.api.types.is_numeric_dtype(captured_tables["lignes_facture"]["prix_unitaire"])
