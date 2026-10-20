@@ -38,6 +38,7 @@ const AdminConfig = lazyPage(() => import('@/pages/admin/AdminConfig'), 'AdminCo
 const AdminModels = lazyPage(() => import('@/pages/admin/AdminModels'), 'AdminModels');
 const AdminAuditLog = lazyPage(() => import('@/pages/admin/AdminAuditLog'), 'AdminAuditLog');
 const AdminUsers = lazyPage(() => import('@/pages/admin/AdminUsers'), 'AdminUsers');
+const AdminUserCreatePage = lazyPage(() => import('@/pages/admin/AdminUserCreatePage'), 'AdminUserCreatePage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/ForgotPasswordPage'), 'ForgotPasswordPage');
 const ResetPasswordPage = lazyPage(() => import('@/pages/ResetPasswordPage'), 'ResetPasswordPage');
 
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="/admin/configuration" element={<AppLayout allowedRoles={['admin']}><AdminConfig /></AppLayout>} />
                 <Route path="/admin/modeles" element={<AppLayout allowedRoles={['admin']}><AdminModels /></AppLayout>} />
                 <Route path="/admin/audit" element={<AppLayout allowedRoles={['admin']}><AdminAuditLog /></AppLayout>} />
+                <Route path="/admin/utilisateurs/nouveau" element={<AppLayout allowedRoles={['admin']}><AdminUserCreatePage /></AppLayout>} />
                 <Route path="/admin/utilisateurs" element={<AppLayout allowedRoles={['admin']}><AdminUsers /></AppLayout>} />
                 <Route path="/admin/aide" element={<AppLayout allowedRoles={['admin']}><HelpPage /></AppLayout>} />
 

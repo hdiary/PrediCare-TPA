@@ -216,3 +216,33 @@ def ensure_seed_users() -> None:
                 ),
             )
     logger.info("seed_users_ready", extra={"count": len(wanted)})
+
+
+def ensure_user_identifiers() -> None:
+    """Attribue un identifiant pseudonymisé stable aux comptes existants sans identifiant."""
+    pool = get_pool()
+    if pool is None:
+        logger.warning("user_identifiers_skipped", extra={"reason": "database_pool_unavailable"})
+        return
+
+    try:
+        with pool.connection(timeout=10) as conn:
+            users = conn.execute(
+                "SELECT u.utilisateur_id, u.nom_utilisateur, r.nom_role "
+                "FROM utilisateurs u "
+                "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
+                "JOIN roles r ON r.role_id = ur.role_id "
+                "WHERE u.identifiant IS NULL ORDER BY u.utilisateur_id"
+            ).fetchall()
+            for user in users:
+                identifier = pseudonymise_account(user["nom_utilisateur"], user["nom_role"])
+                conn.execute(
+                    "UPDATE utilisateurs SET identifiant = %s "
+                    "WHERE utilisateur_id = %s AND identifiant IS NULL",
+                    (identifier, user["utilisateur_id"]),
+                )
+    except PseudonymConfigurationError:
+        logger.error("user_identifiers_skipped: PSEUDO_HMAC_KEY absente ou invalide")
+        return
+
+    logger.info("user_identifiers_ready", extra={"count": len(users)})

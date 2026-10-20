@@ -1,10 +1,15 @@
 -- Schéma MINIMAL pour les tests d'intégration (noms de tables et colonnes lus par l'API).
 -- Le vrai schéma vient des migrations de P1/P3 ; ici seules les colonnes utilisées par l'API.
 CREATE TABLE utilisateurs (
-  utilisateur_id SERIAL PRIMARY KEY, nom_utilisateur TEXT UNIQUE NOT NULL,
+  utilisateur_id SERIAL PRIMARY KEY, identifiant TEXT UNIQUE,
+  nom_utilisateur TEXT UNIQUE NOT NULL,
   hash_mot_de_passe TEXT NOT NULL, est_actif BOOLEAN NOT NULL DEFAULT true,
   assure_id TEXT, prestataire_id TEXT, tentatives_echouees INT NOT NULL DEFAULT 0,
   verrouille_jusqua TIMESTAMPTZ, derniere_connexion TIMESTAMPTZ);
+CREATE TABLE utilisateurs_identites (
+  utilisateur_id INT PRIMARY KEY REFERENCES utilisateurs(utilisateur_id) ON DELETE CASCADE,
+  donnees_chiffrees BYTEA NOT NULL, key_version SMALLINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE TABLE roles (role_id SERIAL PRIMARY KEY, nom_role TEXT UNIQUE NOT NULL);
 INSERT INTO roles (nom_role) VALUES
   ('professionnel_sante'), ('assure'), ('gestionnaire'), ('administrateur');

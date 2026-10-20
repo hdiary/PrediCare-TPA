@@ -32,6 +32,7 @@ from api.schemas_admin import (
     SettingsModel,
     StatutCompte,
     UserCreate,
+    UserCreatedOut,
     UserRowOut,
     UserUpdate,
     _controle_rattachement,
@@ -45,6 +46,7 @@ from api.services.identity import (
 from api.services.mailer import send_account_credentials, send_reset_email
 from api.services.model_registry import ModelUnavailableError, get_registry
 from api.services.pseudonym import PseudonymConfigurationError, pseudonymise_account
+from api.services.pseudonym import ROLE_PREFIXES
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_only = Depends(require_role("administrateur"))
@@ -358,9 +360,10 @@ UserId = Path(ge=1, le=2_147_483_647, description="Identifiant du compte")
 
 def _user_out(r: dict) -> dict:
     """Compte vu par l'API (jamais le hachage du mot de passe)."""
+    username = r["email"]
     return {
         "user_id": r["utilisateur_id"], "identifiant": r.get("identifiant"),
-        "email": r["email"], "role": r["role"],
+        "email": username if "@" in username else None, "role": r["role"],
         "assure_id": r["assure_id"], "prestataire_id": r["prestataire_id"],
         "is_active": r["actif"],
         "last_login": r["derniere_connexion"].isoformat() if r["derniere_connexion"] else None,
@@ -431,20 +434,24 @@ def get_user(user_id: int = UserId, conn=Depends(get_db)):
     return _user_out(_compte_ou_404(conn, user_id))
 
 
-@router.post("/users", response_model=UserRowOut, status_code=201)
+@router.post("/users", response_model=UserCreatedOut, status_code=201)
 def create_user(
     body: UserCreate,
     admin: dict = Depends(require_role("administrateur")),
     conn=Depends(get_db),
 ):
-    """Crée un compte rattaché, pseudonymise son identifiant et envoie le mot de passe."""
-    try:
-        _controle_rattachement(body.role, body.assure_id, body.prestataire_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    """Crée un nouveau compte et conserve son identité dans la table chiffrée."""
+    if body.assure_id and body.role != "assure":
+        raise HTTPException(status_code=422, detail="Seul un compte assuré peut être rattaché à un assuré")
+    if body.prestataire_id and body.role != "professionnel_sante":
+        raise HTTPException(status_code=422, detail="Seul un compte professionnel peut être rattaché à un prestataire")
     _verifier_references(conn, body.assure_id, body.prestataire_id)
     try:
-        identifier = pseudonymise_account(body.numero_cin, body.role)
+        identifier = (
+            pseudonymise_account(body.numero_cin, body.role)
+            if body.numero_cin
+            else f"{ROLE_PREFIXES[body.role]}-{secrets.token_hex(8).upper()}"
+        )
         encrypted_identity = encrypt_account_identity(
             body.model_dump(exclude={"role", "assure_id", "prestataire_id"})
         )
@@ -458,7 +465,8 @@ def create_user(
     while not (any(c.isalpha() for c in password) and any(c.isdigit() for c in password)):
         password = "".join(secrets.choice(alphabet) for _ in range(16))
     created = repo.create_utilisateur(
-        email=body.email, password_hash=hash_password(password), role=body.role,
+        conn,
+        email=body.email or identifier, password_hash=hash_password(password), role=body.role,
         assure_id=body.assure_id, prestataire_id=body.prestataire_id, actif=True,
         identifiant=identifier,
     )
@@ -479,12 +487,15 @@ def create_user(
     write_audit_compte(conn, event_type="compte_cree", actor_id=admin["user_id"],
                        entity_id=created["utilisateur_id"],
                        output_data={"role": body.role, "identifiant": identifier})
-    if not send_account_credentials(body.email, identifier, password):
-        raise HTTPException(
-            status_code=503,
-            detail="E-mail non envoyé ; vérifiez la configuration SMTP avant de réessayer",
-        )
-    return _user_out(created)
+    email_sent = (
+        send_account_credentials(body.email, identifier, password)
+        if body.email else False
+    )
+    return {
+        **_user_out(created),
+        "mot_de_passe_provisoire": password,
+        "email_envoye": email_sent,
+    }
 
 
 @router.patch("/users/{user_id}", response_model=UserRowOut)
@@ -531,7 +542,10 @@ def update_user(
                 decrypt_account_identity(stored_identity["donnees_chiffrees"]).get("numero_cin")
                 if stored_identity else cible["email"]
             )
-            identifier_final = pseudonymise_account(cin, role_final)
+            identifier_final = (
+                pseudonymise_account(cin, role_final)
+                if cin else f"{ROLE_PREFIXES[role_final]}-{secrets.token_hex(8).upper()}"
+            )
         except (IdentityUnavailableError, PseudonymConfigurationError) as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         duplicate = conn.execute(

@@ -112,7 +112,11 @@ class FakeConn:
             )
         if q.startswith("SELECT") and "LOWER(U.NOM_UTILISATEUR)" in q:
             email = next(
-                (name for name in USERS if name.lower() == params[0].lower()),
+                (
+                    name for name, data in USERS.items()
+                    if name.lower() == params[0].lower()
+                    or data["identifiant"].lower() == params[1].lower()
+                ),
                 None,
             )
             data = USERS.get(email) if email else None
@@ -218,17 +222,18 @@ def test_login_email_is_case_insensitive(client):
 
 
 @pytest.mark.parametrize(
-    "email,password",
+    "email,password,expected_status",
     [
-        ("gestionnaire@predicare.local", "mauvais"),
-        ("inconnu@predicare.local", PASSWORD),
-        ("off@predicare.local", PASSWORD),  # compte désactivé
+        ("gestionnaire@predicare.local", "mauvais", 401),
+        ("inconnu@predicare.local", PASSWORD, 401),
+        ("off@predicare.local", PASSWORD, 403),  # compte désactivé
     ],
 )
-def test_login_failure_is_generic_401(client, email, password):
+def test_login_failure_has_expected_status(client, email, password, expected_status):
     r = login(client, email, password)
-    assert r.status_code == 401
-    assert r.json()["detail"] == "Identifiants invalides"
+    assert r.status_code == expected_status
+    if expected_status == 401:
+        assert r.json()["detail"] == "Identifiants invalides"
 
 
 def test_me_requires_token(client):

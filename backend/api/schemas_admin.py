@@ -36,10 +36,10 @@ class UserCreate(BaseModel):
     sexe: Literal["F", "M"]
     date_naissance: date
     telephone: str = Field(min_length=3, max_length=30)
-    email: Email
+    email: Email | None = None
     adresse: str = Field(min_length=1, max_length=255)
     ville: str = Field(min_length=1, max_length=100)
-    numero_cin: str = Field(pattern=r"^\d{12}$")
+    numero_cin: str | None = Field(default=None, pattern=r"^\d{12}$")
     role: Literal["professionnel_sante", "assure", "gestionnaire", "administrateur"]
     assure_id: str | None = None
     prestataire_id: str | None = None
@@ -62,12 +62,17 @@ class UserUpdate(BaseModel):
 class UserRowOut(BaseModel):
     user_id: int
     identifiant: str | None = None
-    email: str
+    email: str | None = None
     role: str
     assure_id: str | None = None
     prestataire_id: str | None = None
     is_active: bool
     last_login: str | None = None
+
+
+class UserCreatedOut(UserRowOut):
+    mot_de_passe_provisoire: str
+    email_envoye: bool
 
 
 def _controle_rattachement(role: str, assure_id: str | None, prestataire_id: str | None) -> None:

@@ -156,6 +156,37 @@ def test_admin_cree_un_compte_pseudonymise_et_envoie_les_identifiants(client):
     assert row["assure_id"] is None and row["est_actif"] is False
 
 
+def test_admin_cree_un_compte_sans_email_cin_ni_fiche_assure(client):
+    admin = _auth(client, "admin@c.mg")
+    response = client.post("/admin/users", headers=admin, json={
+        "role": "assure",
+        "nom": "Enfant",
+        "prenoms": "Test",
+        "sexe": "F",
+        "date_naissance": "2018-04-12",
+        "telephone": "0340000000",
+        "email": None,
+        "adresse": "Adresse test",
+        "ville": "Antananarivo",
+        "numero_cin": None,
+    })
+    assert response.status_code == 201, response.text
+    account = response.json()
+    assert account["email"] is None
+    assert account["assure_id"] is None
+    assert account["identifiant"].startswith("ASS-")
+    assert account["mot_de_passe_provisoire"]
+    assert account["email_envoye"] is False
+    assert CREATED_CREDENTIALS == []
+    assert _login(client, account["identifiant"], account["mot_de_passe_provisoire"]).status_code == 200
+    with _db() as c:
+        identity = c.execute(
+            "SELECT donnees_chiffrees FROM utilisateurs_identites WHERE utilisateur_id = %s",
+            (account["user_id"],),
+        ).fetchone()
+    assert identity["donnees_chiffrees"] == b"encrypted-test-identity"
+
+
 # ---------- mot de passe oublié ----------
 
 def test_mot_de_passe_oublie_flux_complet(client):
@@ -285,13 +316,18 @@ def test_creation_modification_desactivation(client):
     u = cree.json()
     assert u["email"] == "cree@c.mg" and u["prestataire_id"] == "PRE-00999" and u["is_active"]
     assert u["identifiant"].startswith("PDS-")
-    assert "password" not in u and "mot_de_passe_hash" not in u
+    assert u["mot_de_passe_provisoire"] and u["email_envoye"]
+    assert "hash_mot_de_passe" not in u
     assert client.post("/admin/users", headers=admin, json=corps).status_code == 409
 
-    # Rattachements incohérents ou inconnus
+    # La création d'un compte ne nécessite plus de fiche métier existante.
     base = _account_payload("y@c.mg", cin="923456789012")
-    assert client.post("/admin/users", headers=admin, json={
-        **base, "role": "assure"}).status_code == 422
+    cree_sans_fiche = client.post("/admin/users", headers=admin, json={
+        **base, "role": "assure"})
+    assert cree_sans_fiche.status_code == 201
+    assert cree_sans_fiche.json()["assure_id"] is None
+
+    # Les rattachements explicitement fournis doivent rester cohérents et valides.
     assert client.post("/admin/users", headers=admin, json={
         **base, "role": "gestionnaire", "assure_id": "ASS-1111111111"}).status_code == 422
     assert client.post("/admin/users", headers=admin, json={

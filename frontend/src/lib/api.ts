@@ -30,6 +30,7 @@ import type {
   PrescriptionAlert,
   AdminUserCreatePayload,
   UserReferences,
+  CreatedUserCredentials,
   AlertDecisionValue,
 } from "./types";
 
@@ -147,7 +148,7 @@ async function request<T>(path: string, options: RequestInit = {}, opts: { auth?
 // ---------------------------------------------------------------------------
 
 interface ApiUser {
-  user_id: number; identifiant?: string | null; email: string; role: string;
+  user_id: number; identifiant?: string | null; email: string | null; role: string;
   assure_id?: string | null; prestataire_id?: string | null;
 }
 
@@ -165,8 +166,8 @@ function mapUser(u: ApiUser): { role: Role; display_name: string; pseudonym: str
   if (!role) throw new Error(`Rôle inconnu : ${u.role}`);
   const pseudonym = u.identifiant || u.assure_id || u.prestataire_id ||
     `${ROLE_PREFIX[role]}-${String(u.user_id).padStart(4, "0")}`;
-  const local = u.email.split("@")[0];
-  return { role, pseudonym, email: u.email, display_name: local.charAt(0).toUpperCase() + local.slice(1) };
+  const local = u.email?.includes("@") ? u.email.split("@")[0] : pseudonym;
+  return { role, pseudonym, email: u.email ?? "", display_name: local.charAt(0).toUpperCase() + local.slice(1) };
 }
 
 let cachedMe: { pseudonym: string; role: Role; prestataireId: string | null } | null = null;
@@ -763,19 +764,33 @@ export const api = {
     return request("/admin/users/references");
   },
 
-  async createUser(payload: AdminUserCreatePayload): Promise<UserRow> {
+  async createUser(payload: AdminUserCreatePayload): Promise<CreatedUserCredentials> {
     if (isMock("users")) throw new Error("La création de comptes nécessite l’API active.");
-    const row = await request<ApiUser & { is_active: boolean }>("/admin/users", {
+    const row = await request<ApiUser & {
+      is_active: boolean;
+      mot_de_passe_provisoire: string;
+      email_envoye: boolean;
+    }>("/admin/users", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        email: payload.email.trim() || null,
+        numero_cin: payload.numero_cin.trim() || null,
+      }),
     });
     const user = mapUser(row);
     return {
-      pseudonym: user.pseudonym,
-      display_name: user.display_name,
-      role: user.role,
-      email: user.email,
-      status: row.is_active ? "active" : "inactive",
+      user_id: row.user_id,
+      identifier: user.pseudonym,
+      temporary_password: row.mot_de_passe_provisoire,
+      email_sent: row.email_envoye,
+      user: {
+        pseudonym: user.pseudonym,
+        display_name: user.display_name,
+        role: user.role,
+        email: row.email,
+        status: row.is_active ? "active" : "inactive",
+      },
     };
   },
 

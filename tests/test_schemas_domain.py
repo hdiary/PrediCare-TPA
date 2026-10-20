@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from api.schemas_alerts import AlertDetailOut, AlertSummary, DecisionRequest
+from api.schemas_admin import UserCreate
 from api.schemas_domain import FacturePrestataireOut, InvoiceCreate
 
 
@@ -55,6 +56,28 @@ def test_invoice_create_rejects_invalid_enum_or_identifier(field, value):
 
     with pytest.raises(ValidationError):
         InvoiceCreate.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "role",
+    ["assure", "professionnel_sante", "gestionnaire", "administrateur"],
+)
+def test_admin_user_create_allows_optional_email_cin_and_business_link(role):
+    user = UserCreate.model_validate({
+        "role": role,
+        "nom": "Enfant",
+        "prenoms": "Test",
+        "sexe": "F",
+        "date_naissance": "2018-04-12",
+        "telephone": "0340000000",
+        "adresse": "Adresse test",
+        "ville": "Antananarivo",
+    })
+
+    assert user.email is None
+    assert user.numero_cin is None
+    assert user.assure_id is None
+    assert user.prestataire_id is None
 
 
 def test_invoice_create_rejects_inconsistent_line_amount():

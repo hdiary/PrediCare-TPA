@@ -253,11 +253,19 @@ export interface UserRow {
   pseudonym: string;
   display_name: string;
   role: Role;
-  email: string;
+  email: string | null;
   status: 'active' | 'inactive';
 }
 
 export type AdminAccountRole = 'assure' | 'professionnel_sante' | 'gestionnaire' | 'administrateur';
+
+export interface CreatedUserCredentials {
+  user_id: number;
+  identifier: string;
+  temporary_password: string;
+  email_sent: boolean;
+  user: UserRow;
+}
 
 export interface AdminUserCreatePayload {
   role: AdminAccountRole;

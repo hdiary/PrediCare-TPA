@@ -13,7 +13,7 @@ DO $$
 DECLARE
     has_legacy_role BOOLEAN;
     has_legacy_email BOOLEAN;
-    r RECORD;
+    constraint_row RECORD;
 BEGIN
     ALTER TABLE roles ADD COLUMN IF NOT EXISTS role_id BIGSERIAL;
     ALTER TABLE roles ADD COLUMN IF NOT EXISTS nom_role TEXT;
@@ -61,13 +61,13 @@ BEGIN
         WHERE table_schema = current_schema()
           AND table_name = 'utilisateurs' AND column_name = 'nom_utilisateur'
     ) THEN
-        FOR r IN
+        FOR constraint_row IN
             SELECT conname FROM pg_constraint
             WHERE conrelid = 'utilisateurs'::regclass AND contype = 'c'
               AND position('email' IN lower(pg_get_constraintdef(oid))) > 0
         LOOP
             EXECUTE 'ALTER TABLE utilisateurs DROP CONSTRAINT '
-                || quote_ident(r.conname);
+                || quote_ident(constraint_row.conname);
         END LOOP;
         ALTER TABLE utilisateurs RENAME COLUMN email TO nom_utilisateur;
     END IF;

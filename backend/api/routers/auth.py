@@ -48,8 +48,9 @@ def _authenticate(conn, identifier: str, password: str) -> dict:
         "FROM utilisateurs u "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
-        "WHERE lower(u.nom_utilisateur) = lower(%s)",
-        (email.strip(),),
+        "WHERE lower(u.nom_utilisateur) = lower(%s) "
+        "OR lower(u.identifiant) = lower(%s)",
+        (identifier.strip(), identifier.strip()),
     ).fetchone()
 
     if row and row["verrouille"]:
@@ -182,12 +183,8 @@ def refresh(body: RefreshRequest, conn=Depends(get_db)):
         raise _invalid_credentials() from None
 
     row = conn.execute(
-<<<<<<< HEAD
-        "SELECT u.utilisateur_id AS user_id, u.identifiant, u.email, u.role, "
-=======
-        "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, r.nom_role AS role, "
->>>>>>> 5e048448827b45b2b239116fbdfc458a8d9564b0
-        "u.assure_id, u.prestataire_id "
+        "SELECT u.utilisateur_id AS user_id, u.identifiant, "
+        "u.nom_utilisateur AS email, r.nom_role AS role, u.assure_id, u.prestataire_id "
         "FROM auth_sessions s JOIN utilisateurs u ON u.utilisateur_id = s.user_id "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
