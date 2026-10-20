@@ -20,7 +20,7 @@ export interface Invoice {
   id: string;
   date: string;
   amount: number;
-  status: 'received' | 'reviewing' | 'accepted' | 'rejected' | 'paid';
+  status: 'received' | 'reviewing' | 'pending' | 'accepted' | 'rejected' | 'paid';
   reimbursed_amount: number;
   provider_pseudo?: string;
   provider_name?: string;
@@ -217,8 +217,9 @@ export interface AdminSettings {
 
 export interface InvoiceSubmissionResult {
   invoice_id: string;
-  status: 'accepted' | 'rejected';
+  status: 'accepted' | 'pending' | 'rejected';
   errors: { field: string; message: string }[];
+  warnings?: string[];
 }
 
 export type PrescriptionRuleCode =

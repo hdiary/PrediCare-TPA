@@ -42,6 +42,7 @@ export const ALERT_TYPE_LABELS: Record<string, string> = {
 export const INVOICE_STATUS_LABELS: Record<string, string> = {
   received: 'Reçue',
   reviewing: 'En cours de contrôle',
+  pending: 'En attente du gestionnaire',
   accepted: 'Acceptée',
   rejected: 'Rejetée',
   paid: 'Payée',
@@ -50,6 +51,7 @@ export const INVOICE_STATUS_LABELS: Record<string, string> = {
 export const INVOICE_STATUS_COLORS: Record<string, string> = {
   received: 'bg-surface-100 text-surface-600 dark:bg-surface-700 dark:text-surface-300',
   reviewing: 'bg-warning-100 text-warning-700 dark:bg-warning-800 dark:text-warning-200',
+  pending: 'bg-warning-100 text-warning-700 dark:bg-warning-800 dark:text-warning-200',
   accepted: 'bg-success-100 text-success-700 dark:bg-success-800 dark:text-success-200',
   rejected: 'bg-danger-100 text-danger-700 dark:bg-danger-800 dark:text-danger-200',
   paid: 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200',

@@ -153,7 +153,21 @@ def predict(
         calculation = calculate_reimbursement(clean, context)
         fraud_findings = evaluate_fraud_rules(clean, context)
     except ContextUnavailableError:
-        logger.warning("contexte métier indisponible pour %s", clean["facture_id"])
+        logger.error("contexte métier indisponible pour %s", clean["facture_id"])
+        write_audit(
+            conn,
+            event_type="erreur_contexte_facture",
+            actor_id=user["user_id"],
+            entity_type="facture",
+            entity_id=clean["facture_id"],
+            input_data={"facture_id": clean["facture_id"]},
+            output_data={"code": "CONTEXTE_INDISPONIBLE"},
+        )
+        conn.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Référentiel métier incomplet, dépôt impossible pour le moment.",
+        )
 
     # 2. Modèle actif
     bundle = registry.ensure_loaded()
@@ -206,7 +220,10 @@ def predict(
         "QUANTITE_EXCESSIVE", "INCOHERENCE_PROFIL", "DOUBLON",
         "PRESTATAIRE_RADIE", "ORDONNANCE_EXPIREE",
     }
-    rule_alert_codes = [f.code for f in fraud_findings if f.code in alert_rule_codes]
+    rule_alert_codes = [
+        f.code for f in fraud_findings
+        if f.code in alert_rule_codes or f.severity == "HAUTE"
+    ]
     score_alert = result["score"] > seuil
     is_alert = score_alert or bool(rule_alert_codes)
     latence_ms = int((time.perf_counter() - started) * 1000)
@@ -241,11 +258,15 @@ def predict(
             findings = evaluate_rules(conn, clean)
             repo.insert_alertes_regles(conn, prediction_id, clean["facture_id"], findings)
             if is_alert:
+                high_priority_rule = any(
+                    finding.code in rule_alert_codes and finding.severity == "HAUTE"
+                    for finding in fraud_findings
+                )
                 alerte_id = repo.insert_alert(
                     conn,
                     facture_id=clean["facture_id"],
                     codes=sorted(set(rule_alert_codes or ["SCORE_SUPERIEUR_SEUIL"])),
-                    priority="HAUTE" if result["score"] >= seuil else "MOYENNE",
+                    priority="HAUTE" if score_alert or high_priority_rule else "MOYENNE",
                 )
             write_audit(
                 conn,
@@ -271,7 +292,7 @@ def predict(
         raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
 
     # Un professionnel de santé ne reçoit pas le score (éviter d'aider un fraudeur à l'ajuster)
-    if score_alert and alerte_id:
+    if is_alert and alerte_id:
         notification_events = []
 
         def audit_notification(event: dict) -> None:
@@ -302,6 +323,9 @@ def predict(
                 "montant_total": clean["montant_total"],
                 "montant_reclame": calculation.get("montant_reclame") if calculation else None,
                 "montant_calcule": calculation.get("montant_calcule") if calculation else None,
+                "codes_fraude": [finding.code for finding in fraud_findings],
+                "shap": result["shap"],
+                "regles": [finding.as_dict() for finding in findings],
             },
             client=httpx,
             settings=settings,
@@ -362,8 +386,10 @@ def _pdf_to_payload(extracted: dict, prestataire_id: str | None,
         "contrat_id": extracted.get("contrat_id") or contrat_id,
         "type_facture": extracted.get("type_facture"),
         "date_soin": extracted.get("date_soin"),
+        "date_facture": extracted.get("date_facture"),
         "heure_soin": extracted.get("heure_soin") or "08:00",
-        "devise": "MGA",
+        "devise": extracted.get("devise") or "MGA",
+        "mode_reglement": extracted.get("mode_reglement"),
         "lignes": [
             {
                 "code": l["code"],
@@ -375,6 +401,8 @@ def _pdf_to_payload(extracted: dict, prestataire_id: str | None,
         **({"prestataire_id": prestataire_id} if prestataire_id else {}),
         **({"ordonnance_id": extracted["ordonnance_id"]}
            if extracted.get("ordonnance_id") else {}),
+        **({"attestation_pec_id": extracted["attestation_pec_id"]}
+           if extracted.get("attestation_pec_id") else {}),
     }
 
 
@@ -393,11 +421,21 @@ async def predict_pdf(
 ):
     # 1. Contrôles basiques
     if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Seul le format PDF est accepté.")
+        _reject(
+            conn, user, {"facture_id": _new_facture_id()},
+            [{"code": "FORMAT_INVALIDE", "champ": "fichier",
+              "message": "Seul le format PDF est accepté."}],
+            400, "format_pdf", record_rejection=True,
+        )
 
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Le fichier ne doit pas dépasser 10 Mo.")
+        _reject(
+            conn, user, {"facture_id": _new_facture_id()},
+            [{"code": "FORMAT_INVALIDE", "champ": "fichier",
+              "message": "Le fichier ne doit pas dépasser 10 Mo."}],
+            400, "format_pdf", record_rejection=True,
+        )
 
     # 2. Extraire le PDF
     # load_reference_tables renvoie les tables brutes ; extract_document attend le référentiel
@@ -406,18 +444,27 @@ async def predict_pdf(
     extraction = extract_document(content, ref=ref)
 
     if not extraction.ok:
-        # rejet propre : renvoyer les erreurs d'extraction au front
-        raise InvoiceRejected(
-            [{"code": "PDF_INVALIDE", "champ": "fichier", "message": e}
-             for e in extraction.errors],
-            422,
+        payload = {
+            "facture_id": _new_facture_id(),
+            "assure_id": extraction.data.get("assure_id"),
+            "prestataire_id": (
+                prestataire_id or extraction.data.get("prestataire_id")
+                or user.get("prestataire_id")
+            ),
+        }
+        _reject(
+            conn, user, payload,
+            [{"code": issue["code"], "champ": "fichier", "message": issue["message"]}
+             for issue in extraction.issues],
+            extraction.http_status, "extraction_pdf", record_rejection=True,
         )
 
     if extraction.doc_type != "facture":
-        raise InvoiceRejected(
+        _reject(
+            conn, user, {"facture_id": _new_facture_id()},
             [{"code": "TYPE_INVALIDE", "champ": "fichier",
               "message": f"Document détecté '{extraction.doc_type}', une facture est attendue."}],
-            422,
+            422, "type_document_pdf", record_rejection=True,
         )
 
     # 3. Reconstruire le payload
@@ -425,7 +472,10 @@ async def predict_pdf(
     if extraction.data.get("assure_id") and not extraction.data.get("contrat_id"):
         contrat_id = repo.contrat_de_assure(conn, extraction.data["assure_id"])
     payload = _pdf_to_payload(
-        extraction.data, prestataire_id or user.get("prestataire_id"), contrat_id)
+        extraction.data,
+        prestataire_id or user.get("prestataire_id") or extraction.data.get("prestataire_id"),
+        contrat_id,
+    )
 
     # 4. Parse and persist an attached prescription before linking the invoice.
     prescription_data = {}
@@ -460,4 +510,20 @@ async def predict_pdf(
         payload["ordonnance_id"] = prescription_data["prescription_id"]
 
     # 5. Réutiliser la logique existante
-    return predict(payload=payload, user=user, conn=conn, registry=registry)
+    response = predict(
+        payload=payload, user=user, conn=conn, registry=registry,
+        record_rejection=True, pending_when_unavailable=True,
+    )
+    if extraction.warnings:
+        response.avertissements = extraction.warnings
+        write_audit(
+            conn,
+            event_type="avertissement_extraction_pdf",
+            actor_id=user["user_id"],
+            entity_type="facture",
+            entity_id=payload["facture_id"],
+            input_data={"facture_id": payload["facture_id"]},
+            output_data={"avertissements": extraction.warnings},
+        )
+        conn.commit()
+    return response

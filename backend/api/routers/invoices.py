@@ -16,7 +16,7 @@ from api.schemas_invoices import InvoiceList
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
-StatutFacture = Literal["EN_COURS", "PAYEE", "REJETEE"]
+StatutFacture = Literal["EN_COURS", "PAYEE", "REJETEE", "EN_ATTENTE_GESTIONNAIRE"]
 
 
 @router.get("", response_model=InvoiceList)

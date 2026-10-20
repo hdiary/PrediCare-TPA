@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   UploadCloud, FileText, Plus, Trash2, CheckCircle2,
-  AlertTriangle, ArrowLeft, File, Calendar, Banknote, ClipboardList,
+  AlertTriangle, ArrowLeft, File, Calendar, Banknote, ClipboardList, Clock3,
 } from 'lucide-react';
 import { Card, Button, Input, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -156,6 +156,7 @@ export function DepositInvoicePage() {
       setResult(res); // résultat réel : accepté, ou rejeté avec les motifs renvoyés par l'API
       setStep('result');
       if (res.status === 'accepted') showToast('Facture déposée avec succès', 'success');
+      if (res.status === 'pending') showToast('Facture reçue, en attente de traitement', 'success');
     } catch (err) {
       // erreur technique (réseau, serveur indisponible...) : on reste sur le formulaire
       showToast(err instanceof Error ? err.message : 'Erreur lors du dépôt', 'error');
@@ -199,6 +200,37 @@ export function DepositInvoicePage() {
               <FileText className="w-4 h-4 text-surface-400" />
               <span className="text-sm font-mono font-medium text-surface-700 dark:text-surface-200">{result.invoice_id}</span>
             </div>
+            {result.warnings?.length ? (
+              <div role="status" className="rounded-xl border border-warning-300 bg-warning-50 px-4 py-3 text-left text-sm text-warning-800 dark:border-warning-800 dark:bg-warning-900/30 dark:text-warning-200 mb-6">
+                {result.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              </div>
+            ) : null}
+            <div>
+              <Button variant="outline" onClick={reset}>
+                <ArrowLeft className="w-4 h-4" /> Déposer une autre facture
+              </Button>
+            </div>
+          </Card>
+        ) : result.status === 'pending' ? (
+          <Card className="p-8 text-center animate-slide-up">
+            <div className="w-20 h-20 rounded-full bg-warning-50 dark:bg-warning-900/30 flex items-center justify-center mx-auto mb-6">
+              <Clock3 className="w-12 h-12 text-warning-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-surface-800 dark:text-surface-100 mb-2">
+              Facture en attente de traitement
+            </h2>
+            <p className="text-sm text-surface-500 dark:text-surface-400 mb-6">
+              Votre facture a été reçue et sera examinée par un gestionnaire.
+            </p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-surface-50 dark:bg-surface-700 mb-6">
+              <FileText className="w-4 h-4 text-surface-400" />
+              <span className="text-sm font-mono font-medium text-surface-700 dark:text-surface-200">{result.invoice_id}</span>
+            </div>
+            {result.warnings?.length ? (
+              <div role="status" className="rounded-xl border border-warning-300 bg-warning-50 px-4 py-3 text-left text-sm text-warning-800 dark:border-warning-800 dark:bg-warning-900/30 dark:text-warning-200 mb-6">
+                {result.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              </div>
+            ) : null}
             <div>
               <Button variant="outline" onClick={reset}>
                 <ArrowLeft className="w-4 h-4" /> Déposer une autre facture

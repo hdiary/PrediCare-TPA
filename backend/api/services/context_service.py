@@ -1,4 +1,6 @@
 """Build the validated business context used by reimbursement and fraud rules."""
+from datetime import date
+
 from api import repositories_domain as domain
 
 
@@ -50,6 +52,20 @@ def build_context(conn, clean: dict) -> dict:
             "SELECT count(*) AS n FROM factures WHERE ordonnance_id = %s AND facture_id <> %s",
             (clean.get("ordonnance_id"), clean["facture_id"]),
         ).fetchone()["n"] if clean.get("ordonnance_id") else 0,
+        "paid_category": conn.execute(
+            "SELECT COALESCE(sum(montant_pris_en_charge), 0) AS amount FROM factures "
+            "WHERE assure_id = %s AND type_facture = %s AND statut = 'PAYEE' "
+            "AND date_part('year', date_soin) = %s AND facture_id <> %s",
+            (clean["assure_id"], clean["type_facture"],
+             date.fromisoformat(clean["date_soin"]).year, clean["facture_id"]),
+        ).fetchone()["amount"],
+        "paid_global": conn.execute(
+            "SELECT COALESCE(sum(montant_pris_en_charge), 0) AS amount FROM factures "
+            "WHERE assure_id = %s AND statut = 'PAYEE' "
+            "AND date_part('year', date_soin) = %s AND facture_id <> %s",
+            (clean["assure_id"], date.fromisoformat(clean["date_soin"]).year,
+             clean["facture_id"]),
+        ).fetchone()["amount"],
     }
 
     prescription = None

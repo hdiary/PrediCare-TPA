@@ -99,7 +99,7 @@ class InvoiceOut(BaseModel):
     montant_eligible: int
     montant_pris_en_charge: int
     reste_a_charge: int
-    statut: Literal["PAYEE", "REJETEE", "EN_COURS"]
+    statut: Literal["PAYEE", "REJETEE", "EN_COURS", "EN_ATTENTE_GESTIONNAIRE"]
     motif_rejet: str | None
     date_traitement: date | None
 

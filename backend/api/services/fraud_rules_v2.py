@@ -1,6 +1,6 @@
 """Fraud rules aligned with training feature definitions."""
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -84,7 +84,7 @@ def rule_surconsommation(clean, ctx):
 def rule_acte_fictif(clean, ctx):
     """is_acte_fictif: required ordonnance absent."""
     if not clean.get("ordonnance_id") and any(ctx.get("references", {}).get(l["code"], {}).get("ordonnance_requise") is True for l in clean.get("lignes", [])):
-        return _f("ACTE_FICTIF", "is_acte_fictif", "Acte nécessitant une ordonnance")
+        return _f("ACTE_FICTIF", "is_acte_fictif", "Acte nécessitant une ordonnance", severity="HAUTE")
 
 
 def rule_incoherence_profil(clean, ctx):
@@ -137,10 +137,26 @@ def rule_prestataire_radie(clean, ctx):
 def rule_hors_couverture(clean, ctx):
     """is_hors_couverture: insured/contract period or waiting period."""
     insured, contract = ctx.get("insured") or {}, ctx.get("contract") or {}
+    guarantee = ctx.get("guarantee") or {}
     if "date_soin" not in clean:
         return
     soin = date.fromisoformat(clean["date_soin"])
-    if (insured.get("date_adhesion") and soin < _d(insured["date_adhesion"])) or (insured.get("date_radiation") and soin > _d(insured["date_radiation"])) or contract.get("statut") != "ACTIF":
+    start_dates = [
+        _d(value) for value in (insured.get("date_adhesion"), contract.get("date_effet"))
+        if value
+    ]
+    start = max(start_dates) if start_dates else None
+    end_dates = [
+        _d(value) for value in (insured.get("date_radiation"), contract.get("date_fin"))
+        if value
+    ]
+    end = min(end_dates) if end_dates else None
+    waiting_days = int(guarantee.get("delai_carence_jours", 0))
+    if (
+        contract.get("statut") != "ACTIF"
+        or (start and soin < start + timedelta(days=waiting_days))
+        or (end and soin > end)
+    ):
         return _f("HORS_COUVERTURE", "is_hors_couverture", "Soin hors couverture", severity="HAUTE")
 
 

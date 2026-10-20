@@ -35,6 +35,7 @@ class PredictResponse(BaseModel):
     latence_ms: int | None = None
     codes_fraude: list[str] | None = None
     regles: list[RegleItem] | None = None   # alertes de règles de prescription (gestionnaire)
+    avertissements: list[str] | None = None
 
 
 PREDICT_REQUEST_EXAMPLE = {

@@ -201,11 +201,13 @@ const DECISION_TO_STATUS: Record<string, AlertStatus> = {
 
 const INVOICE_STATUS_FROM_API: Record<string, Invoice["status"]> = {
   EN_COURS: "reviewing",
+  EN_ATTENTE_GESTIONNAIRE: "pending",
   PAYEE: "paid",
   REJETEE: "rejected",
 };
 const INVOICE_STATUS_TO_API: Record<string, string | null> = {
-  reviewing: "EN_COURS", paid: "PAYEE", rejected: "REJETEE",
+  reviewing: "EN_COURS", pending: "EN_ATTENTE_GESTIONNAIRE",
+  paid: "PAYEE", rejected: "REJETEE",
   received: null, accepted: null, // statuts sans équivalent côté backend
 };
 
@@ -418,8 +420,20 @@ export const api = {
           throw err;
         }
 
-        const r = (await res.json()) as { facture_id: string };
-        return { invoice_id: r.facture_id, status: "accepted", errors: [] };
+        const r = (await res.json()) as {
+          facture_id: string;
+          statut?: string;
+          scoring_indisponible?: boolean;
+          avertissements?: string[];
+        };
+        return {
+          invoice_id: r.facture_id,
+          status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+            ? "pending"
+            : "accepted",
+          errors: [],
+          warnings: r.avertissements ?? [],
+        };
       }
 
       // -------- Cas JSON : parse + POST /predict (comportement d'origine) --------
@@ -444,11 +458,21 @@ export const api = {
       for (let attempt = 0; attempt < 2; attempt++) {
         if (!payload.facture_id) payload.facture_id = newFactureId();
         try {
-          const r = await request<{ facture_id: string }>("/predict", {
+          const r = await request<{
+            facture_id: string;
+            statut?: string;
+            scoring_indisponible?: boolean;
+          }>("/predict", {
             method: "POST",
             body: JSON.stringify(payload),
           });
-          return { invoice_id: r.facture_id, status: "accepted", errors: [] };
+          return {
+            invoice_id: r.facture_id,
+            status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+              ? "pending"
+              : "accepted",
+            errors: [],
+          };
         } catch (e) {
           if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
           const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
@@ -499,11 +523,21 @@ export const api = {
     for (let attempt = 0; attempt < 2; attempt++) {
       if (!payload.facture_id) payload.facture_id = newFactureId();
       try {
-        const r = await request<{ facture_id: string }>("/predict", {
+        const r = await request<{
+          facture_id: string;
+          statut?: string;
+          scoring_indisponible?: boolean;
+        }>("/predict", {
           method: "POST",
           body: JSON.stringify(payload),
         });
-        return { invoice_id: r.facture_id, status: "accepted", errors: [] };
+        return {
+          invoice_id: r.facture_id,
+          status: r.scoring_indisponible || r.statut === "EN_ATTENTE_GESTIONNAIRE"
+            ? "pending"
+            : "accepted",
+          errors: [],
+        };
       } catch (e) {
         if (!(e instanceof ApiError) || ![403, 409, 422].includes(e.status)) throw e;
         const doublon = e.errors.some((x) => x.code === "FACTURE_DEJA_ENREGISTREE");
