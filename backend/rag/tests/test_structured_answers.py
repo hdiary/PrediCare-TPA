@@ -211,6 +211,19 @@ class StructuredAnswerTests(unittest.TestCase):
         self.assertEqual(source, chunk)
         self.assertTrue(is_direct_contract_question(question))
 
+    def test_extracts_policy_effective_date(self):
+        chunk = _contract_chunk(
+            "Date d'effet de la police : 2021-03-26.")
+
+        question = "Quelle est la Date d'effet de la police de mon contrat ?"
+        result = answer_from_contract(question, [chunk])
+
+        self.assertIsNotNone(result)
+        answer, source = result
+        self.assertIn("2021-03-26", answer)
+        self.assertEqual(source, chunk)
+        self.assertTrue(is_direct_contract_question(question))
+
     def test_extracts_policy_number_from_contract_conditions(self):
         chunk = _contract_chunk("[Contrat CTR-000066] Police POL-2022-2780.")
 

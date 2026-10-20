@@ -91,7 +91,7 @@ export function ReimbursementsPage() {
                     className="hover:bg-surface-50 dark:hover:bg-surface-700/50 cursor-pointer transition-colors"
                   >
                     <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 tabular-nums">{formatDate(inv.date)}</td>
-                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300 font-mono">{inv.provider_pseudo || '—'}</td>
+                    <td className="px-6 py-4 text-sm text-surface-600 dark:text-surface-300">{inv.provider_name || inv.provider_pseudo || '—'}</td>
                     <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums font-medium">{formatMGA(inv.amount)}</td>
                     <td className="px-6 py-4 text-sm text-surface-700 dark:text-surface-200 text-right tabular-nums">{formatMGA(inv.reimbursed_amount)}</td>
                     <td className="px-6 py-4">
@@ -133,7 +133,7 @@ export function ReimbursementsPage() {
                   <User className="w-4 h-4" />
                   <span className="text-xs">Prestataire</span>
                 </div>
-                <p className="text-sm font-medium text-surface-700 dark:text-surface-200 font-mono">{selected.provider_pseudo || '—'}</p>
+                <p className="text-sm font-medium text-surface-700 dark:text-surface-200">{selected.provider_name || selected.provider_pseudo || '—'}</p>
               </div>
             </div>
 

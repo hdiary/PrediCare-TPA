@@ -322,7 +322,7 @@ export const api = {
     const data = await request<{
       items: {
         facture_id: string; date_soin: string; montant_total: number; montant_pris_en_charge?: number | null;
-        statut: string; prestataire_id: string; assure_id: string; lignes: ApiLine[];
+        statut: string; prestataire_id: string; prestataire_nom?: string | null; assure_id: string; lignes: ApiLine[];
       }[];
       total: number;
     }>(`/invoices?${params}`);
@@ -335,6 +335,7 @@ export const api = {
         status: INVOICE_STATUS_FROM_API[f.statut] ?? "reviewing",
         reimbursed_amount: f.montant_pris_en_charge ?? 0,
         provider_pseudo: f.prestataire_id,
+        provider_name: f.prestataire_nom ?? undefined,
         insured_pseudo: f.assure_id,
         lines: f.lignes.map(mapLine),
       })),

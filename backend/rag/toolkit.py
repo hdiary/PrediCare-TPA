@@ -48,6 +48,16 @@ _CLAIM_STATUS_LABELS = {
     "REJETEE": "Non prise en charge",
     "EN_COURS": "En cours de traitement",
 }
+_REJECTION_REASON_LABELS = {
+    "CONTROLE_MEDICAL": "Facture soumise à un contrôle médical",
+    "PIECE_MANQUANTE_ATTESTATION": "Attestation requise manquante",
+    "ORDONNANCE_PERIMEE": "Ordonnance expirée",
+    "DELAI_DE_CARENCE": "Délai de carence non écoulé",
+    "HORS_PERIODE_COUVERTURE": "Soins hors période de couverture",
+    "PLAFOND_ATTEINT": "Plafond de remboursement atteint",
+    "ENTENTE_PREALABLE_ABSENTE": "Entente préalable requise manquante",
+    "PRODUIT_NON_REMBOURSABLE": "Produit non remboursable",
+}
 _CLAIM_TOOL = {
     "type": "function",
     "function": {
@@ -114,8 +124,8 @@ _PROVIDER_CLAIM_TOOL = {
         "description": (
             "Consulter les factures du professionnel de santé connecté "
             "uniquement. La recherche est limitée côté serveur à son "
-            "prestataire_id. Utiliser pour le statut, les dates et les "
-            "montants de ses factures."
+            "prestataire_id. Utiliser pour le statut, les dates, les montants "
+            "et, pour une facture rejetée, le motif communiqué par le suivi."
         ),
         "strict": True,
         "parameters": _CLAIM_TOOL["function"]["parameters"],
@@ -201,32 +211,37 @@ _CONTRACT_STATUS_SQL = text("""
       AND contrat_id = :contract_id
 """)
 _PROVIDER_CLAIMS_SQL = text("""
-    SELECT facture_id, date_reception, date_soin, date_traitement,
-           type_facture, montant_total, montant_pris_en_charge, statut
-    FROM v_agent_claim_status
-    WHERE prestataire_id = :prestataire_id
+    SELECT claims.facture_id, claims.date_reception, claims.date_soin,
+           claims.date_traitement, claims.type_facture, claims.montant_total,
+           claims.montant_pris_en_charge, claims.statut,
+           rejection.motif_rejet
+    FROM v_agent_claim_status AS claims
+    LEFT JOIN v_agent_provider_rejection_reasons AS rejection
+      ON rejection.facture_id = claims.facture_id
+     AND rejection.prestataire_id = claims.prestataire_id
+    WHERE claims.prestataire_id = :prestataire_id
       AND (
           (
               (CAST(:date_from AS date) IS NULL
-               OR date_reception >= CAST(:date_from AS date))
+               OR claims.date_reception >= CAST(:date_from AS date))
               AND
               (CAST(:date_to AS date) IS NULL
-               OR date_reception <= CAST(:date_to AS date))
+               OR claims.date_reception <= CAST(:date_to AS date))
           )
           OR
           (
               (CAST(:date_from AS date) IS NULL
-               OR date_soin >= CAST(:date_from AS date))
+               OR claims.date_soin >= CAST(:date_from AS date))
               AND
               (CAST(:date_to AS date) IS NULL
-               OR date_soin <= CAST(:date_to AS date))
+               OR claims.date_soin <= CAST(:date_to AS date))
           )
       )
       AND (
           CAST(:invoice_id AS text) IS NULL
-          OR facture_id = CAST(:invoice_id AS text)
+          OR claims.facture_id = CAST(:invoice_id AS text)
       )
-    ORDER BY date_reception DESC NULLS LAST, facture_id
+    ORDER BY claims.date_reception DESC NULLS LAST, claims.facture_id
     LIMIT 10
 """)
 
@@ -334,7 +349,8 @@ class AgentToolkit:
             raise RuntimeError(
                 "Claim search did not return structured claim results")
         if not claims:
-            return "Aucune facture correspondante trouvée pour votre compte."
+            owner = "votre activité" if self.prestataire_id else "votre compte"
+            return f"Aucune facture correspondante trouvée pour {owner}."
 
         lines = [
             f"Voici les factures les plus récentes "
@@ -362,6 +378,8 @@ class AgentToolkit:
                 "montant pris en charge "
                 f"{self._format_amount(claim['montant_pris_en_charge'])}")
             details.append(f"statut {claim['statut']}")
+            if claim.get("motif_rejet"):
+                details.append(f"motif : {claim['motif_rejet']}")
             lines.append(f"- **{claim['facture_id']}** : " +
                          ", ".join(details))
         return "\n".join(lines)
@@ -436,9 +454,12 @@ class AgentToolkit:
                     }
                 rows = connection.execute(query, params).mappings().all()
             if not rows:
+                owner = (
+                    "prestataire connecté"
+                    if self.prestataire_id else "compte assuré connecté")
                 return ToolOutput(
-                    "Aucune facture correspondante trouvée pour l'assuré "
-                    "connecté.", [], claims=[])
+                    f"Aucune facture correspondante trouvée pour le {owner}.",
+                    [], claims=[])
             claims = [
                 {
                     "facture_id": row["facture_id"],
@@ -450,6 +471,9 @@ class AgentToolkit:
                     "montant_total": row["montant_total"],
                     "montant_pris_en_charge": row["montant_pris_en_charge"],
                     "statut": self._display_status(row["statut"]),
+                    "motif_rejet": self._display_rejection_reason(
+                        row.get("motif_rejet"))
+                    if row["statut"] == "REJETEE" else None,
                 }
                 for row in rows
             ]
@@ -528,3 +552,10 @@ class AgentToolkit:
             return _CLAIM_STATUS_LABELS[value]
         except KeyError:
             return "À confirmer auprès d'un gestionnaire"
+
+    @staticmethod
+    def _display_rejection_reason(value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _REJECTION_REASON_LABELS.get(
+            value, "Motif à confirmer auprès d'un gestionnaire")

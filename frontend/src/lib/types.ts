@@ -23,6 +23,7 @@ export interface Invoice {
   status: 'received' | 'reviewing' | 'accepted' | 'rejected' | 'paid';
   reimbursed_amount: number;
   provider_pseudo?: string;
+  provider_name?: string;
   insured_pseudo?: string;
   lines?: InvoiceLine[];
 }
