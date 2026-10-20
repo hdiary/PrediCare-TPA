@@ -123,7 +123,7 @@ export function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <Input
                 label="Adresse email"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="vous@exemple.fr"

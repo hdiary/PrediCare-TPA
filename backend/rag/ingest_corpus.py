@@ -49,7 +49,8 @@ def main() -> None:
     engine = create_engine(database_url)
     embedder = EmbeddingClient(
         settings.llm_api_key, settings.embedding_model,
-        settings.embedding_dim, settings.embedding_api_url)
+        settings.embedding_dim, settings.embedding_api_url,
+        settings.embedding_timeout_seconds)
 
     ingested = 0
     skipped = 0

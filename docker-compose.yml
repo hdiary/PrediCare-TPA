@@ -146,6 +146,7 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
       EMBEDDING_API_URL: ${EMBEDDING_API_URL:-https://api.openai.com/v1/embeddings}
+      EMBEDDING_TIMEOUT_SECONDS: ${EMBEDDING_TIMEOUT_SECONDS:-120}
       RAG_CORPUS_DIR: /corpus_rag
     volumes:
       - ./backend/rag/corpus_rag:/corpus_rag:ro
@@ -215,6 +216,7 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
       EMBEDDING_API_URL: ${EMBEDDING_API_URL:-https://api.openai.com/v1/embeddings}
+      EMBEDDING_TIMEOUT_SECONDS: ${EMBEDDING_TIMEOUT_SECONDS:-120}
       LLM_API_URL: ${LLM_API_URL:-https://api.openai.com/v1/chat/completions}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
       RAG_TOP_K: ${RAG_TOP_K:-6}

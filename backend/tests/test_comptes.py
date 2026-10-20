@@ -33,16 +33,22 @@ def client():
 
     with _db() as c:
         c.execute((pathlib.Path(__file__).parent / "schema_test.sql").read_text())
-        for email, role, ass, pre in [
+        for username, role, ass, pre in [
             ("admin@c.mg", "administrateur", None, None),
             ("gest@c.mg", "gestionnaire", None, None),
             ("assure@c.mg", "assure", "ASS-9CAA1484E0", None),
             ("pro@c.mg", "professionnel_sante", None, "PRE-00214"),
         ]:
+            user = c.execute(
+                "INSERT INTO utilisateurs "
+                "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id) "
+                "VALUES (%s,%s,%s,%s) RETURNING utilisateur_id",
+                (username, hash_password(MDP), ass, pre),
+            ).fetchone()
             c.execute(
-                "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, "
-                "prestataire_id) VALUES (%s,%s,%s,%s,%s)",
-                (email, hash_password(MDP), role, ass, pre),
+                "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) "
+                "SELECT %s, role_id FROM roles WHERE nom_role = %s",
+                (user["utilisateur_id"], role),
             )
     import api.routers.admin as admin_mod
     import api.routers.auth as auth_mod
@@ -75,8 +81,22 @@ def _auth(client, email, mdp=MDP):
 
 def _user_id(email):
     with _db() as c:
-        return c.execute("SELECT utilisateur_id AS i FROM utilisateurs WHERE email=%s",
+        return c.execute("SELECT utilisateur_id AS i FROM utilisateurs "
+                         "WHERE lower(nom_utilisateur)=lower(%s)",
                          (email,)).fetchone()["i"]
+
+
+def test_comptes_assures_et_prestataires_provisionnes_au_demarrage(client):
+    for username, role, identity_key, identity_value in [
+        ("ASS-9CAA1484E0", "assure", "assure_id", "ASS-9CAA1484E0"),
+        ("PRE-00214", "professionnel_sante", "prestataire_id", "PRE-00214"),
+    ]:
+        response = _login(client, username, "123456")
+        assert response.status_code == 200
+        user = response.json()["user"]
+        assert user["email"] == username
+        assert user["role"] == role
+        assert user[identity_key] == identity_value
 
 
 # ---------- inscription ----------
@@ -128,9 +148,9 @@ def test_inscription_ignore_un_rattachement_fourni_par_le_client(client):
         "email": "triche@c.mg", "password": MDP, "role": "assure", "assure_id": "ASS-1111111111"})
     assert r.status_code == 202
     with _db() as c:
-        row = c.execute("SELECT assure_id, actif FROM utilisateurs "
-                        "WHERE email='triche@c.mg'").fetchone()
-    assert row["assure_id"] is None and row["actif"] is False
+        row = c.execute("SELECT assure_id, est_actif FROM utilisateurs "
+                        "WHERE nom_utilisateur='triche@c.mg'").fetchone()
+    assert row["assure_id"] is None and row["est_actif"] is False
 
 
 # ---------- mot de passe oublié ----------
@@ -183,8 +203,15 @@ def test_nouvelle_demande_invalide_l_ancien_lien(client):
 
 def test_limite_de_demandes_par_heure(client):
     with _db() as c:
-        c.execute("INSERT INTO utilisateurs (email, mot_de_passe_hash, role) "
-                  "VALUES ('limite@c.mg', 'x', 'gestionnaire')")
+        user = c.execute(
+            "INSERT INTO utilisateurs (nom_utilisateur, hash_mot_de_passe) "
+            "VALUES ('limite@c.mg', 'x') RETURNING utilisateur_id"
+        ).fetchone()
+        c.execute(
+            "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) "
+            "SELECT %s, role_id FROM roles WHERE nom_role = 'gestionnaire'",
+            (user["utilisateur_id"],),
+        )
     for _ in range(5):
         assert client.post("/auth/forgot-password",
                            json={"email": "limite@c.mg"}).status_code == 202

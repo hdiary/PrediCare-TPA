@@ -142,7 +142,9 @@ docker compose --profile full up --build -d
 L'interface est disponible sur `http://localhost:5173` et l'API sur
 `http://localhost:8000`. Configurez `DEMO_PASSWORD`, `LLM_API_KEY`,
 `LLM_MODEL`, `EMBEDDING_MODEL` et l'URL de votre service d'embeddings dans
-`.env`. Les autres écrans conservent leurs données simulées par défaut ;
+`.env`. `EMBEDDING_TIMEOUT_SECONDS` contrôle le délai maximal des requêtes
+d'embeddings (120 secondes par défaut) ; augmentez-le si votre fournisseur
+met plus de temps à traiter les lots. Les autres écrans conservent leurs données simulées par défaut ;
 `VITE_USE_MOCK_AUTH=false` et `VITE_USE_MOCK_CHAT=false` activent l'authentification
 et le chat réels. Les comptes démo sont créés par l'API quand `DEMO_PASSWORD`
 est défini.

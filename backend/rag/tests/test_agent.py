@@ -4,6 +4,40 @@ from unittest.mock import MagicMock, patch
 from rag.agent import RagAgent
 
 class RagAgentToolTests(unittest.TestCase):
+    def test_contract_status_uses_database_without_pdf_or_llm(self):
+        embeddings = MagicMock()
+        retriever = MagicMock()
+        llm = MagicMock()
+        cache = MagicMock()
+        audit = MagicMock()
+        toolkit = MagicMock()
+        toolkit.contract_status_answer.return_value = (
+            "Le statut de votre contrat est **actif**.")
+        agent = RagAgent(embeddings, retriever, llm, cache, audit)
+
+        with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
+            toolkit_class.is_contract_status_question.return_value = True
+            response = agent.answer(
+                "Quel est le statut de mon contrat ?",
+                contract_id="CTR-000003",
+                user_pseudo_id="PROMPT-TEST",
+                role="assure",
+                assure_id="ASS-5E8DACD855",
+            )
+
+        self.assertIn("**actif**", response.answer)
+        self.assertIn("base de données", response.answer)
+        self.assertFalse(response.sources)
+        toolkit.contract_status_answer.assert_called_once()
+        embeddings.embed.assert_not_called()
+        retriever.search.assert_not_called()
+        llm.complete_with_tools.assert_not_called()
+        cache.get.assert_not_called()
+        cache.put.assert_not_called()
+        self.assertEqual(
+            audit.write.call_args.kwargs["tools_used"],
+            ["get_my_contract_status"])
+
     def test_claim_questions_without_assured_context_are_not_sent_to_llm(self):
         embeddings = MagicMock()
         retriever = MagicMock()
@@ -35,7 +69,8 @@ class RagAgentToolTests(unittest.TestCase):
             "FAC-00000001 : statut REJETEE")
         agent = RagAgent(embeddings, retriever, llm, cache, audit)
 
-        with patch("rag.agent.AgentToolkit", return_value=toolkit):
+        with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
+            toolkit_class.is_contract_status_question.return_value = False
             response = agent.answer(
                 "Liste mes dernières factures avec leur date de réception et leur statut.",
                 contract_id="CTR-000048",
@@ -71,6 +106,7 @@ class RagAgentToolTests(unittest.TestCase):
         agent = RagAgent(embeddings, retriever, llm, cache, audit)
 
         with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
+            toolkit_class.is_contract_status_question.return_value = False
             toolkit_class.is_claim_question.return_value = True
             toolkit_class.is_reimbursement_total_question.return_value = False
             toolkit_class.is_claim_status_question.return_value = True

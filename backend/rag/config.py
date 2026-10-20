@@ -10,6 +10,7 @@ class RagSettings:
     embedding_model: str
     embedding_dim: int
     embedding_api_url: str
+    embedding_timeout_seconds: float
     llm_api_key: str
     llm_model: str
     llm_api_url: str
@@ -28,6 +29,8 @@ class RagSettings:
             embedding_dim=int(os.environ.get("EMBEDDING_DIM", "1024")),
             embedding_api_url=os.environ.get(
                 "EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings"),
+            embedding_timeout_seconds=float(
+                os.environ.get("EMBEDDING_TIMEOUT_SECONDS", "120")),
             llm_api_key=os.environ.get("LLM_API_KEY", ""),
             llm_model=os.environ.get("LLM_MODEL", ""),
             llm_api_url=os.environ.get(
@@ -46,6 +49,8 @@ class RagSettings:
             raise ValueError("EMBEDDING_MODEL must be configured")
         if settings.llm_timeout_seconds <= 0:
             raise ValueError("LLM_TIMEOUT_SECONDS must be positive")
+        if settings.embedding_timeout_seconds <= 0:
+            raise ValueError("EMBEDDING_TIMEOUT_SECONDS must be positive")
         if settings.embedding_dim < 1:
             raise ValueError("EMBEDDING_DIM must be a positive integer")
         if not 1 <= settings.top_k <= 50:

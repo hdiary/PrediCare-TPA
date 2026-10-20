@@ -41,11 +41,15 @@ def _authenticate(conn, email: str, password: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
     row = conn.execute(
-        "SELECT utilisateur_id AS user_id, email, mot_de_passe_hash AS password_hash, role, "
-        "assure_id, prestataire_id, actif AS is_active, tentatives_echouees, "
+        "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, "
+        "u.hash_mot_de_passe AS password_hash, r.nom_role AS role, "
+        "u.assure_id, u.prestataire_id, u.est_actif AS is_active, u.tentatives_echouees, "
         "(verrouille_jusqua IS NOT NULL AND verrouille_jusqua > now()) AS verrouille "
-        "FROM utilisateurs WHERE email = %s",
-        (email.strip().lower(),),
+        "FROM utilisateurs u "
+        "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
+        "JOIN roles r ON r.role_id = ur.role_id "
+        "WHERE lower(u.nom_utilisateur) = lower(%s)",
+        (email.strip(),),
     ).fetchone()
 
     if row and row["verrouille"]:
@@ -178,10 +182,13 @@ def refresh(body: RefreshRequest, conn=Depends(get_db)):
         raise _invalid_credentials() from None
 
     row = conn.execute(
-        "SELECT u.utilisateur_id AS user_id, u.email, u.role, u.assure_id, u.prestataire_id "
+        "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, r.nom_role AS role, "
+        "u.assure_id, u.prestataire_id "
         "FROM auth_sessions s JOIN utilisateurs u ON u.utilisateur_id = s.user_id "
+        "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
+        "JOIN roles r ON r.role_id = ur.role_id "
         "WHERE s.session_id = %s AND s.user_id = %s AND s.refresh_jti = %s "
-        "AND s.revoked_at IS NULL AND s.expires_at > now() AND u.actif = true "
+        "AND s.revoked_at IS NULL AND s.expires_at > now() AND u.est_actif = true "
         "FOR UPDATE OF s",
         (session_id, user_id, previous_jti),
     ).fetchone()

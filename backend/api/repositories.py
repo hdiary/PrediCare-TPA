@@ -372,41 +372,92 @@ def insert_alert(conn, *, facture_id: str, codes: list[str], priority: str = "MO
 
 def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
-        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs {clause} "
-        f"ORDER BY utilisateur_id{pagination}",
+        "SELECT alerte_regle_id, regle_code, severite, message, details, cree_le "
+        "FROM alertes_prescription WHERE prediction_id = %s "
+        "ORDER BY cree_le, alerte_regle_id",
+        (prediction_id,),
+    ).fetchall()
+
+
+_USER_SELECT = (
+    "u.utilisateur_id, u.nom_utilisateur AS email, r.nom_role AS role, "
+    "u.assure_id, u.prestataire_id, u.est_actif AS actif, "
+    "u.derniere_connexion, u.tentatives_echouees, u.verrouille_jusqua"
+)
+_USER_FROM = (
+    "FROM utilisateurs u "
+    "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
+    "JOIN roles r ON r.role_id = ur.role_id"
+)
+_CHAMPS_MODIFIABLES = {"role", "assure_id", "prestataire_id", "actif"}
+
+
+def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | None,
+                      limit: int, offset: int) -> list[dict]:
+    clauses = []
+    params = []
+    if role is not None:
+        clauses.append("r.nom_role = %s")
+        params.append(role)
+    if actif is not None:
+        clauses.append("u.est_actif = %s")
+        params.append(actif)
+    if q:
+        clauses.append("u.nom_utilisateur ILIKE %s")
+        params.append(f"%{q}%")
+    where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+    params.extend((limit, offset))
+    return conn.execute(
+        f"SELECT {_USER_SELECT} {_USER_FROM} {where}"
+        "ORDER BY u.utilisateur_id LIMIT %s OFFSET %s",
         params,
     ).fetchall()
 
 
 def get_utilisateur(conn, user_id: int) -> dict | None:
     return conn.execute(
-        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+        f"SELECT {_USER_SELECT} {_USER_FROM} WHERE u.utilisateur_id = %s", (user_id,)
     ).fetchone()
 
 
 def get_utilisateur_par_email(conn, email: str) -> dict | None:
     return conn.execute(
-        f"SELECT {_COLS_UTILISATEUR} FROM utilisateurs WHERE email = %s", (email,)
+        f"SELECT {_USER_SELECT} {_USER_FROM} "
+        "WHERE lower(u.nom_utilisateur) = lower(%s)",
+        (email,),
     ).fetchone()
 
 
 def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
     row = conn.execute(
-        "SELECT mot_de_passe_hash FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
+        "SELECT hash_mot_de_passe FROM utilisateurs WHERE utilisateur_id = %s", (user_id,)
     ).fetchone()
-    return row["mot_de_passe_hash"] if row else None
+    return row["hash_mot_de_passe"] if row else None
 
 
 def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
                        assure_id: str | None, prestataire_id: str | None,
                        actif: bool) -> dict | None:
-    """Crée un compte ; retourne None si l'adresse existe déjà (aucune erreur levée)."""
-    return conn.execute(
-        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, prestataire_id, "
-        "actif) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING "
-        f"RETURNING {_COLS_UTILISATEUR}",
-        (email, password_hash, role, assure_id, prestataire_id, actif),
+    """Crée un compte ; retourne None si le nom d'utilisateur existe déjà."""
+    role_row = conn.execute(
+        "SELECT role_id FROM roles WHERE nom_role = %s", (role,)
     ).fetchone()
+    if role_row is None:
+        raise ValueError(f"Rôle inconnu : {role}")
+    created = conn.execute(
+        "INSERT INTO utilisateurs "
+        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, est_actif) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING "
+        "RETURNING utilisateur_id",
+        (email, password_hash, assure_id, prestataire_id, actif),
+    ).fetchone()
+    if created is None:
+        return None
+    conn.execute(
+        "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) VALUES (%s, %s)",
+        (created["utilisateur_id"], role_row["role_id"]),
+    )
+    return get_utilisateur(conn, created["utilisateur_id"])
 
 
 def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
@@ -416,17 +467,38 @@ def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
         raise ValueError(f"Champs non modifiables : {sorted(inconnus)}")
     if not champs:
         return get_utilisateur(conn, user_id)
-    sets = ", ".join(f"{k} = %s" for k in champs)
-    return conn.execute(
-        f"UPDATE utilisateurs SET {sets} WHERE utilisateur_id = %s RETURNING {_COLS_UTILISATEUR}",
-        [*champs.values(), user_id],
-    ).fetchone()
+    if "role" in champs:
+        role_row = conn.execute(
+            "SELECT role_id FROM roles WHERE nom_role = %s", (champs["role"],)
+        ).fetchone()
+        if role_row is None:
+            raise ValueError(f"Rôle inconnu : {champs['role']}")
+        conn.execute(
+            "DELETE FROM utilisateurs_roles WHERE utilisateur_id = %s", (user_id,)
+        )
+        conn.execute(
+            "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) VALUES (%s, %s)",
+            (user_id, role_row["role_id"]),
+        )
+    columns = {
+        "assure_id": "assure_id",
+        "prestataire_id": "prestataire_id",
+        "actif": "est_actif",
+    }
+    assignments = {columns[key]: value for key, value in champs.items() if key in columns}
+    if assignments:
+        sets = ", ".join(f"{column} = %s" for column in assignments)
+        conn.execute(
+            f"UPDATE utilisateurs SET {sets} WHERE utilisateur_id = %s",
+            [*assignments.values(), user_id],
+        )
+    return get_utilisateur(conn, user_id)
 
 
 def set_mot_de_passe(conn, user_id: int, password_hash: str) -> None:
     """Change le mot de passe et lève un éventuel verrouillage de connexion."""
     conn.execute(
-        "UPDATE utilisateurs SET mot_de_passe_hash = %s, tentatives_echouees = 0, "
+        "UPDATE utilisateurs SET hash_mot_de_passe = %s, tentatives_echouees = 0, "
         "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
         (password_hash, user_id),
     )
@@ -480,7 +552,7 @@ def ensure_reset_table(conn) -> None:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS reinitialisations_mdp ("
             "reset_id BIGSERIAL PRIMARY KEY, "
-            "utilisateur_id INTEGER NOT NULL REFERENCES utilisateurs(utilisateur_id) "
+            "utilisateur_id BIGINT NOT NULL REFERENCES utilisateurs(utilisateur_id) "
             "ON DELETE CASCADE, "
             "token_hash TEXT NOT NULL UNIQUE, "
             "cree_le TIMESTAMPTZ NOT NULL DEFAULT now(), "

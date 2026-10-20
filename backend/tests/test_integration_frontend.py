@@ -79,7 +79,7 @@ def client():
 
     with psycopg.connect(db_url, autocommit=True) as c:
         c.execute((pathlib.Path(__file__).parent / "schema_test.sql").read_text())
-        for email, role, ass, pre in [
+        for username, role, ass, pre in [
             ("pro@t.mg", "professionnel_sante", None, "PRE-00214"),
             ("pro2@t.mg", "professionnel_sante", None, "PRE-00999"),
             ("assure@t.mg", "assure", "ASS-9CAA1484E0", None),
@@ -87,10 +87,16 @@ def client():
             ("gest@t.mg", "gestionnaire", None, None),
             ("admin@t.mg", "administrateur", None, None),
         ]:
+            user = c.execute(
+                "INSERT INTO utilisateurs "
+                "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id) "
+                "VALUES (%s,%s,%s,%s) RETURNING utilisateur_id",
+                (username, hash_password(MDP), ass, pre),
+            ).fetchone()
             c.execute(
-                "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, "
-                "prestataire_id) VALUES (%s,%s,%s,%s,%s)",
-                (email, hash_password(MDP), role, ass, pre),
+                "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) "
+                "SELECT %s, role_id FROM roles WHERE nom_role = %s",
+                (user[0], role),
             )
     import api.routers.predict as predict_mod
     from api.main import app
