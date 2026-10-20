@@ -1,14 +1,22 @@
 -- Schéma MINIMAL pour les tests d'intégration (noms de tables et colonnes lus par l'API).
 -- Le vrai schéma vient des migrations de P1/P3 ; ici seules les colonnes utilisées par l'API.
 CREATE TABLE utilisateurs (
-  utilisateur_id SERIAL PRIMARY KEY, identifiant TEXT UNIQUE, email TEXT UNIQUE NOT NULL, mot_de_passe_hash TEXT NOT NULL,
-  role TEXT NOT NULL, assure_id TEXT, prestataire_id TEXT, actif BOOLEAN NOT NULL DEFAULT true,
-  tentatives_echouees INT NOT NULL DEFAULT 0, verrouille_jusqua TIMESTAMPTZ,
-  derniere_connexion TIMESTAMPTZ);
-CREATE TABLE utilisateurs_identites (
-  utilisateur_id INT PRIMARY KEY REFERENCES utilisateurs(utilisateur_id),
-  donnees_chiffrees BYTEA NOT NULL, key_version SMALLINT NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+  utilisateur_id SERIAL PRIMARY KEY, nom_utilisateur TEXT UNIQUE NOT NULL,
+  hash_mot_de_passe TEXT NOT NULL, est_actif BOOLEAN NOT NULL DEFAULT true,
+  assure_id TEXT, prestataire_id TEXT, tentatives_echouees INT NOT NULL DEFAULT 0,
+  verrouille_jusqua TIMESTAMPTZ, derniere_connexion TIMESTAMPTZ);
+CREATE TABLE roles (role_id SERIAL PRIMARY KEY, nom_role TEXT UNIQUE NOT NULL);
+INSERT INTO roles (nom_role) VALUES
+  ('professionnel_sante'), ('assure'), ('gestionnaire'), ('administrateur');
+CREATE TABLE utilisateurs_roles (
+  utilisateur_id INT NOT NULL REFERENCES utilisateurs(utilisateur_id) ON DELETE CASCADE,
+  role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
+  PRIMARY KEY (utilisateur_id, role_id),
+  UNIQUE (utilisateur_id));
+CREATE TABLE auth_sessions (
+  session_id UUID PRIMARY KEY, user_id INT NOT NULL REFERENCES utilisateurs(utilisateur_id),
+  refresh_jti UUID NOT NULL UNIQUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL, revoked_at TIMESTAMPTZ);
 CREATE TABLE journal_audit (
   audit_id BIGSERIAL PRIMARY KEY, date TIMESTAMPTZ NOT NULL DEFAULT now(), type_evenement TEXT NOT NULL,
   utilisateur_id INT, type_entite TEXT, entite_id TEXT, nom_modele TEXT, version_modele TEXT,

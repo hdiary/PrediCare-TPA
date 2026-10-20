@@ -63,6 +63,13 @@ L'identifiant d'une alerte est le `facture_id` (une prédiction par facture).
 5. Les anciennes routes sans préfixe restent disponibles ; `/api/v1` expose les mêmes endpoints pour le frontend.
 6. Le rôle et l'état du compte sont relus en base à chaque requête (`utilisateurs`).
 7. `assure_id` et `prestataire_id` viennent de la base, jamais du client. L'agent IA doit utiliser `user["assure_id"]`.
+8. Pour la connexion, le champ JSON reste `email` pour compatibilité, mais accepte aussi `nom_utilisateur`.
+
+Au démarrage de l'API, chaque ligne de `assures` et `prestataires` reçoit un compte si absent :
+`nom_utilisateur = assure_id` avec le rôle `assure`, ou `nom_utilisateur = prestataire_id`
+avec le rôle `professionnel_sante`. Le mot de passe initial est `123456`; il est haché en
+bcrypt, et un mot de passe déjà changé n'est pas réinitialisé au redémarrage. Ces identifiants
+initiaux doivent être remplacés après la première connexion.
 
 Protéger un endpoint : `dependencies=[Depends(require_role("gestionnaire"))]`.
 

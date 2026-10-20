@@ -30,7 +30,8 @@ def main() -> None:
     engine = create_engine(database_url)
     embedder = EmbeddingClient(
         os.environ.get("LLM_API_KEY", ""), settings.embedding_model,
-        settings.embedding_dim, settings.embedding_api_url)
+        settings.embedding_dim, settings.embedding_api_url,
+        settings.embedding_timeout_seconds)
     result = ingest_pdf(
         args.pdf, args.contract_id, engine, embedder, force=args.force)
     action = "skipped (already ingested)" if result.skipped else "ingested"

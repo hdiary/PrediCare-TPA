@@ -39,6 +39,10 @@ _REIMBURSEMENT_TOTAL_QUESTION = re.compile(
     r"\b(?:combien|total|montant total)\b.{0,60}"
     r"\b(?:rembours\w*|pris en charge)\b",
     re.IGNORECASE)
+_CONTRACT_STATUS_QUESTION = re.compile(
+    r"\b(?:statut|situation)\b.{0,30}\bcontrat\b"
+    r"|\bcontrat\b.{0,30}\b(?:statut|situation|actif|r[eé]sili[eé])\b",
+    re.IGNORECASE)
 _CLAIM_STATUS_LABELS = {
     "PAYEE": "Payée",
     "REJETEE": "Non prise en charge",
@@ -190,6 +194,12 @@ _REIMBURSEMENT_TOTAL_SQL = text("""
       AND contrat_id = :contract_id
       AND statut = 'PAYEE'
 """)
+_CONTRACT_STATUS_SQL = text("""
+    SELECT contrat_id, statut
+    FROM v_agent_contract_status
+    WHERE assure_id = :assure_id
+      AND contrat_id = :contract_id
+""")
 _PROVIDER_CLAIMS_SQL = text("""
     SELECT facture_id, date_reception, date_soin, date_traitement,
            type_facture, montant_total, montant_pris_en_charge, statut
@@ -277,6 +287,10 @@ class AgentToolkit:
         return bool(_REIMBURSEMENT_TOTAL_QUESTION.search(question))
 
     @staticmethod
+    def is_contract_status_question(question: str) -> bool:
+        return bool(_CONTRACT_STATUS_QUESTION.search(question))
+
+    @staticmethod
     def is_claim_status_question(question: str) -> bool:
         if (not AgentToolkit.is_claim_question(question)
                 or _CLAIM_FILTER.search(question)
@@ -286,6 +300,28 @@ class AgentToolkit:
             _CLAIM_STATUS_QUESTION.search(question)
             or _CLAIM_LIST_QUESTION.search(question)
         )
+
+    def contract_status_answer(self) -> str:
+        if not self.assure_id or self.prestataire_id:
+            raise ValueError(
+                "Contract status requires an authenticated insured context")
+        with self.engine.connect() as connection:
+            row = connection.execute(_CONTRACT_STATUS_SQL, {
+                "assure_id": self.assure_id,
+                "contract_id": self.contract_id,
+            }).mappings().first()
+        if row is None:
+            return (
+                "Je ne trouve pas de statut de contrat correspondant au "
+                "compte assuré connecté. Veuillez contacter un gestionnaire "
+                "pour vérifier le rattachement du compte.")
+        statuses = {"ACTIF": "actif", "RESILIE": "résilié"}
+        try:
+            status = statuses[row["statut"]]
+        except KeyError as error:
+            raise ValueError(
+                "The contract has an unsupported status") from error
+        return f"Le statut de votre contrat est **{status}**."
 
     def recent_claims_answer(self) -> str:
         result = self.execute("search_my_claims", {

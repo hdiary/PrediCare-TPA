@@ -1,7 +1,5 @@
-"""Création des comptes de démonstration au démarrage (idempotent)."""
+"""Provisionnement idempotent des comptes liés aux assurés et prestataires."""
 import logging
-
-import psycopg
 
 from api.config import get_settings
 from api.db import get_pool
@@ -9,6 +7,7 @@ from api.security import hash_password
 from api.services.pseudonym import PseudonymConfigurationError, pseudonymise_account
 
 logger = logging.getLogger(__name__)
+DEFAULT_IDENTITY_PASSWORD = "123456"
 
 DEMO_USERS = [
     ("pro@predicare.local", "professionnel_sante"),
@@ -16,100 +15,6 @@ DEMO_USERS = [
     ("gestionnaire@predicare.local", "gestionnaire"),
 ]
 
-
-def _pick(conn, query: str) -> str | None:
-    row = conn.execute(query).fetchone()
-    return next(iter(row.values())) if row else None
-
-
-def ensure_demo_users() -> None:
-    """Create the initial administrator and optional demonstration accounts.
-
-    The insured user is linked to a principal insured person with invoices; the
-    professional user is linked to an active provider with invoices. Existing
-    accounts are never reset or overwritten.
-    """
-    settings = get_settings()
-    pool = get_pool()
-    if pool is None:
-        logger.warning("initial_users_skipped", extra={"reason": "database_pool_unavailable"})
-        return
-
-    admin_password = getattr(settings, "admin_initial_password", None)
-    demo_password = settings.demo_password
-    admin_email = getattr(settings, "admin_email", "admin@predicare.local").strip().lower()
-    if admin_password and not admin_email:
-        raise ValueError("ADMIN_EMAIL must not be empty when ADMIN_INITIAL_PASSWORD is set")
-    if not admin_password and not demo_password:
-        logger.warning(
-            "initial_users_skipped",
-            extra={"reason": "ADMIN_INITIAL_PASSWORD and DEMO_PASSWORD are not configured"},
-        )
-        return
-
-    try:
-        with pool.connection(timeout=10) as conn:
-            if admin_password:
-                inserted = conn.execute(
-                    "INSERT INTO utilisateurs (email, mot_de_passe_hash, role) "
-                    "VALUES (%s, %s, 'administrateur') ON CONFLICT (email) DO NOTHING "
-                    "RETURNING utilisateur_id",
-                    (admin_email, hash_password(admin_password)),
-                ).fetchone()
-                if inserted is None:
-                    existing = conn.execute(
-                        "SELECT role FROM utilisateurs WHERE email = %s",
-                        (admin_email,),
-                    ).fetchone()
-                    if not existing or existing["role"] != "administrateur":
-                        raise RuntimeError(
-                            "ADMIN_EMAIL already belongs to a non-administrator account"
-                        )
-                logger.info("initial_admin_ready")
-            else:
-                logger.warning(
-                    "initial_admin_skipped",
-                    extra={"reason": "ADMIN_INITIAL_PASSWORD is not configured"},
-                )
-
-            if demo_password:
-                demo_hash = hash_password(demo_password)
-                assure_id = _pick(
-                    conn,
-                    "SELECT a.assure_id FROM assures a WHERE a.rang_beneficiaire = 'ASSURE_PRINCIPAL' "
-                    "AND EXISTS (SELECT 1 FROM factures f WHERE f.assure_id = a.assure_id) "
-                    "ORDER BY a.assure_id LIMIT 1",
-                )
-                prestataire_id = _pick(
-                    conn,
-                    "SELECT p.prestataire_id FROM prestataires p WHERE p.statut = 'ACTIF' "
-                    "AND EXISTS (SELECT 1 FROM factures f WHERE f.prestataire_id = p.prestataire_id) "
-                    "ORDER BY p.prestataire_id LIMIT 1",
-                )
-                if assure_id is None or prestataire_id is None:
-                    raise RuntimeError(
-                        "Demo users require an existing insured person and active provider with invoices"
-                    )
-                for email, role in DEMO_USERS:
-                    conn.execute(
-                        "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, assure_id, "
-                        "prestataire_id) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-                        (
-                            email,
-                            demo_hash,
-                            role,
-                            assure_id if role == "assure" else None,
-                            prestataire_id if role == "professionnel_sante" else None,
-                        ),
-                    )
-            logger.info("demo_users_ready")
-    except psycopg.errors.UndefinedTable:
-        logger.error("tables manquantes : appliquer les migrations (assures, utilisateurs...)")
-    except Exception:  # noqa: BLE001
-        logger.exception("demo_users_failed")
-
-
-# Comptes créés au démarrage : (email, rôle, nom du réglage qui porte le mot de passe)
 SEED_USERS = [
     ("admin@predicare.com", "administrateur", "seed_admin_password"),
     ("gestion@predicare.com", "gestionnaire", "seed_gestion_password"),
@@ -117,60 +22,197 @@ SEED_USERS = [
 ]
 
 
-def ensure_seed_users() -> None:
-    """Crée les comptes de SEED_USERS s'ils n'existent pas (idempotent, ne plante jamais).
+def _ensure_user(
+    conn,
+    username: str,
+    password_hash: str,
+    role: str,
+    *,
+    assure_id: str | None = None,
+    prestataire_id: str | None = None,
+) -> int:
+    row = conn.execute(
+        "INSERT INTO utilisateurs "
+        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id) "
+        "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING utilisateur_id",
+        (username, password_hash, assure_id, prestataire_id),
+    ).fetchone()
+    if row is None:
+        row = conn.execute(
+            "SELECT utilisateur_id FROM utilisateurs "
+            "WHERE lower(nom_utilisateur) = lower(%s)",
+            (username,),
+        ).fetchone()
+    if row is None:
+        raise RuntimeError(f"Impossible de créer le compte {username!r}")
 
-    Un compte déjà présent n'est jamais modifié : un mot de passe changé ensuite en base
-    est conservé au redémarrage. Le compte professionnel de santé est rattaché à un
-    prestataire actif ayant des factures (comme pour les comptes de démonstration).
-    """
+    conn.execute(
+        "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) "
+        "SELECT %s, role_id FROM roles WHERE nom_role = %s "
+        "ON CONFLICT (utilisateur_id) DO NOTHING",
+        (row["utilisateur_id"], role),
+    )
+    assigned = conn.execute(
+        "SELECT r.nom_role FROM utilisateurs_roles ur "
+        "JOIN roles r ON r.role_id = ur.role_id WHERE ur.utilisateur_id = %s",
+        (row["utilisateur_id"],),
+    ).fetchone()
+    if not assigned or assigned["nom_role"] != role:
+        raise RuntimeError(
+            f"Le compte {username!r} possède déjà un rôle différent de {role!r}"
+        )
+    if assure_id is not None or prestataire_id is not None:
+        conn.execute(
+            "UPDATE utilisateurs SET assure_id = %s, prestataire_id = %s "
+            "WHERE utilisateur_id = %s",
+            (assure_id, prestataire_id, row["utilisateur_id"]),
+        )
+    return row["utilisateur_id"]
+
+
+def ensure_identity_users() -> None:
+    """Crée les comptes manquants sans remplacer les mots de passe déjà modifiés."""
+    pool = get_pool()
+    if pool is None:
+        logger.warning("identity_users_skipped", extra={"reason": "database_pool_unavailable"})
+        return
+
+    with pool.connection(timeout=10) as conn:
+        identities = conn.execute(
+            "SELECT assure_id AS nom_utilisateur, 'assure' AS role FROM assures "
+            "UNION ALL "
+            "SELECT prestataire_id, 'professionnel_sante' FROM prestataires"
+        ).fetchall()
+        usernames = [identity["nom_utilisateur"] for identity in identities]
+        roles = [identity["role"] for identity in identities]
+        if not usernames:
+            logger.info("identity_users_ready", extra={"count": 0})
+            return
+
+        collision = conn.execute(
+            "SELECT nom_utilisateur FROM unnest(%s::text[], %s::text[]) "
+            "AS expected(nom_utilisateur, role) "
+            "GROUP BY nom_utilisateur HAVING count(DISTINCT role) > 1 LIMIT 1",
+            (usernames, roles),
+        ).fetchone()
+        if collision:
+            raise RuntimeError(
+                f"Un identifiant est partagé par plusieurs types de compte: "
+                f"{collision['nom_utilisateur']!r}"
+            )
+
+        wrong_role = conn.execute(
+            "SELECT u.nom_utilisateur, r.nom_role FROM unnest(%s::text[], %s::text[]) "
+            "AS expected(nom_utilisateur, role) "
+            "JOIN utilisateurs u ON lower(u.nom_utilisateur) = lower(expected.nom_utilisateur) "
+            "LEFT JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
+            "LEFT JOIN roles r ON r.role_id = ur.role_id "
+            "WHERE r.nom_role IS DISTINCT FROM expected.role LIMIT 1",
+            (usernames, roles),
+        ).fetchone()
+        if wrong_role:
+            raise RuntimeError(
+                f"Le compte {wrong_role['nom_utilisateur']!r} a déjà le rôle "
+                f"{wrong_role['nom_role']!r}, incompatible avec son identité"
+            )
+
+        password_hash = hash_password(DEFAULT_IDENTITY_PASSWORD)
+        conn.execute(
+            "INSERT INTO utilisateurs (nom_utilisateur, hash_mot_de_passe) "
+            "SELECT DISTINCT nom_utilisateur, %s "
+            "FROM unnest(%s::text[]) AS identities(nom_utilisateur) "
+            "ON CONFLICT DO NOTHING",
+            (password_hash, usernames),
+        )
+        conn.execute(
+            "INSERT INTO utilisateurs_roles (utilisateur_id, role_id) "
+            "SELECT u.utilisateur_id, r.role_id "
+            "FROM unnest(%s::text[], %s::text[]) "
+            "AS expected(nom_utilisateur, role) "
+            "JOIN utilisateurs u ON lower(u.nom_utilisateur) = lower(expected.nom_utilisateur) "
+            "JOIN roles r ON r.nom_role = expected.role "
+            "ON CONFLICT (utilisateur_id) DO NOTHING",
+            (usernames, roles),
+        )
+        conn.execute(
+            "UPDATE utilisateurs u SET "
+            "assure_id = CASE WHEN expected.role = 'assure' THEN expected.nom_utilisateur ELSE NULL END, "
+            "prestataire_id = CASE WHEN expected.role = 'professionnel_sante' "
+            "THEN expected.nom_utilisateur ELSE NULL END "
+            "FROM unnest(%s::text[], %s::text[]) "
+            "AS expected(nom_utilisateur, role) "
+            "WHERE lower(u.nom_utilisateur) = lower(expected.nom_utilisateur)",
+            (usernames, roles),
+        )
+        logger.info("identity_users_ready", extra={"count": len(usernames)})
+
+
+def ensure_demo_users() -> None:
+    """Create configured administrator/demo users and all entity-linked accounts."""
+    ensure_identity_users()
     settings = get_settings()
     pool = get_pool()
-    wanted = [(e, r, getattr(settings, f)) for e, r, f in SEED_USERS if getattr(settings, f)]
+    if pool is None:
+        logger.warning("initial_users_skipped", extra={"reason": "database_pool_unavailable"})
+        return
+
+    admin_password = settings.admin_initial_password
+    demo_password = settings.demo_password
+    with pool.connection(timeout=10) as conn:
+        if admin_password:
+            admin_username = settings.admin_email.strip()
+            _ensure_user(conn, admin_username, hash_password(admin_password), "administrateur")
+        if demo_password:
+            password_hash = hash_password(demo_password)
+            assure_id = conn.execute(
+                "SELECT assure_id FROM assures ORDER BY assure_id LIMIT 1"
+            ).fetchone()
+            prestataire_id = conn.execute(
+                "SELECT prestataire_id FROM prestataires ORDER BY prestataire_id LIMIT 1"
+            ).fetchone()
+            for username, role in DEMO_USERS:
+                _ensure_user(
+                    conn,
+                    username,
+                    password_hash,
+                    role,
+                    assure_id=assure_id["assure_id"] if role == "assure" and assure_id else None,
+                    prestataire_id=(
+                        prestataire_id["prestataire_id"]
+                        if role == "professionnel_sante" and prestataire_id else None
+                    ),
+                )
+        logger.info("demo_users_ready")
+
+
+def ensure_seed_users() -> None:
+    """Create explicitly configured seed users without overwriting existing passwords."""
+    settings = get_settings()
+    wanted = [
+        (username, role, getattr(settings, setting))
+        for username, role, setting in SEED_USERS
+        if getattr(settings, setting)
+    ]
+    pool = get_pool()
     if not wanted or pool is None:
         logger.info("seed_users_skipped")
         return
-    try:
-        with pool.connection(timeout=10) as conn:
-            prestataire_id = _pick(
+
+    with pool.connection(timeout=10) as conn:
+        prestataire = conn.execute(
+            "SELECT p.prestataire_id FROM prestataires p WHERE p.statut = 'ACTIF' "
+            "AND EXISTS (SELECT 1 FROM factures f WHERE f.prestataire_id = p.prestataire_id) "
+            "ORDER BY p.prestataire_id LIMIT 1"
+        ).fetchone()
+        for username, role, password in wanted:
+            _ensure_user(
                 conn,
-                "SELECT p.prestataire_id FROM prestataires p WHERE p.statut = 'ACTIF' "
-                "AND EXISTS (SELECT 1 FROM factures f WHERE f.prestataire_id = p.prestataire_id) "
-                "ORDER BY p.prestataire_id LIMIT 1",
+                username,
+                hash_password(password),
+                role,
+                prestataire_id=(
+                    prestataire["prestataire_id"]
+                    if role == "professionnel_sante" and prestataire else None
+                ),
             )
-            for email, role, password in wanted:
-                conn.execute(
-                    "INSERT INTO utilisateurs (email, mot_de_passe_hash, role, prestataire_id) "
-                    "VALUES (%s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-                    (email, hash_password(password), role,
-                     prestataire_id if role == "professionnel_sante" else None),
-                )
-        logger.info("seed_users_ready", extra={"count": len(wanted)})
-    except psycopg.errors.UndefinedTable:
-        logger.error("tables manquantes : appliquer les migrations (utilisateurs...)")
-    except Exception:  # noqa: BLE001
-        logger.exception("seed_users_failed")
-
-
-def ensure_user_identifiers() -> None:
-    """Attribue un identifiant aux anciens comptes, qui n'ont pas de CIN conservé."""
-    pool = get_pool()
-    if pool is None:
-        return
-    try:
-        with pool.connection(timeout=10) as conn:
-            users = conn.execute(
-                "SELECT utilisateur_id, email, role FROM utilisateurs "
-                "WHERE identifiant IS NULL ORDER BY utilisateur_id"
-            ).fetchall()
-            for user in users:
-                identifier = pseudonymise_account(user["email"], user["role"])
-                conn.execute(
-                    "UPDATE utilisateurs SET identifiant = %s "
-                    "WHERE utilisateur_id = %s AND identifiant IS NULL",
-                    (identifier, user["utilisateur_id"]),
-                )
-    except PseudonymConfigurationError:
-        logger.error("user_identifiers_skipped: PSEUDO_HMAC_KEY absent ou invalide")
-    except Exception:  # noqa: BLE001
-        logger.exception("user_identifiers_failed")
+    logger.info("seed_users_ready", extra={"count": len(wanted)})

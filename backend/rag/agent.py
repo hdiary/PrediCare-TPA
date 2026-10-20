@@ -99,6 +99,34 @@ class RagAgent:
                 started_at=started_at)
             return response
 
+        if AgentToolkit.is_contract_status_question(question):
+            if not assure_id or prestataire_id:
+                answer = (
+                    "La consultation du statut du contrat est réservée à "
+                    "l'assuré connecté.")
+                self.audit.write(
+                    user_pseudo_id=user_pseudo_id, role=role, question=question,
+                    tools_used=["contract_status_unavailable"],
+                    cache_hit=False, blocked=False, block_reason=None,
+                    tokens_in=0, tokens_out=0, started_at=started_at)
+                return ChatResponse(answer, [])
+            toolkit = AgentToolkit(
+                embeddings=self.embeddings,
+                retriever=self.retriever,
+                engine=self.retriever.engine,
+                contract_id=contract_id or "",
+                assure_id=assure_id,
+            )
+            answer = (
+                f"{toolkit.contract_status_answer()}\n\n"
+                "Source : statut du contrat en base de données.")
+            self.audit.write(
+                user_pseudo_id=user_pseudo_id, role=role, question=question,
+                tools_used=["get_my_contract_status"], cache_hit=False,
+                blocked=False, block_reason=None, tokens_in=0, tokens_out=0,
+                started_at=started_at)
+            return ChatResponse(answer, [])
+
         if AgentToolkit.is_claim_status_question(question):
             toolkit = AgentToolkit(
                 embeddings=self.embeddings,

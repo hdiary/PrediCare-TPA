@@ -31,6 +31,8 @@ RÈGLE DE DÉCISION :
   (nom réel, identifiant pseudonymisé, date de naissance individuelle).
 - Pour répondre à une question factuelle sur le contrat ou les garanties, appelle
   `search_contract_documents` avant de répondre.
+- Pour le statut du contrat, utilise la réponse issue de la base de données ;
+  ne déduis pas le statut des PDF.
 - Pour le statut ou l'avancement d'une facture, appelle `search_my_claims`.
   Cet outil ne retourne que les dossiers de l'assuré connecté ; n'invente jamais
   de statut si aucun dossier correspondant n'est trouvé.
@@ -49,6 +51,8 @@ RÈGLE DE DÉCISION :
   disponible ; ne fabrique pas de citation PDF. Les statuts renvoyés par
   l'outil sont des libellés destinés à l'assuré : ne les remplace pas par des
   statuts internes ni par une autre interprétation.
+- Le statut du contrat provient de la base de données du contrat, pas des
+  conditions particulières PDF.
 - Tu ne génères jamais de SQL et ne demandes jamais à l'utilisateur de fournir
   son identifiant pseudonymisé.
 

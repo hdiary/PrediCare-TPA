@@ -44,6 +44,19 @@ class EmbeddingClientTests(unittest.TestCase):
                 "https://example.test/v1/embeddings")
             self.assertEqual(client.embed(["hello"]), [vector])
 
+    def test_uses_configured_timeout(self):
+        vector = [0.25, 0.5, 0.75]
+        response = httpx.Response(
+            200, json={"data": [{"index": 0, "embedding": vector}]},
+            request=httpx.Request("POST", "https://example.test/v1/embeddings"))
+        with patch("rag.embeddings.httpx.post", return_value=response) as post:
+            client = EmbeddingClient(
+                "test-key", "test-model", 3,
+                "https://example.test/v1/embeddings", timeout=180)
+            client.embed(["hello"])
+
+        self.assertEqual(post.call_args.kwargs["timeout"], 180)
+
     def test_reports_wrong_endpoint_shape(self):
         response = httpx.Response(
             200, json={"object": "list"},

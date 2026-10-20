@@ -23,7 +23,8 @@ def create_agent() -> RagAgent:
     engine = create_engine(database_url)
     embeddings = EmbeddingClient(
         settings.llm_api_key, settings.embedding_model,
-        settings.embedding_dim, settings.embedding_api_url)
+        settings.embedding_dim, settings.embedding_api_url,
+        settings.embedding_timeout_seconds)
     llm = ChatCompletionClient(
         settings.llm_api_key, settings.llm_model, settings.llm_api_url,
         settings.llm_timeout_seconds)

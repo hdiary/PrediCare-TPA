@@ -100,6 +100,9 @@ class FakeResult:
     def all(self):
         return list(self._rows)
 
+    def first(self):
+        return self._rows[0] if self._rows else None
+
     def one(self):
         return self._rows[0]
 
@@ -117,18 +120,23 @@ class FakeConnection:
     def execute(self, statement, params=None):
         self._engine.calls.append(params)
         self._engine.statements.append(str(statement))
+        if "v_agent_contract_status" in str(statement):
+            return FakeResult(self._engine.contract_status_rows)
         if "SUM(montant_pris_en_charge)" in str(statement):
             return FakeResult([self._engine.aggregate_result])
         return FakeResult(self._engine.rows)
 
 
 class FakeEngine:
-    def __init__(self, rows, aggregate_result=None):
+    def __init__(self, rows, aggregate_result=None, contract_status_rows=None):
         self.rows = rows
         self.aggregate_result = aggregate_result or {
             "total_rembourse": Decimal("59500"),
             "nombre_factures_payees": 1,
         }
+        self.contract_status_rows = (
+            [{"contrat_id": CONTRACT_ID, "statut": "ACTIF"}]
+            if contract_status_rows is None else contract_status_rows)
         self.calls: list[dict] = []
         self.statements: list[str] = []
 
@@ -193,10 +201,11 @@ def sample_rows(amount_type=int):
 
 
 def make_toolkit(rows=None, assure_id=ASSURE_ID, chunks=None,
-                 aggregate_result=None):
+                 aggregate_result=None, contract_status_rows=None):
     engine = FakeEngine(
         sample_rows() if rows is None else rows,
-        aggregate_result=aggregate_result)
+        aggregate_result=aggregate_result,
+        contract_status_rows=contract_status_rows)
     retriever = FakeRetriever(chunks or [])
     toolkit = AgentToolkit(
         embeddings=FakeEmbeddings(),
@@ -274,6 +283,40 @@ def test_total_question_uses_aggregate_tool_not_recent_claim_shortcut():
         f"outil total exposé={'get_my_reimbursement_total' in tool_names}",
         "Agent -> outil d'agrégation sur tout l'historique",
         is_routed_to_agent_tool)
+
+
+@pytest.mark.parametrize("question", [
+        "Quel est le statut de mon contrat ?",
+        "Mon contrat est-il actif ?",
+        "Quelle est la situation de mon contrat ?",
+])
+def test_contract_status_question_uses_database_shortcut(question):
+    assert AgentToolkit.is_contract_status_question(question)
+
+
+def test_contract_status_comes_from_connected_insured_and_contract():
+    toolkit, engine, _ = make_toolkit()
+
+    answer = toolkit.contract_status_answer()
+
+    assert answer == "Le statut de votre contrat est **actif**."
+    assert engine.calls == [{
+        "assure_id": ASSURE_ID,
+        "contract_id": CONTRACT_ID,
+    }]
+    assert "v_agent_contract_status" in engine.statements[0]
+
+
+def test_contract_status_does_not_return_another_contract_status():
+    toolkit, engine, _ = make_toolkit(contract_status_rows=[])
+
+    answer = toolkit.contract_status_answer()
+
+    assert "Je ne trouve pas de statut" in answer
+    assert engine.calls == [{
+        "assure_id": ASSURE_ID,
+        "contract_id": CONTRACT_ID,
+    }]
 
 
 # --------------------------------------------------------------------------

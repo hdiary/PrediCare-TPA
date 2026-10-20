@@ -7,7 +7,7 @@ import httpx
 
 class EmbeddingClient:
     def __init__(self, api_key: str, model: str, dimensions: int,
-                 api_url: str, timeout: float = 30.0):
+                 api_url: str, timeout: float = 120.0):
         if not model:
             raise ValueError("EMBEDDING_MODEL is required")
         self.api_key = api_key

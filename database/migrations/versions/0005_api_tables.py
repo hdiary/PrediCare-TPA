@@ -5,23 +5,19 @@ Revises: 0004_users_and_roles
 
 Pourquoi cette migration
 ------------------------
-Le code de l'API lit et écrit dans `utilisateurs`, `roles(code)`, `configuration`,
+Le code de l'API lit et écrit dans `utilisateurs`, `utilisateurs_roles`, `roles(nom_role)`,
+`configuration`,
 `predictions` (colonnes est_alerte, seuil_utilise...), `explications_shap`,
 `decisions_gestionnaire`, `journal_audit` et `alertes_prescription`. Ces tables
-n'étaient définies que dans database/sql/*.sql, que personne n'exécutait, alors que
-les migrations 0002 et 0004 créaient d'autres tables (users, user_roles, roles(role_id),
-shap_explanations, decisions_gestionnaires, audit_log) que l'API n'utilise pas.
+n'étaient définies que dans database/sql/*.sql, que personne n'exécutait.
 
-Cette migration :
-  1. supprime les tables inutilisées créées par 0002 et 0004 ;
-  2. crée les tables attendues par l'API (contenu de database/sql/020, 030 et 040) ;
-  3. donne à app_rw le strict nécessaire sur ces tables.
+Cette migration conserve le modèle utilisateurs/rôles de 0004, ajoute les colonnes
+nécessaires à l'authentification et crée les tables métier utilisées par l'API.
 
 `documents_vectorises` (RAG, créée par 0002) est conservée.
 
-ATTENTION : la suppression des tables de 0002/0004 détruit leurs données. À n'appliquer
-que sur une base dont ces tables sont vides. Le downgrade supprime les tables créées ici
-sans recréer celles de 0002/0004 (elles étaient inutilisées).
+Les tables métier obsolètes sont supprimées avant leur remplacement. Le downgrade supprime
+les tables créées ici et conserve les utilisateurs/rôles de 0004.
 """
 from alembic import op
 
@@ -34,33 +30,64 @@ UPGRADE_SQL = """
 -- 1. Tables de 0002 / 0004 que l'API n'utilise pas
 DROP TABLE IF EXISTS decisions_gestionnaires, shap_explanations, predictions, audit_log CASCADE;
 DROP FUNCTION IF EXISTS audit_log_immutable();
-DROP TABLE IF EXISTS user_roles, users, roles CASCADE;
 
--- 2a. Rôles applicatifs, utilisateurs, configuration (database/sql/020)
-CREATE TABLE roles (
-    code    TEXT PRIMARY KEY,
-    libelle TEXT NOT NULL
-);
-INSERT INTO roles (code, libelle) VALUES
+-- Compatibilité avec les bases qui ont déjà appliqué l'ancienne version de 0004.
+DO $$
+BEGIN
+    IF to_regclass('utilisateurs') IS NULL AND to_regclass('users') IS NOT NULL THEN
+        ALTER TABLE users RENAME TO utilisateurs;
+        ALTER TABLE utilisateurs RENAME COLUMN user_id TO utilisateur_id;
+        ALTER TABLE utilisateurs RENAME COLUMN username TO nom_utilisateur;
+        ALTER TABLE utilisateurs RENAME COLUMN password_hash TO hash_mot_de_passe;
+        ALTER TABLE utilisateurs RENAME COLUMN is_active TO est_actif;
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'utilisateurs'
+              AND column_name = 'created_at'
+        ) THEN
+            ALTER TABLE utilisateurs RENAME COLUMN created_at TO cree_le;
+        END IF;
+    END IF;
+
+    IF to_regclass('utilisateurs_roles') IS NULL AND to_regclass('user_roles') IS NOT NULL THEN
+        ALTER TABLE user_roles RENAME TO utilisateurs_roles;
+        ALTER TABLE utilisateurs_roles RENAME COLUMN user_id TO utilisateur_id;
+        ALTER TABLE utilisateurs_roles RENAME COLUMN assigned_at TO attribue_le;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'roles'
+          AND column_name = 'role_name'
+    ) THEN
+        ALTER TABLE roles RENAME COLUMN role_name TO nom_role;
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'roles'
+              AND column_name = 'created_at'
+        ) THEN
+            ALTER TABLE roles RENAME COLUMN created_at TO cree_le;
+        END IF;
+    END IF;
+END $$;
+
+-- 1b. Compléter le modèle utilisateurs/rôles créé par 0004.
+ALTER TABLE utilisateurs
+    ADD COLUMN assure_id TEXT REFERENCES assures(assure_id),
+    ADD COLUMN prestataire_id TEXT REFERENCES prestataires(prestataire_id),
+    ADD COLUMN derniere_connexion TIMESTAMPTZ,
+    ADD COLUMN tentatives_echouees INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN verrouille_jusqua TIMESTAMPTZ;
+INSERT INTO roles (nom_role, description) VALUES
     ('professionnel_sante', 'Professionnel de santé'),
-    ('assure',              'Assuré'),
-    ('gestionnaire',        'Gestionnaire'),
-    ('administrateur',      'Administrateur');
+    ('assure', 'Assuré'),
+    ('gestionnaire', 'Gestionnaire'),
+    ('administrateur', 'Administrateur')
+ON CONFLICT DO NOTHING;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_utilisateurs_roles_utilisateur_id
+    ON utilisateurs_roles(utilisateur_id);
 
-CREATE TABLE utilisateurs (
-    utilisateur_id      BIGSERIAL PRIMARY KEY,
-    email               TEXT NOT NULL UNIQUE CHECK (email = lower(email)),
-    mot_de_passe_hash   TEXT NOT NULL,
-    role                TEXT NOT NULL REFERENCES roles(code),
-    assure_id           TEXT REFERENCES assures(assure_id),
-    prestataire_id      TEXT REFERENCES prestataires(prestataire_id),
-    actif               BOOLEAN NOT NULL DEFAULT TRUE,
-    cree_le             TIMESTAMPTZ NOT NULL DEFAULT now(),
-    derniere_connexion  TIMESTAMPTZ,
-    tentatives_echouees INT NOT NULL DEFAULT 0,
-    verrouille_jusqua   TIMESTAMPTZ
-);
-
+-- 2a. Configuration applicative (database/sql/020)
 CREATE TABLE configuration (
     cle            TEXT PRIMARY KEY,
     valeur         TEXT NOT NULL,
@@ -158,6 +185,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_rw') THEN
         GRANT SELECT ON roles TO app_rw;
         GRANT SELECT, INSERT, UPDATE ON utilisateurs, configuration TO app_rw;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON utilisateurs_roles TO app_rw;
         GRANT SELECT, INSERT ON predictions, explications_shap, decisions_gestionnaire,
               journal_audit, alertes_prescription TO app_rw;
         GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_rw;
@@ -170,8 +198,14 @@ END $$;
 
 DOWNGRADE_SQL = """
 DROP TABLE IF EXISTS alertes_prescription, journal_audit, decisions_gestionnaire,
-                     explications_shap, predictions, configuration, utilisateurs, roles CASCADE;
+                     explications_shap, predictions, configuration CASCADE;
 DROP FUNCTION IF EXISTS journal_audit_immuable();
+ALTER TABLE utilisateurs
+    DROP COLUMN IF EXISTS verrouille_jusqua,
+    DROP COLUMN IF EXISTS tentatives_echouees,
+    DROP COLUMN IF EXISTS derniere_connexion,
+    DROP COLUMN IF EXISTS prestataire_id,
+    DROP COLUMN IF EXISTS assure_id;
 """
 
 

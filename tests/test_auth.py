@@ -110,14 +110,14 @@ class FakeConn:
                 and session["expires_at"] > datetime.now(UTC)
                 else None
             )
-        if q.startswith("SELECT") and "WHERE EMAIL" in q:
-            account = next(
-                ((email, data) for email, data in USERS.items()
-                 if email == params[0] or data["identifiant"] == params[1]),
+        if q.startswith("SELECT") and "LOWER(U.NOM_UTILISATEUR)" in q:
+            email = next(
+                (name for name in USERS if name.lower() == params[0].lower()),
                 None,
             )
-            return FakeCursor(self._row(*account) if account else None)
-        if q.startswith("SELECT") and "WHERE UTILISATEUR_ID" in q:
+            data = USERS.get(email) if email else None
+            return FakeCursor(self._row(email, data) if data else None)
+        if q.startswith("SELECT") and "WHERE U.UTILISATEUR_ID" in q:
             for email, data in USERS.items():
                 if data["user_id"] == params[0]:
                     return FakeCursor(self._row(email, data))
