@@ -164,8 +164,8 @@ def insert_shap(conn, prediction_id: int, facture_id: str, valeurs: dict) -> Non
 # ---------- alertes et décisions ----------
 
 _DERNIERE_DECISION = (
-    "LEFT JOIN LATERAL (SELECT decision, decided_at AS date_decision FROM decisions_gestionnaires "
-    "WHERE prediction_id = p.prediction_id ORDER BY decided_at DESC, decision_id DESC "
+    "LEFT JOIN LATERAL (SELECT decision, date_decision FROM decisions_gestionnaire "
+    "WHERE prediction_id = p.prediction_id ORDER BY date_decision DESC, decision_id DESC "
     "LIMIT 1) d ON TRUE"
 )
 
@@ -236,6 +236,35 @@ def count_alertes(conn, statut: str, priorite: str | None = None,
     return int(row["n"])
 
 
+def list_prescription_alerts(
+    conn, rule: str | None = None, min_severity: int = 0
+) -> list[dict]:
+    filters = ["ap.type_alerte = 'PRESCRIPTION'", "ap.ordonnance_id IS NOT NULL"]
+    params: list[object] = []
+    if rule:
+        filters.append("ap.regle_code = %s")
+        params.append(rule)
+    if min_severity:
+        filters.append(
+            "CASE ap.severite WHEN 'HAUTE' THEN 3 "
+            "WHEN 'MOYENNE' THEN 2 ELSE 1 END >= %s"
+        )
+        params.append(min_severity)
+    return conn.execute(
+        "SELECT ap.alerte_regle_id::text AS id, ap.ordonnance_id AS prescription_id, "
+        "ap.regle_code AS rule, "
+        "CASE ap.severite WHEN 'HAUTE' THEN 3 WHEN 'MOYENNE' THEN 2 ELSE 1 END AS severity, "
+        "ap.message AS detail, o.diagnostic AS diagnosis, "
+        "o.date_prescription AS prescription_date, "
+        "o.prescripteur_id AS prescriber_pseudo, o.assure_id AS insured_pseudo "
+        "FROM alertes_prescription ap "
+        "JOIN ordonnances o ON o.ordonnance_id = ap.ordonnance_id "
+        f"WHERE {' AND '.join(filters)} "
+        "ORDER BY severity DESC, ap.cree_le DESC, ap.alerte_regle_id DESC",
+        params,
+    ).fetchall()
+
+
 def get_prediction(conn, facture_id: str, for_update: bool = False) -> dict | None:
     lock = " FOR UPDATE" if for_update else ""
     return conn.execute(
@@ -253,9 +282,9 @@ def get_shap(conn, prediction_id: int) -> dict | None:
 
 def list_decisions(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
-        "SELECT decision_id, facture_id, user_id::bigint AS gestionnaire_id, decision, commentaire, "
-        "montant_economise, decided_at AS date_decision FROM decisions_gestionnaires "
-        "WHERE prediction_id = %s ORDER BY decided_at DESC, decision_id DESC",
+        "SELECT decision_id, facture_id, gestionnaire_id, decision, commentaire, "
+        "montant_economise, date_decision FROM decisions_gestionnaire "
+        "WHERE prediction_id = %s ORDER BY date_decision DESC, decision_id DESC",
         (prediction_id,),
     ).fetchall()
 
@@ -263,11 +292,11 @@ def list_decisions(conn, prediction_id: int) -> list[dict]:
 def insert_decision(conn, *, prediction_id, facture_id, gestionnaire_id, decision,
                     commentaire, montant_economise) -> dict:
     return conn.execute(
-        "INSERT INTO decisions_gestionnaires (prediction_id, facture_id, user_id, decision, "
+        "INSERT INTO decisions_gestionnaire (prediction_id, facture_id, gestionnaire_id, decision, "
         "commentaire, montant_economise) VALUES (%s, %s, %s, %s, %s, %s) "
-        "RETURNING decision_id, facture_id, user_id::bigint AS gestionnaire_id, decision, commentaire, "
-        "montant_economise, decided_at AS date_decision",
-        (prediction_id, facture_id, str(gestionnaire_id), decision, commentaire, montant_economise),
+        "RETURNING decision_id, facture_id, gestionnaire_id, decision, commentaire, "
+        "montant_economise, date_decision",
+        (prediction_id, facture_id, gestionnaire_id, decision, commentaire, montant_economise),
     ).fetchone()
 
 
@@ -290,7 +319,7 @@ def get_alert_summary(conn, facture_id: str) -> dict | None:
 
 def decision_existe(conn, prediction_id: int) -> bool:
     row = conn.execute(
-        "SELECT 1 AS existe FROM decisions_gestionnaires WHERE prediction_id = %s LIMIT 1",
+        "SELECT 1 AS existe FROM decisions_gestionnaire WHERE prediction_id = %s LIMIT 1",
         (prediction_id,),
     ).fetchone()
     return row is not None
