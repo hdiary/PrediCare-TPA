@@ -60,6 +60,16 @@ def list_alerts(
     )
 
 
+@router.get("/prescription-alerts", dependencies=[manager_only])
+def list_prescription_alerts(
+    rule: str | None = None,
+    min_severity: int = Query(0, ge=0, le=3),
+    conn=Depends(get_db),
+):
+    rows = repo.list_prescription_alerts(conn, rule, min_severity)
+    return {"items": rows, "total": len(rows)}
+
+
 @router.get("/alerts/{facture_id}", response_model=AlertDetailOut, dependencies=[manager_only])
 @router.get("/alertes/{facture_id}", response_model=AlertDetailOut, dependencies=[manager_only])
 def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):

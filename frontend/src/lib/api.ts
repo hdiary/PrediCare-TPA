@@ -27,6 +27,7 @@ import type {
   Conversation,
   InvoicePrescription,
   InvoiceSubmissionResult,
+  InvoicePrescription,
   UserRow,
   PrescriptionAlert,
   AdminUserCreatePayload,
@@ -666,11 +667,11 @@ export const api = {
   },
 
   async getBIKPIs(): Promise<BIKpiData> {
-    return request("/v1/bi/kpis");
+    return request("/bi/kpis");
   },
 
   async getBIModel(): Promise<BIModelData> {
-    return request("/v1/bi/model");
+    return request("/bi/model");
   },
 
   async logout(): Promise<void> {
