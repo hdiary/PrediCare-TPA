@@ -65,6 +65,11 @@ _CONTRACT_END_DATE_QUESTION = re.compile(
     r"\b(?:date\s+de\s+fin|fin\s+de\s+mon\s+contrat)\b",
     re.IGNORECASE,
 )
+_CONTRACT_EFFECTIVE_DATE_QUESTION = re.compile(
+    r"\bdate\s+d['’]effet\b.{0,40}\b(?:police|contrat)\b"
+    r"|\b(?:police|contrat)\b.{0,40}\bdate\s+d['’]effet\b",
+    re.IGNORECASE,
+)
 _ANNUAL_PREMIUM = re.compile(
     r"Prime annuelle\s*:\s*(?P<per_beneficiary>[\d ]+?)\s*Ar\s+"
     r"par bénéficiaire,\s+soit\s+(?P<total>[\d ]+?)\s*Ar\s+pour\s+"
@@ -89,6 +94,11 @@ _CONTRACT_STATUS = re.compile(
 )
 _CONTRACT_END_DATE = re.compile(
     r"\bFin\s*:\s*(?P<date>\d{4}-\d{2}-\d{2})\b", re.IGNORECASE
+)
+_CONTRACT_EFFECTIVE_DATE = re.compile(
+    r"\bDate\s+d['’]effet\s+(?:de\s+la\s+)?(?:police|contrat)\s*:\s*"
+    r"(?P<date>\d{4}-\d{2}-\d{2})\b",
+    re.IGNORECASE,
 )
 _COVERAGE_ROW = re.compile(
     r"(?P<category>dentaire?|pharmacie|laboratoire|imagerie|"
@@ -241,6 +251,16 @@ def answer_from_contract(
                     chunk,
                 )
 
+    if _CONTRACT_EFFECTIVE_DATE_QUESTION.search(question):
+        for chunk in contract_chunks:
+            match = _CONTRACT_EFFECTIVE_DATE.search(chunk.content)
+            if match:
+                return (
+                    f"La date d'effet de votre contrat est "
+                    f"{match.group('date')}.",
+                    chunk,
+                )
+
     if _EXCLUSION_QUESTION.search(question):
         for chunk in chunks:
             if not chunk.article or not chunk.article.casefold().startswith(
@@ -320,4 +340,5 @@ def is_direct_contract_question(question: str) -> bool:
         or _SUBSCRIBER_QUESTION.search(question)
         or _CONTRACT_STATUS_QUESTION.search(question)
         or _CONTRACT_END_DATE_QUESTION.search(question)
+        or _CONTRACT_EFFECTIVE_DATE_QUESTION.search(question)
     )

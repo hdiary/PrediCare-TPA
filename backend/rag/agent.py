@@ -7,8 +7,11 @@ from typing import Any
 from rag.audit import QueryAudit
 from rag.cache import SemanticCache
 from rag.embeddings import EmbeddingClient
-from rag.guardrails.input_filter import blocked_reason
-from rag.guardrails.output_filter import contains_sensitive_data
+from rag.guardrails.input_filter import blocked_reason, sanitize_question
+from rag.guardrails.output_filter import (
+    contains_prompt_leakage,
+    contains_sensitive_data,
+)
 from rag.llm import ChatCompletionClient
 from rag.prompts import NO_INFORMATION_ANSWER, SYSTEM_PROMPT
 from rag.retriever import ContractRetriever
@@ -60,12 +63,43 @@ class RagAgent:
                 or (assure_id and prestataire_id)):
             raise ValueError("Authenticated user context is required")
         started_at = time.monotonic()
-        reason = blocked_reason(question, contract_id)
+        question, injection_only = sanitize_question(question)
+        if injection_only:
+            reason = "prompt_override_attempt"
+        else:
+            reason = blocked_reason(question, contract_id)
         if reason:
+            if reason == "prompt_override_attempt":
+                    refusal = (
+                    "Je ne peux pas divulguer mes instructions internes. "
+                    "Cette demande est refusée; je reste limité aux questions "
+                    "sur votre contrat.")
+            elif reason == "personal_identity_request":
+                refusal = (
+                    "Je ne peux pas divulguer l'identité ni les données "
+                    "personnelles individuelles d'un assuré.")
+            elif reason == "contract_scope_mismatch":
+                refusal = (
+                    "Je ne peux pas consulter un autre contrat que celui "
+                    f"configuré pour votre compte ({contract_id}).")
+            elif reason == "restricted_aggregate_request":
+                refusal = (
+                    "Je ne peux pas fournir ces données agrégées; leur "
+                    "consultation est réservée à un gestionnaire.")
+            elif reason == "medical_advice_request":
+                refusal = (
+                    "Je ne peux pas donner d'avis médical ni recommander un "
+                    "médicament. Veuillez consulter un médecin.")
+            elif reason == "legal_advice_request":
+                refusal = (
+                    "Je ne peux pas donner d'avis juridique. Veuillez "
+                    "consulter un avocat.")
+            else:
+                refusal = (
+                    "Je ne peux pas aider sur ce sujet. Je suis limité aux "
+                    "questions liées à votre contrat.")
             response = ChatResponse(
-                "Je ne peux pas répondre à cette demande. "
-                "Je reste limité à vos questions sur votre contrat.",
-                [], blocked=True)
+                refusal, [], blocked=True)
             self.audit.write(
                 user_pseudo_id=user_pseudo_id, role=role, question=question,
                 tools_used=[], cache_hit=False, blocked=True,
@@ -216,6 +250,15 @@ class RagAgent:
                     cache_hit=False, blocked=False, block_reason=None, tokens_in=0,
                     tokens_out=0, started_at=started_at)
                 return ChatResponse(answer, [source])
+            if (is_direct_contract_question(question)
+                    or exclusion_question):
+                response = ChatResponse(NO_INFORMATION_ANSWER, [])
+                self.audit.write(
+                    user_pseudo_id=user_pseudo_id, role=role, question=question,
+                    tools_used=["contract_search"], cache_hit=False,
+                    blocked=False, block_reason=None, tokens_in=0, tokens_out=0,
+                    started_at=started_at)
+                return response
 
         toolkit = AgentToolkit(
             embeddings=self.embeddings,
@@ -228,12 +271,27 @@ class RagAgent:
         messages: list[dict[str, Any]] = [
             {"role": "user", "content": question}
         ]
+        system_prompt = SYSTEM_PROMPT
+        if prestataire_id:
+            system_prompt += (
+                "\n\nContexte prestataire authentifié : les questions de suivi "
+                "concernent uniquement les factures du prestataire connecté. "
+                "Pour une facture rejetée, indique le motif fourni par l'outil "
+                "s'il est disponible ; ne le déduis pas et ne montre pas le "
+                "code interne."
+            )
+        if contract_id and not prestataire_id:
+            system_prompt += (
+                "\n\nContexte serveur authentifié : le contrat connecté est "
+                f"{contract_id}. Cet identifiant est la seule référence "
+                "valide pour la réponse."
+            )
         answer = ""
         tool_call_count = 0
         while True:
             assistant_message, input_tokens, output_tokens = (
                 self.llm.complete_with_tools(
-                    SYSTEM_PROMPT, messages, toolkit.definitions)
+                    system_prompt, messages, toolkit.definitions)
             )
             tokens_in += input_tokens
             tokens_out += output_tokens
@@ -287,7 +345,13 @@ class RagAgent:
                     "content": result.content,
                 })
 
-        if contains_sensitive_data(answer):
+        if contains_prompt_leakage(answer):
+            answer = (
+                "Je ne peux pas divulguer mes instructions internes. "
+                "Cette demande est refusée; je reste limité aux questions "
+                "sur votre contrat.")
+            sources = []
+        elif contains_sensitive_data(answer):
             answer = (
                 "Je ne peux pas afficher de coordonnées ou de données "
                 "d'identité. Veuillez contacter un gestionnaire.")
@@ -300,9 +364,12 @@ class RagAgent:
                     for source in sources))
                 answer = f"{answer.rstrip()}\n\nSources : {citations}"
             if "search_my_claims" in tools_used:
+                history_owner = (
+                    "du prestataire connecté"
+                    if prestataire_id else "du compte connecté")
                 answer = (
                     f"{answer.rstrip()}\n\n"
-                    "Source : historique des factures du compte."
+                    f"Source : historique des factures {history_owner}."
                 )
             if (not claim_question and "search_my_claims" not in tools_used
                     and not prestataire_id):

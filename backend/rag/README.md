@@ -59,27 +59,32 @@ Les questions sur les exclusions sont sourcées depuis l'article 10. Les
 identifiants de contrat mentionnés dans une question doivent correspondre au
 contrat fourni à l'agent ; une demande visant un autre contrat est bloquée.
 Les demandes d'identité réelle d'un bénéficiaire sont également bloquées.
+Les demandes de révélation des instructions internes sont refusées avant
+l'appel au LLM. Les marqueurs d'injection isolés dans une question sont
+retirés pour traiter la partie contractuelle légitime restante ; la sortie du
+LLM est aussi contrôlée pour bloquer les fragments reconnaissables du prompt et
+les noms d'outils internes.
 Le cache ne réutilise une réponse que pour la même question textuelle (sans
 tenir compte de la casse et des espaces en bordure), afin d'éviter de répondre
 à une question avec le résultat d'une question seulement similaire.
 
 Pour les questions qui nécessitent le LLM, l'agent dispose d'outils à fonctions
 fermées : `search_contract_documents` pour les PDF et `search_my_claims` pour
-les factures du contexte assuré fourni. Le modèle ne produit jamais de SQL.
-L'outil de suivi appelle une requête paramétrée sur la vue
-`v_agent_claim_status`, qui n'expose que l'identifiant pseudonymisé, le contrat,
-les dates utiles, le type de facture, les montants facturé et pris en charge,
-et le statut. Les statuts internes sont convertis en libellés destinés à
-l'assuré dans le toolkit. Le rôle PostgreSQL `agent_ro` n'a qu'un droit
-`SELECT` sur cette vue pour cet accès métier. Les statuts obtenus par SQL ne
-sont pas mis en cache.
+les factures du contexte authentifié. Le modèle ne produit jamais de SQL.
+Pour un assuré, l'outil consulte les factures du compte et du contrat ; pour
+un professionnel de santé, il ne consulte que celles du `prestataire_id`
+rattaché à sa session. Le suivi expose les dates utiles, le type de facture,
+les montants facturé et pris en charge et le statut. Pour une facture rejetée
+du prestataire connecté, un outil SQL jointif fournit aussi le motif de rejet ;
+les motifs connus sont convertis en libellés lisibles et les codes inconnus ne
+sont pas exposés. Les statuts obtenus par SQL ne sont pas mis en cache.
 
-En mode CLI, l'identifiant `--assure-id` active l'outil de suivi ; sans cet
-argument, une question de suivi reçoit une explication et aucun accès SQL n'est
-effectué. Cette valeur pseudonymisée saisie en CLI sert uniquement aux essais
-locaux : elle ne constitue pas une authentification et ne doit pas être exposée
-à des utilisateurs. L'API devra ultérieurement fournir l'identifiant depuis la
-session authentifiée.
+En mode CLI, l'identifiant `--assure-id` active le suivi de l'assuré ; sans
+cet argument, une question de suivi reçoit une explication et aucun accès SQL
+n'est effectué. Cette valeur pseudonymisée saisie en CLI sert uniquement aux
+essais locaux : elle ne constitue pas une authentification et ne doit pas être
+exposée à des utilisateurs. En production, l'API fournit les identifiants
+assuré ou prestataire depuis la session authentifiée.
 Les demandes explicites de statut ou de liste des dernières factures sont
 formatées directement depuis les résultats SQL ; le LLM ne choisit pas de
 filtres de date et ne peut pas contredire les statuts retournés par la base.
@@ -155,13 +160,20 @@ ne recherche que dans les documents généraux du réseau, jamais dans les
 conditions particulières d'un assuré. Les rôles gestionnaire et administrateur
 n'ont pas accès au chat.
 
+Les questions sur les dates d'effet et les données personnalisées du contrat
+utilisent le contrat résolu côté serveur. Après mise à jour, redémarrez le
+service `loader` pour appliquer les migrations ; la migration 0021 vide le
+cache de réponses RAG afin d'éliminer les réponses générées avec l'ancien prompt.
+
 ## Schéma et code
 
 Les migrations `0004_rag_tables`, `0005_rag_embedding_1024`,
 `0006_agent_claim_status_view`, `0007_agent_claim_amounts` et
 `0010_chat_api_and_provider_scope` créent les tables RAG et la vue de suivi,
 ajoutent l'accès prestataire limité ainsi que l'historique du chat, puis
-adaptent les vecteurs à BGE-M3. La migration 0005 supprime les anciens vecteurs
+adaptent les vecteurs à BGE-M3. La migration `0022_provider_rejection_reason`
+ajoute la vue de motifs de rejet réservée à la lecture par `agent_ro`.
+La migration 0005 supprime les anciens vecteurs
 et documents RAG, y compris ceux de l'ancienne table `documents_vectorises`,
 pour que le corpus soit réindexé avec le nouveau modèle. La vue SQL n'expose
 que les champs nécessaires au suivi des factures et est accessible en lecture

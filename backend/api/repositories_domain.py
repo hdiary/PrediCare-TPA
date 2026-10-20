@@ -72,12 +72,70 @@ def get_invoice_for_provider(conn, facture_id: str, prestataire_id: str) -> dict
     ).fetchone()
 
 
-def list_invoices_for_insured(conn, assure_id: str, limit: int, offset: int) -> list[dict]:
-    return _list_invoices(conn, "assure_id", assure_id, limit, offset)
+def list_invoices(
+    conn,
+    *,
+    prestataire_id: str | None,
+    assure_id: str | None,
+    statut: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict], int]:
+    filters = []
+    qualified_filters = []
+    params = []
+    if prestataire_id is not None:
+        filters.append("prestataire_id = %s")
+        qualified_filters.append("f.prestataire_id = %s")
+        params.append(prestataire_id)
+    if assure_id is not None:
+        filters.append("assure_id = %s")
+        qualified_filters.append("f.assure_id = %s")
+        params.append(assure_id)
+    if statut is not None:
+        filters.append("statut = %s")
+        qualified_filters.append("f.statut = %s")
+        params.append(statut)
+
+    where = f" WHERE {' AND '.join(filters)}" if filters else ""
+    qualified_where = f" WHERE {' AND '.join(qualified_filters)}" if qualified_filters else ""
+    total = conn.execute(
+        f"SELECT count(*) AS n FROM factures{where}", tuple(params)
+    ).fetchone()["n"]
+    rows = conn.execute(
+        "SELECT f.facture_id, f.numero_facture, f.prestataire_id, p.nom AS prestataire_nom, "
+        "f.assure_id, f.date_soin, "
+        "f.nb_lignes, f.montant_total, f.montant_pris_en_charge, f.reste_a_charge, f.statut "
+        f"FROM factures f LEFT JOIN prestataires p ON p.prestataire_id = f.prestataire_id"
+        f"{qualified_where} "
+        "ORDER BY f.date_reception DESC, f.facture_id DESC "
+        "LIMIT %s OFFSET %s",
+        (*params, limit, offset),
+    ).fetchall()
+    return rows, total
 
 
 def list_invoices_for_provider(conn, prestataire_id: str, limit: int, offset: int) -> list[dict]:
     return _list_invoices(conn, "prestataire_id", prestataire_id, limit, offset)
+
+
+def list_invoice_lines(conn, facture_ids: Sequence[str]) -> dict[str, list[dict]]:
+    if not facture_ids:
+        return {}
+    rows = conn.execute(
+        "SELECT facture_id, num_ligne, code, libelle, quantite, prix_unitaire, montant "
+        "FROM lignes_facture WHERE facture_id = ANY(%s) "
+        "ORDER BY facture_id, num_ligne",
+        (facture_ids,),
+    ).fetchall()
+    lines: dict[str, list[dict]] = {}
+    for row in rows:
+        lines.setdefault(row["facture_id"], []).append(
+            {key: row[key] for key in (
+                "num_ligne", "code", "libelle", "quantite", "prix_unitaire", "montant"
+            )}
+        )
+    return lines
 
 
 def _list_invoices(conn, column: str, owner_id: str, limit: int, offset: int) -> list[dict]:

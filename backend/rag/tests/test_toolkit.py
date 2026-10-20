@@ -201,7 +201,8 @@ def sample_rows(amount_type=int):
 
 
 def make_toolkit(rows=None, assure_id=ASSURE_ID, chunks=None,
-                 aggregate_result=None, contract_status_rows=None):
+                 aggregate_result=None, contract_status_rows=None,
+                 prestataire_id=None):
     engine = FakeEngine(
         sample_rows() if rows is None else rows,
         aggregate_result=aggregate_result,
@@ -212,7 +213,8 @@ def make_toolkit(rows=None, assure_id=ASSURE_ID, chunks=None,
         retriever=retriever,
         engine=engine,
         contract_id=CONTRACT_ID,
-        assure_id=assure_id,
+        assure_id=None if prestataire_id else assure_id,
+        prestataire_id=prestataire_id,
     )
     return toolkit, engine, retriever
 
@@ -487,6 +489,44 @@ def test_recent_claims_answer_format():
         not missing), f"éléments manquants : {missing}"
 
 
+def test_provider_claim_search_returns_translated_rejection_reason():
+    rejected_invoice = {
+        **sample_rows()[0],
+        "facture_id": "FAC-00000007",
+        "statut": "REJETEE",
+        "motif_rejet": "ORDONNANCE_PERIMEE",
+    }
+    toolkit, engine, _ = make_toolkit(
+        rows=[rejected_invoice], prestataire_id="PRE-00123")
+
+    result = toolkit.execute("search_my_claims", CLAIMS_ARGS)
+    answer = toolkit.recent_claims_answer()
+    tool_names = [tool["function"]["name"] for tool in toolkit.definitions]
+
+    assert "ORDONNANCE_PERIMEE" not in result.content + answer
+    assert "Ordonnance expirée" in result.content + answer
+    assert "search_contract_documents" not in tool_names
+    assert "search_network_documents" in tool_names
+    assert engine.calls[0]["prestataire_id"] == "PRE-00123"
+    assert "v_agent_provider_rejection_reasons" in engine.statements[0]
+    assert "rejection.prestataire_id = claims.prestataire_id" in engine.statements[0]
+
+
+def test_provider_unknown_rejection_reason_is_not_exposed_as_internal_code():
+    rejected_invoice = {
+        **sample_rows()[0],
+        "statut": "REJETEE",
+        "motif_rejet": "UNKNOWN_INTERNAL_REASON",
+    }
+    toolkit, _, _ = make_toolkit(
+        rows=[rejected_invoice], prestataire_id="PRE-00123")
+
+    answer = toolkit.recent_claims_answer()
+
+    assert "UNKNOWN_INTERNAL_REASON" not in answer
+    assert "Motif à confirmer auprès d'un gestionnaire" in answer
+
+
 def test_no_claims_message():
     toolkit, _, _ = make_toolkit(rows=[])
     answer = toolkit.recent_claims_answer()
@@ -494,6 +534,15 @@ def test_no_claims_message():
         "Sorties de l'outil dossiers", "Assuré sans aucune facture",
         answer, "Message clair « aucune facture », sans invention",
         answer == NO_CLAIMS_MESSAGE)
+
+
+def test_provider_without_claims_gets_provider_scoped_message():
+    toolkit, _, _ = make_toolkit(rows=[], prestataire_id="PRE-00123")
+
+    result = toolkit.execute("search_my_claims", CLAIMS_ARGS)
+
+    assert result.claims == []
+    assert result.content == "Aucune facture correspondante trouvée pour le prestataire connecté."
 
 
 def test_decimal_amounts_do_not_crash():

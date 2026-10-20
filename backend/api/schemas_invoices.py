@@ -17,6 +17,7 @@ class InvoiceOut(BaseModel):
     facture_id: str
     numero_facture: str | None = None
     prestataire_id: str
+    prestataire_nom: str | None = None
     assure_id: str
     date_soin: date
     nb_lignes: int | None = None

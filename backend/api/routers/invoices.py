@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api import repositories as repo
+from api import repositories_domain as repo
 from api.db import get_db
 from api.deps import require_role
 from api.schemas_invoices import InvoiceList
@@ -36,10 +36,14 @@ def list_invoices(
         assure_id = user.get("assure_id")
         if assure_id is None:
             raise HTTPException(status_code=403, detail="Compte non rattaché à un assuré")
-    rows, total = repo.list_factures(
-        conn, prestataire_id=prestataire_id, assure_id=assure_id, statut=statut,
-        limit=limit, offset=offset,
+    rows, total = repo.list_invoices(
+        conn,
+        prestataire_id=prestataire_id,
+        assure_id=assure_id,
+        statut=statut,
+        limit=limit,
+        offset=offset,
     )
-    lignes = repo.lignes_de_factures(conn, [r["facture_id"] for r in rows])
+    lignes = repo.list_invoice_lines(conn, [r["facture_id"] for r in rows])
     items = [{**r, "lignes": lignes.get(r["facture_id"], [])} for r in rows]
     return {"items": items, "total": total}

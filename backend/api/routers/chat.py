@@ -37,7 +37,7 @@ def _require_chat_role(user: dict) -> None:
     if user["role"] not in _CHAT_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="L'assistant est réservé aux assurés",
+            detail="L'assistant est réservé aux assurés et aux professionnels de santé",
         )
 
 
