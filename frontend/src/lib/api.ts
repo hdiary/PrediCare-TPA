@@ -33,6 +33,7 @@ import type {
   UserReferences,
   CreatedUserCredentials,
   AlertDecisionValue,
+  ApiInvoiceLine,
 } from "./types";
 
 import {
@@ -290,19 +291,7 @@ function alertTypeOf(a: { type_alerte?: string | null }): AlertType {
     : "tarification";
 }
 
-/** « ecart_prix_moyen » -> « Écart prix moyen » (pas de dictionnaire fourni par le modèle). */
-function prettyFeature(name: string): string {
-  const s = name.replace(/_/g, " ").trim();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-interface ApiLine {
-  code: string;
-  libelle?: string | null;
-  quantite: number;
-  prix_unitaire: number;
-  montant: number;
-}
+type ApiLine = ApiInvoiceLine;
 const mapLine = (l: ApiLine) => ({
   code: l.code,
   label: l.libelle || l.code,
@@ -808,6 +797,20 @@ export const api = {
     if (isMock("alerts")) {
       await delay(500);
       const a = mockAlertDetail;
+      const lines = a.invoice_lines.map((line) => ({
+        code: line.code,
+        libelle: line.label,
+        quantite: line.quantity,
+        prix_unitaire: line.unit_price,
+        montant: line.amount,
+      }));
+      const historique = a.provider_history.map((entry) => ({
+        facture_id: id,
+        score: entry.score,
+        decision: entry.decision === "validated" ? "VALIDER" : "REJETER",
+        date_decision: entry.ts,
+        gestionnaire_id: Number(entry.actor_pseudo.replace("GST-", "")),
+      }));
       return {
         prediction: {
           facture_id: id,
@@ -827,7 +830,12 @@ export const api = {
           prestataire_id: a.provider_pseudo,
           assure_id: a.insured_pseudo,
         },
-        facture: { lignes: a.invoice_lines },
+        facture: {
+          prestataire_id: a.provider_pseudo,
+          assure_id: a.insured_pseudo,
+          montant_total: a.amount,
+          lignes: lines,
+        },
         shap: {
           top: a.top_factors.map((f) => ({
             variable: f.label_fr,
@@ -837,67 +845,11 @@ export const api = {
         codes_fraude: a.prescription_flags,
         regles: [],
         decisions: [],
+        lignes: lines,
+        historique_prestataire: historique,
       };
     }
-    const d = await request<{
-      prediction: { facture_id: string; score: number; date: string };
-      shap: {
-        top?: {
-          variable: string;
-          valeur?: number | string | null;
-          contribution: number;
-        }[];
-      } | null;
-      decisions: {
-        decision: string;
-        date_decision: string;
-        gestionnaire_id: number;
-      }[];
-      facture: {
-        prestataire_id: string;
-        assure_id: string;
-        montant_total: number;
-      } | null;
-      lignes: ApiLine[];
-      historique_prestataire: {
-        facture_id: string;
-        score: number;
-        decision: string;
-        date_decision: string;
-        gestionnaire_id: number;
-      }[];
-    }>(`/alerts/${encodeURIComponent(id)}`);
-    const last = d.decisions[0]?.decision;
-    return {
-      id: d.prediction.facture_id,
-      invoice_id: d.prediction.facture_id,
-      score: d.prediction.score,
-      amount: d.facture?.montant_total ?? 0,
-      provider_pseudo: d.facture?.prestataire_id ?? "—",
-      insured_pseudo: d.facture?.assure_id ?? "—",
-      created_at: d.prediction.date,
-      status: last ? (DECISION_TO_STATUS[last] ?? "pending") : "pending",
-      type: alertTypeOf({}),
-      top_factors: (d.shap?.top ?? []).map((f) => ({
-        feature: f.variable,
-        label_fr:
-          prettyFeature(f.variable) +
-          (f.valeur !== null && f.valeur !== undefined ? ` (${f.valeur})` : ""),
-        impact: f.contribution,
-        direction: f.contribution >= 0 ? "positive" : "negative",
-      })),
-      prescription_flags: [], // règles de prescription (P2) pas encore branchées côté backend
-      invoice_lines: d.lignes.map(mapLine),
-      provider_history: d.historique_prestataire.map((h) => ({
-        ts: h.date_decision,
-        decision: (DECISION_TO_STATUS[h.decision] ?? "rejected") as
-          | "validated"
-          | "rejected"
-          | "investigating",
-        actor_pseudo: `GST-${String(h.gestionnaire_id).padStart(4, "0")}`,
-        score: h.score,
-      })),
-    } as unknown as AlertApiDetail;
+    return request<AlertApiDetail>(`/alerts/${encodeURIComponent(id)}`);
   },
 
   /** `amount` : montant de la facture ; une fraude confirmée est comptée comme montant économisé. */

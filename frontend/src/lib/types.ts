@@ -73,9 +73,30 @@ export interface AlertApiSummary {
   prestataire_id?: string | null; assure_id?: string | null;
 }
 export interface AlertApiDetail {
-  prediction: AlertApiSummary; facture: Record<string, unknown>;
+  prediction: AlertApiSummary;
+  facture: {
+    prestataire_id?: string | null;
+    assure_id?: string | null;
+    montant_total?: number | null;
+    lignes: ApiInvoiceLine[];
+  };
   shap: Array<{ variable: string; valeur?: number | string | null; contribution: number }> | { top?: Array<{ variable: string; valeur?: number | string | null; contribution: number }>; [key: string]: unknown } | null;
   codes_fraude: string[]; regles: Array<Record<string, unknown>>; decisions: Array<Record<string, unknown>>;
+  lignes: ApiInvoiceLine[];
+  historique_prestataire: {
+    facture_id: string;
+    score: number;
+    decision: string;
+    date_decision: string;
+    gestionnaire_id: number;
+  }[];
+}
+export interface ApiInvoiceLine {
+  code: string;
+  libelle?: string | null;
+  quantite: number;
+  prix_unitaire: number;
+  montant: number;
 }
 export interface AlertDecisionResult {
   decision_id: number; facture_id: string; gestionnaire_id: number;

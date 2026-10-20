@@ -7,6 +7,8 @@ from datetime import date, time
 import psycopg
 from psycopg.types.json import Jsonb
 
+from api.repositories_domain import list_invoice_lines
+
 # ---------- référentiels (contrôles de /predict) ----------
 
 def facture_existe(conn, facture_id: str) -> bool:
@@ -340,12 +342,33 @@ def update_alert_notification(conn, facture_id: str, state: str, attempts: int) 
     )
 
 
-def get_alert_invoice(conn, facture_id: str) -> dict:
-    row = conn.execute(
-        "SELECT facture_id, numero_facture, type_facture, date_soin, montant_total, "
-        "devise, statut FROM factures WHERE facture_id = %s", (facture_id,),
+def get_facture_et_lignes(conn, facture_id: str) -> tuple[dict | None, list[dict]]:
+    facture = conn.execute(
+        "SELECT facture_id, numero_facture, prestataire_id, assure_id, contrat_id, "
+        "ordonnance_id, type_facture, date_soin, heure_soin, date_facture, date_reception, "
+        "devise, nb_lignes, montant_total, montant_eligible, montant_pris_en_charge, "
+        "reste_a_charge, statut, motif_rejet, date_traitement "
+        "FROM factures WHERE facture_id = %s",
+        (facture_id,),
     ).fetchone()
-    return dict(row) if row else {}
+    if facture is None:
+        return None, []
+    lines = list_invoice_lines(conn, [facture_id]).get(facture_id, [])
+    return facture, lines
+
+
+def historique_prestataire(conn, prestataire_id: str, facture_id: str) -> list[dict]:
+    return conn.execute(
+        "SELECT d.facture_id, p.score, d.decision, d.date_decision, d.gestionnaire_id "
+        "FROM decisions_gestionnaire d "
+        "JOIN factures f ON f.facture_id = d.facture_id "
+        "JOIN predictions p ON p.prediction_id = d.prediction_id "
+        "JOIN predictions alerte_courante ON alerte_courante.facture_id = %s "
+        "WHERE f.prestataire_id = %s AND d.facture_id <> %s "
+        "AND d.date_decision <= alerte_courante.date "
+        "ORDER BY d.date_decision DESC, d.decision_id DESC",
+        (facture_id, prestataire_id, facture_id),
+    ).fetchall()
 
 
 # ---------- identités (déchiffrement réservé à l'affichage d'une alerte) ----------

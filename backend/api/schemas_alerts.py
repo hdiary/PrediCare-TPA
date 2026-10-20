@@ -42,6 +42,7 @@ class AlertSummary(BaseModel):
     version_modele: str
     date: datetime
     montant_total: int | None = None
+    nb_regles: int = 0
     prestataire_id: str | None = None
     assure_id: str | None = None
     type_facture: str | None = None
@@ -67,6 +68,8 @@ class AlertDetailOut(BaseModel):
     regles: list[RegleItem] = Field(default_factory=list)
     decisions: list[DecisionOut] = Field(default_factory=list)
     facture: dict = Field(default_factory=dict)
+    lignes: list[dict] = Field(default_factory=list)
+    historique_prestataire: list[dict] = Field(default_factory=list)
     codes_fraude: list[str] = Field(default_factory=list)
 
 

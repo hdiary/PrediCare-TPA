@@ -84,16 +84,12 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
     facture, lignes = repo.get_facture_et_lignes(conn, facture_id)
     return {
         "prediction": summary,
-        "facture": {**(repo.get_alert_invoice(conn, facture_id) or facture or {}), "lignes": lignes},
+        "facture": {**(facture or {}), "lignes": lignes},
         "shap": shap["valeurs"] if shap else None,
         "codes_fraude": sorted(set(codes)),
         "regles": rules,
         "decisions": repo.list_decisions(conn, pred["prediction_id"]),
         "lignes": lignes,
-        "historique_prestataire": (
-            repo.historique_prestataire(conn, facture["prestataire_id"], facture_id)
-            if facture else []
-        ),
         "historique_prestataire": (
             repo.historique_prestataire(conn, facture["prestataire_id"], facture_id)
             if facture else []
