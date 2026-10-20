@@ -1,13 +1,13 @@
 """Add authenticated chat history and provider-scoped RAG access.
 
 Revision ID: 0010_chat_api_and_provider_scope
-Revises: 0009_bi_decision_alignment, 0004_users_and_roles, 0006_login_roles
+Revises: 0009_bi_decision_alignment, 0006_login_roles
 """
 from alembic import op
 
 
 revision = "0010_chat_api_and_provider_scope"
-down_revision = ("0009_bi_decision_alignment", "0004_users_and_roles", "0006_login_roles")
+down_revision = ("0009_bi_decision_alignment", "0006_login_roles")
 branch_labels = None
 depends_on = None
 

@@ -27,8 +27,49 @@ def _pred_cols() -> dict:
     }
 
 
+def _decision_cte() -> str:
+    inspector = sa.inspect(op.get_bind())
+    tables = set(inspector.get_table_names())
+    table = next(
+        (name for name in ("decisions_gestionnaires", "decisions_gestionnaire")
+         if name in tables),
+        None,
+    )
+    if table is None:
+        return """
+        dec AS (
+            SELECT NULL::TEXT AS facture_id, NULL::BIGINT AS prediction_id,
+                   NULL::TEXT AS decision, NULL::TIMESTAMPTZ AS decided_at,
+                   NULL::BIGINT AS decision_id
+            WHERE FALSE
+        )
+        """
+
+    cols = {c["name"] for c in inspector.get_columns(table)}
+    if "prediction_id" not in cols:
+        return """
+        dec AS (
+            SELECT NULL::TEXT AS facture_id, NULL::BIGINT AS prediction_id,
+                   NULL::TEXT AS decision, NULL::TIMESTAMPTZ AS decided_at,
+                   NULL::BIGINT AS decision_id
+            WHERE FALSE
+        )
+        """
+    date_col = next(name for name in ("decided_at", "date_decision") if name in cols)
+    return f"""
+    dec AS (
+        SELECT DISTINCT ON (prediction_id)
+               facture_id, prediction_id,
+               decision, "{date_col}" AS decided_at, decision_id
+        FROM "{table}"
+        ORDER BY prediction_id, "{date_col}" DESC, decision_id DESC
+    )
+    """
+
+
 def upgrade() -> None:
     c = _pred_cols()
+    decisions = _decision_cte()
     op.execute(f"""
     CREATE OR REPLACE VIEW v_bi_factures AS
     WITH pred AS (
@@ -41,12 +82,7 @@ def upgrade() -> None:
         FROM predictions
         ORDER BY facture_id, "{c['created']}" DESC, prediction_id DESC
     ),
-    dec AS (
-        SELECT DISTINCT ON (prediction_id)
-               prediction_id, decision, decided_at, decision_id
-        FROM decisions_gestionnaires
-        ORDER BY prediction_id, decided_at DESC, decision_id DESC
-    )
+    {decisions}
     SELECT f.facture_id,
            f.date_facture,
            f.type_facture,
@@ -72,6 +108,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     c = _pred_cols()
+    decisions = _decision_cte()
     op.execute(f"""
     CREATE OR REPLACE VIEW v_bi_factures AS
     WITH pred AS (
@@ -83,12 +120,7 @@ def downgrade() -> None:
         FROM predictions
         ORDER BY facture_id, "{c['created']}" DESC, prediction_id DESC
     ),
-    dec AS (
-        SELECT DISTINCT ON (facture_id)
-               facture_id, decision, decided_at, decision_id
-        FROM decisions_gestionnaires
-        ORDER BY facture_id, decided_at DESC, decision_id DESC
-    )
+    {decisions}
     SELECT f.facture_id,
            f.date_facture,
            f.type_facture,

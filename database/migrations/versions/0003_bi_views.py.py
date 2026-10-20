@@ -4,6 +4,7 @@ Revision ID: 0003_bi_views
 Revises: 0002_app_tables
 """
 from alembic import op
+import sqlalchemy as sa
 
 revision = "0003_bi_views"
 down_revision = "0003_foreign_keys"
@@ -11,21 +12,62 @@ branch_labels = None
 depends_on = None
 
 
+def _pred_cols() -> dict:
+    cols = {c["name"] for c in sa.inspect(op.get_bind()).get_columns("predictions")}
+
+    def pick(*names):
+        return next(name for name in names if name in cols)
+
+    return {
+        "alert": pick("is_alert", "est_alerte"),
+        "version": pick("model_version", "version_modele"),
+        "created": pick("created_at", "date"),
+    }
+
+
+def _decision_cte() -> str:
+    inspector = sa.inspect(op.get_bind())
+    tables = set(inspector.get_table_names())
+    table = next(
+        (name for name in ("decisions_gestionnaires", "decisions_gestionnaire")
+         if name in tables),
+        None,
+    )
+    if table is None:
+        return """
+        dec AS (
+            SELECT NULL::TEXT AS facture_id, NULL::TEXT AS decision,
+                   NULL::TIMESTAMPTZ AS decided_at, NULL::BIGINT AS decision_id
+            WHERE FALSE
+        )
+        """
+
+    cols = {c["name"] for c in inspector.get_columns(table)}
+    date_col = next(name for name in ("decided_at", "date_decision") if name in cols)
+    return f"""
+    dec AS (
+        SELECT DISTINCT ON (facture_id)
+               facture_id, decision, "{date_col}" AS decided_at, decision_id
+        FROM "{table}"
+        ORDER BY facture_id, "{date_col}" DESC, decision_id DESC
+    )
+    """
+
+
 def upgrade():
-    op.execute("""
+    c = _pred_cols()
+    decisions = _decision_cte()
+    op.execute(f"""
     CREATE VIEW v_bi_factures AS
     WITH pred AS (
         SELECT DISTINCT ON (facture_id)
-               facture_id, score, threshold, is_alert, model_version
+               facture_id, score,
+               "{c['alert']}" AS is_alert,
+               "{c['version']}" AS model_version
         FROM predictions
-        ORDER BY facture_id, created_at DESC
+        ORDER BY facture_id, "{c['created']}" DESC, prediction_id DESC
     ),
-    dec AS (
-        SELECT DISTINCT ON (facture_id)
-               facture_id, decision, decided_at
-        FROM decisions_gestionnaires
-        ORDER BY facture_id, decided_at DESC
-    )
+    {decisions}
     SELECT f.facture_id,
            f.date_facture,
            f.type_facture,
