@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Receipt, Search, FileText } from 'lucide-react';
-import { Card, Badge, Button, Drawer, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
+import { Card, Badge, Drawer, Skeleton, ErrorState, EmptyState, Input, ListPagination } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatMGA, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
@@ -21,8 +21,8 @@ export function ProviderInvoicesPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selected, setSelected] = useState<Invoice | null>(null);
-  const perPage = 10;
 
   const load = () => {
     setLoading(true);
@@ -39,8 +39,7 @@ export function ProviderInvoicesPage() {
     inv.id.toLowerCase().includes(search.toLowerCase()) ||
     (inv.insured_pseudo || '').toLowerCase().includes(search.toLowerCase())
   );
-  const paginated = filtered.slice((page - 1) * perPage, page * perPage);
-  const totalPages = Math.ceil(filtered.length / perPage);
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-6">
@@ -121,16 +120,14 @@ export function ProviderInvoicesPage() {
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 ">
-            <p className="text-xs text-surface-400">
-              {filtered.length} facture{filtered.length > 1 ? 's' : ''} · Page {page}/{totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Précédent</Button>
-              <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Suivant</Button>
-            </div>
-          </div>
+        {filtered.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
         )}
       </Card>
 

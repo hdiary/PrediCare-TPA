@@ -70,6 +70,11 @@ class UserRowOut(BaseModel):
     last_login: str | None = None
 
 
+class UserPageOut(BaseModel):
+    items: list[UserRowOut]
+    total: int
+
+
 class UserCreatedOut(UserRowOut):
     mot_de_passe_provisoire: str
     email_envoye: bool

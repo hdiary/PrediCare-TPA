@@ -25,6 +25,7 @@ import type {
   AuditLogEntry,
   AdminSettings,
   Conversation,
+  InvoicePrescription,
   InvoiceSubmissionResult,
   UserRow,
   PrescriptionAlert,
@@ -152,6 +153,8 @@ interface ApiUser {
   assure_id?: string | null; prestataire_id?: string | null;
 }
 
+type AdminRole = "assure" | "professionnel_sante" | "gestionnaire" | "administrateur";
+
 const ROLE_FROM_API: Record<string, Role> = {
   assure: "insured",
   professionnel_sante: "provider",
@@ -159,6 +162,12 @@ const ROLE_FROM_API: Record<string, Role> = {
   administrateur: "admin",
 };
 const ROLE_PREFIX: Record<Role, string> = { insured: "ASS", provider: "PDS", manager: "GES", admin: "ADM" };
+const ROLE_TO_API: Record<Role, AdminRole> = {
+  insured: "assure",
+  provider: "professionnel_sante",
+  manager: "gestionnaire",
+  admin: "administrateur",
+};
 
 /** Le frontend affiche un pseudonyme : identifiant métier si le compte en a un, sinon RÔLE-numéro. */
 function mapUser(u: ApiUser): { role: Role; display_name: string; pseudonym: string; email: string } {
@@ -759,16 +768,55 @@ export const api = {
     return settings;
   },
 
-  async getUsers(): Promise<UserRow[]> {
+  async getUsers(filters: {
+    role?: Role | "all";
+    status?: "active" | "inactive" | "all";
+    search?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ items: UserRow[]; total: number }> {
     if (isMock("users")) {
       await delay(300);
-      return mockUserRows;
+      let items = [...mockUserRows];
+      if (filters.role && filters.role !== "all") items = items.filter((user) => user.role === filters.role);
+      if (filters.status && filters.status !== "all") items = items.filter((user) => user.status === filters.status);
+      if (filters.search) {
+        const term = filters.search.toLowerCase();
+        items = items.filter((user) => [user.pseudonym, user.display_name, user.email ?? ""]
+          .some((value) => value.toLowerCase().includes(term)));
+      }
+      const limit = filters.limit ?? 25;
+      const offset = filters.offset ?? 0;
+      return { items: items.slice(offset, offset + limit), total: items.length };
     }
-    const rows = await request<(ApiUser & { is_active: boolean })[]>("/admin/users");
-    return rows.map((r) => {
-      const u = mapUser(r);
-      return { pseudonym: u.pseudonym, display_name: u.display_name, role: u.role, email: u.email, status: r.is_active ? "active" : "inactive" };
+    const params = new URLSearchParams({
+      limit: String(filters.limit ?? 25),
+      offset: String(filters.offset ?? 0),
     });
+    if (filters.role && filters.role !== "all") params.set("role", ROLE_TO_API[filters.role]);
+    if (filters.status && filters.status !== "all") {
+      params.set("statut", filters.status === "active" ? "actifs" : "inactifs");
+    }
+    if (filters.search?.trim()) params.set("q", filters.search.trim());
+    const page = await request<{ items: (ApiUser & { is_active: boolean })[]; total: number }>(
+      `/admin/users/page?${params}`,
+    );
+    return {
+      total: page.total,
+      items: page.items.map((r) => {
+        const u = mapUser(r);
+        return {
+          user_id: r.user_id,
+          pseudonym: u.pseudonym,
+          display_name: u.display_name,
+          role: u.role,
+          email: u.email,
+          status: r.is_active ? "active" : "inactive",
+          assure_id: r.assure_id,
+          prestataire_id: r.prestataire_id,
+        };
+      }),
+    };
   },
 
   async getUserReferences(): Promise<UserReferences> {
@@ -804,6 +852,29 @@ export const api = {
         status: row.is_active ? "active" : "inactive",
       },
     };
+  },
+
+  async updateUser(userId: number, payload: {
+    role: Role;
+    is_active: boolean;
+    assure_id?: string | null;
+    prestataire_id?: string | null;
+  }): Promise<void> {
+    if (isMock("users")) throw new Error("La modification de comptes nécessite l’API active.");
+    await request(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        role: ROLE_TO_API[payload.role],
+        is_active: payload.is_active,
+        assure_id: payload.assure_id ?? null,
+        prestataire_id: payload.prestataire_id ?? null,
+      }),
+    });
+  },
+
+  async deactivateUser(userId: number): Promise<void> {
+    if (isMock("users")) throw new Error("La désactivation de comptes nécessite l’API active.");
+    await request(`/admin/users/${userId}`, { method: "DELETE" });
   },
 
   async getConversations(): Promise<{ conversations: Conversation[] }> {

@@ -24,6 +24,7 @@ export function Button({
   className = '',
   disabled = false,
   type = 'button',
+  form,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -32,6 +33,7 @@ export function Button({
   className?: string;
   disabled?: boolean;
   type?: 'button' | 'submit';
+  form?: string;
 }) {
   const variants = {
     primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-soft',
@@ -48,6 +50,7 @@ export function Button({
   return (
     <button
       type={type}
+      form={form}
       onClick={onClick}
       disabled={disabled}
       className={`inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
@@ -186,6 +189,55 @@ export function Modal({ open, onClose, title, children, footer }: { open: boolea
             {footer}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function ListPagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+}) {
+  if (total === 0) return null;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const first = (page - 1) * pageSize + 1;
+  const last = Math.min(page * pageSize, total);
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-surface-300/60 px-6 py-4 dark:border-surface-700/60 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-xs text-surface-500 dark:text-surface-400">
+        {first}–{last} sur {total} · Page {page}/{totalPages}
+      </span>
+      <div className="flex items-center justify-between gap-3 sm:justify-end">
+        {onPageSizeChange && (
+          <label className="flex items-center gap-2 text-xs text-surface-500 dark:text-surface-400">
+            Lignes
+            <select
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className="rounded-lg border border-surface-300 bg-white px-2 py-1.5 text-sm text-surface-700 dark:border-surface-600 dark:bg-surface-900 dark:text-surface-200"
+            >
+              {[10, 12, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+        )}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+            Précédent
+          </Button>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+            Suivant
+          </Button>
+        </div>
       </div>
     </div>
   );

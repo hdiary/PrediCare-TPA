@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Receipt, Calendar, Banknote, User, X } from 'lucide-react';
-import { Card, Badge, Button, Drawer, Skeleton, ErrorState, EmptyState } from '@/components/ui';
+import { Receipt, Calendar, Banknote, User } from 'lucide-react';
+import { Card, Badge, Drawer, Skeleton, ErrorState, EmptyState, ListPagination } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatMGA, formatDate, INVOICE_STATUS_LABELS, INVOICE_STATUS_COLORS } from '@/lib/format';
 import type { Invoice } from '@/lib/types';
@@ -20,6 +20,8 @@ export function ReimbursementsPage() {
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<Invoice | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const load = () => {
     setLoading(true);
@@ -31,6 +33,7 @@ export function ReimbursementsPage() {
   };
 
   useEffect(load, [filter]);
+  const paginated = invoices.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="space-y-6">
@@ -44,7 +47,7 @@ export function ReimbursementsPage() {
         {STATUS_FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => setFilter(f.value)}
+            onClick={() => { setFilter(f.value); setPage(1); }}
             className={`px-[18px] py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
               filter === f.value
                 ? 'bg-primary-700 text-white'
@@ -84,7 +87,7 @@ export function ReimbursementsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
-                {invoices.map((inv) => (
+                {paginated.map((inv) => (
                   <tr
                     key={inv.id}
                     onClick={() => setSelected(inv)}
@@ -105,6 +108,15 @@ export function ReimbursementsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && !error && invoices.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={invoices.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
         )}
       </Card>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { GitBranch, CheckCircle2, Archive, ArrowLeftRight, TrendingUp, TrendingDown } from 'lucide-react';
-import { Card, Button, Skeleton, ErrorState, Badge, Modal, Drawer } from '@/components/ui';
+import { Card, Button, Skeleton, ErrorState, Badge, Modal, Drawer, ListPagination } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import { formatDate, formatPercent } from '@/lib/format';
@@ -15,6 +15,8 @@ export function AdminModels() {
   const [activateTarget, setActivateTarget] = useState<ModelVersion | null>(null);
   const [comparePair, setComparePair] = useState<ModelVersion[]>([]);
   const [showCompare, setShowCompare] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const load = () => {
     setLoading(true);
@@ -49,6 +51,7 @@ export function AdminModels() {
       return [...pair, v];
     });
   };
+  const paginatedVersions = versions.slice((page - 1) * pageSize, page * pageSize);
 
   if (loading) return <div className="space-y-5"><Skeleton className="h-16" /><Skeleton className="h-96" /></div>;
   if (error) return <ErrorState message="Impossible de charger les modèles." onRetry={load} />;
@@ -82,7 +85,7 @@ export function AdminModels() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
-              {versions.map((v) => (
+              {paginatedVersions.map((v) => (
                 <tr key={v.version} className="hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
@@ -129,6 +132,15 @@ export function AdminModels() {
             </tbody>
           </table>
         </div>
+        {versions.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={versions.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
+        )}
       </Card>
 
       {/* Activation confirmation */}

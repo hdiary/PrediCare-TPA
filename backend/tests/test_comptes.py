@@ -320,8 +320,17 @@ def test_creation_modification_desactivation(client):
     assert "hash_mot_de_passe" not in u
     assert client.post("/admin/users", headers=admin, json=corps).status_code == 409
 
+    page = client.get("/admin/users/page?limit=1&offset=0", headers=admin)
+    assert page.status_code == 200
+    assert len(page.json()["items"]) == 1
+    assert page.json()["total"] >= 1
+
     # La création d'un compte ne nécessite plus de fiche métier existante.
     base = _account_payload("y@c.mg", cin="923456789012")
+    assert client.post("/admin/users", headers=admin, json={
+        **_account_payload("sans-prestataire@c.mg", cin="323456789012"),
+        "role": "professionnel_sante",
+    }).status_code == 422
     cree_sans_fiche = client.post("/admin/users", headers=admin, json={
         **base, "role": "assure"})
     assert cree_sans_fiche.status_code == 201

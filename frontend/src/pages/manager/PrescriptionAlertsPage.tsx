@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ClipboardList } from 'lucide-react';
-import { Card, Badge, Skeleton, ErrorState, EmptyState, Input, Drawer } from '@/components/ui';
+import { Card, Badge, Skeleton, ErrorState, EmptyState, Input, Drawer, ListPagination } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatDate, PRESCRIPTION_RULES, PRESCRIPTION_SEVERITY } from '@/lib/format';
 import type { PrescriptionAlert } from '@/lib/types';
@@ -26,6 +26,8 @@ export function PrescriptionAlertsPage() {
   const [rule, setRule] = useState('all');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PrescriptionAlert | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const load = () => {
     setLoading(true);
@@ -45,6 +47,7 @@ export function PrescriptionAlertsPage() {
       a.insured_pseudo.toLowerCase().includes(q) ||
       a.detail.toLowerCase().includes(q))
     .sort((a, b) => b.severity - a.severity || b.prescription_date.localeCompare(a.prescription_date));
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const grave = alerts.filter((a) => a.severity === 3).length;
 
@@ -72,14 +75,14 @@ export function PrescriptionAlertsPage() {
         <Input
           placeholder="Rechercher par ordonnance, prescripteur, assuré, détail..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           icon={<Search className="w-4 h-4" />}
         />
         <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
           {RULE_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setRule(f.value)}
+              onClick={() => { setRule(f.value); setPage(1); }}
               className={`px-[18px] py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all ${
                 rule === f.value
                   ? 'bg-primary-700 text-white'
@@ -117,7 +120,7 @@ export function PrescriptionAlertsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
-                {filtered.map((a) => (
+                {paginated.map((a) => (
                   <tr
                     key={a.id}
                     onClick={() => setSelected(a)}
@@ -134,6 +137,15 @@ export function PrescriptionAlertsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && !error && filtered.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
         )}
       </Card>
 

@@ -33,6 +33,7 @@ from api.schemas_admin import (
     StatutCompte,
     UserCreate,
     UserCreatedOut,
+    UserPageOut,
     UserRowOut,
     UserUpdate,
     _controle_rattachement,
@@ -415,6 +416,22 @@ def list_users(
     return [_user_out(r) for r in rows]
 
 
+@router.get("/users/page", response_model=UserPageOut, dependencies=[admin_only])
+def list_users_page(
+    role: Role | None = None,
+    statut: StatutCompte = "tous",
+    q: str | None = Query(None, max_length=100, description="Recherche dans l'adresse e-mail"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    conn=Depends(get_db),
+):
+    """Liste paginée des comptes et nombre total correspondant aux filtres."""
+    actif = {"actifs": True, "inactifs": False, "tous": None}[statut]
+    rows = repo.list_utilisateurs(conn, role=role, actif=actif, q=q, limit=limit, offset=offset)
+    total = repo.count_utilisateurs(conn, role=role, actif=actif, q=q)
+    return {"items": [_user_out(row) for row in rows], "total": total}
+
+
 @router.get("/users/references", dependencies=[admin_only])
 def user_references(conn=Depends(get_db)):
     """Référentiels métier disponibles pour le rattachement des nouveaux comptes."""
@@ -445,6 +462,8 @@ def create_user(
         raise HTTPException(status_code=422, detail="Seul un compte assuré peut être rattaché à un assuré")
     if body.prestataire_id and body.role != "professionnel_sante":
         raise HTTPException(status_code=422, detail="Seul un compte professionnel peut être rattaché à un prestataire")
+    if body.role == "professionnel_sante" and not body.prestataire_id:
+        raise HTTPException(status_code=422, detail="Un compte professionnel doit être rattaché à un prestataire")
     _verifier_references(conn, body.assure_id, body.prestataire_id)
     try:
         identifier = (

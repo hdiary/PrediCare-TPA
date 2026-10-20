@@ -251,11 +251,14 @@ export interface InvoicePrescription {
 }
 
 export interface UserRow {
+  user_id?: number;
   pseudonym: string;
   display_name: string;
   role: Role;
   email: string | null;
   status: 'active' | 'inactive';
+  assure_id?: string | null;
+  prestataire_id?: string | null;
 }
 
 export type AdminAccountRole = 'assure' | 'professionnel_sante' | 'gestionnaire' | 'administrateur';

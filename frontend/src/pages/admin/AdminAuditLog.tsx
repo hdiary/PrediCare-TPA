@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, ScrollText, Download } from 'lucide-react';
-import { Card, Button, Skeleton, ErrorState, EmptyState, Input } from '@/components/ui';
+import { Card, Button, Skeleton, ErrorState, EmptyState, Input, ListPagination } from '@/components/ui';
 import { api } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useToast } from '@/components/ui/Toast';
@@ -13,6 +13,8 @@ export function AdminAuditLog() {
   const [error, setError] = useState(false);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const ACTIONS = [
     { value: 'all', label: 'Toutes les actions' },
@@ -42,6 +44,7 @@ export function AdminAuditLog() {
       (actionFilter === 'facture' && e.action.toLowerCase().includes('facture'));
     return matchSearch && matchAction;
   });
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const exportCSV = () => {
     const headers = ['Horodatage', 'Acteur', 'Action', 'Objet', 'Version du modèle'];
@@ -74,13 +77,13 @@ export function AdminAuditLog() {
           <Input
             placeholder="Rechercher par acteur, action, objet..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             icon={<Search className="w-4 h-4" />}
           />
         </div>
         <select
           value={actionFilter}
-          onChange={(e) => setActionFilter(e.target.value)}
+          onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
           className="rounded-xl border border-surface-300 dark:border-surface-600 bg-white dark:bg-surface-900 text-surface-700 dark:text-surface-200 px-4 py-2.5 text-sm focus:border-primary-500"
         >
           {ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -113,7 +116,7 @@ export function AdminAuditLog() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
-                {filtered.map((entry, i) => (
+                {paginated.map((entry, i) => (
                   <tr key={i} className="hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors">
                     <td className="px-6 py-3.5 text-sm text-surface-500 dark:text-surface-400 tabular-nums whitespace-nowrap">{formatDateTime(entry.ts)}</td>
                     <td className="px-6 py-3.5 text-sm font-mono text-surface-600 dark:text-surface-300">{entry.actor_pseudo}</td>
@@ -125,6 +128,15 @@ export function AdminAuditLog() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && !error && filtered.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
         )}
       </Card>
     </div>

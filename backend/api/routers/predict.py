@@ -267,38 +267,6 @@ def predict(
                     "latence_ms": latence_ms,
                 },
             )
-        repo.insert_facture(conn, clean, today_mg())
-        prediction_id = repo.insert_prediction(
-            conn,
-            facture_id=clean["facture_id"],
-            nom_modele=bundle.name,
-            version_modele=bundle.version,
-            score=result["score"],
-            seuil=seuil,
-            est_alerte=is_alert,
-            latence_ms=latence_ms,
-            variables=result["variables"],
-            soumis_par=user["user_id"],
-        )
-        repo.insert_shap(conn, prediction_id, clean["facture_id"], result["shap_complet"])
-        write_audit(
-            conn,
-            event_type="prediction",
-            actor_id=user["user_id"],
-            entity_type="facture",
-            entity_id=clean["facture_id"],
-            model_name=bundle.name,
-            model_version=bundle.version,
-            input_data=clean,
-            output_data={
-                "prediction_id": prediction_id,
-                "score": result["score"],
-                "seuil": seuil,
-                "is_alert": is_alert,
-                "shap": result["shap"],
-                "latence_ms": latence_ms,
-            },
-        )
     except psycopg.errors.UniqueViolation as exc:   # deux envois simultanés du même facture_id
         raise HTTPException(status_code=409, detail="Facture déjà enregistrée") from exc
 

@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button, Card, Input, Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
-import type { AdminUserCreatePayload, CreatedUserCredentials } from '@/lib/types';
+import type { AdminUserCreatePayload, CreatedUserCredentials, UserReferences } from '@/lib/types';
 
 const EMPTY_FORM: AdminUserCreatePayload = {
   role: 'assure',
@@ -24,6 +24,15 @@ export function AdminUserCreatePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<CreatedUserCredentials | null>(null);
+  const [references, setReferences] = useState<UserReferences | null>(null);
+  const [referencesError, setReferencesError] = useState('');
+
+  useEffect(() => {
+    if (form.role !== 'professionnel_sante' || references) return;
+    api.getUserReferences()
+      .then(setReferences)
+      .catch((cause) => setReferencesError(cause instanceof Error ? cause.message : 'Impossible de charger les prestataires.'));
+  }, [form.role, references]);
 
   const updateForm = <K extends keyof AdminUserCreatePayload>(
     key: K,
@@ -93,7 +102,7 @@ export function AdminUserCreatePage() {
         </Button>
         <h2 className="mt-5 text-xl font-bold text-surface-800 dark:text-surface-100">Créer un utilisateur</h2>
         <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
-          Crée un nouveau compte, sans exiger de fiche assuré ou prestataire existante.
+          Crée un compte utilisateur avec son rôle et, pour un professionnel de santé, son prestataire de rattachement.
         </p>
       </div>
 
@@ -110,7 +119,10 @@ export function AdminUserCreatePage() {
               <select
                 required
                 value={form.role}
-                onChange={(event) => updateForm('role', event.target.value as AdminUserCreatePayload['role'])}
+                onChange={(event) => {
+                  const role = event.target.value as AdminUserCreatePayload['role'];
+                  setForm((current) => ({ ...current, role, prestataire_id: undefined }));
+                }}
                 className="mt-2 h-11 w-full rounded-xl border border-surface-300 bg-white px-3.5 text-sm text-surface-800 dark:border-surface-600 dark:bg-surface-900 dark:text-surface-100"
               >
                 <option value="assure">Assuré</option>
@@ -119,6 +131,28 @@ export function AdminUserCreatePage() {
                 <option value="administrateur">Administrateur</option>
               </select>
             </label>
+            {form.role === 'professionnel_sante' && (
+              <label className="block text-sm font-medium text-surface-700 dark:text-surface-200">
+                Prestataire de rattachement *
+                <select
+                  required
+                  value={form.prestataire_id ?? ''}
+                  onChange={(event) => updateForm('prestataire_id', event.target.value || undefined)}
+                  className="mt-2 h-11 w-full rounded-xl border border-surface-300 bg-white px-3.5 text-sm text-surface-800 dark:border-surface-600 dark:bg-surface-900 dark:text-surface-100"
+                >
+                  <option value="">Sélectionner un prestataire</option>
+                  {(references?.prestataires ?? []).map((prestataire) => (
+                    <option key={prestataire.prestataire_id} value={prestataire.prestataire_id}>
+                      {prestataire.nom} — {prestataire.ville} ({prestataire.prestataire_id})
+                    </option>
+                  ))}
+                </select>
+                {referencesError && <span role="alert" className="mt-1 block text-xs text-danger-600">{referencesError}</span>}
+                {references && references.prestataires.length === 0 && (
+                  <span role="alert" className="mt-1 block text-xs text-danger-600">Aucun prestataire actif disponible.</span>
+                )}
+              </label>
+            )}
             <label className="block text-sm font-medium text-surface-700 dark:text-surface-200">
               Sexe *
               <select

@@ -423,6 +423,27 @@ def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | No
     ).fetchall()
 
 
+def count_utilisateurs(conn, *, role: str | None, actif: bool | None,
+                       q: str | None) -> int:
+    clauses = []
+    params = []
+    if role is not None:
+        clauses.append("r.nom_role = %s")
+        params.append(role)
+    if actif is not None:
+        clauses.append("u.est_actif = %s")
+        params.append(actif)
+    if q:
+        clauses.append("(u.nom_utilisateur ILIKE %s OR u.identifiant ILIKE %s)")
+        params.extend((f"%{q}%", f"%{q}%"))
+    where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+    row = conn.execute(
+        f"SELECT count(*) AS total {_USER_FROM} {where}",
+        params,
+    ).fetchone()
+    return row["total"]
+
+
 def get_utilisateur(conn, user_id: int) -> dict | None:
     return conn.execute(
         f"SELECT {_USER_SELECT} {_USER_FROM} WHERE u.utilisateur_id = %s", (user_id,)

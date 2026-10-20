@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Search } from 'lucide-react';
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Skeleton } from '@/components/ui';
+import { Badge, Card, EmptyState, ErrorState, Input, ListPagination, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { Alert } from '@/lib/types';
 import { ALERT_STATUS_COLORS, ALERT_STATUS_LABELS, ALERT_TYPE_LABELS, formatDate, formatMGA, riskColor } from '@/lib/format';
@@ -25,7 +25,7 @@ export function AlertsListPage() {
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(1);
-  const perPage = 12;
+  const [pageSize, setPageSize] = useState(12);
 
   const load = () => {
     setLoading(true);
@@ -52,8 +52,7 @@ export function AlertsListPage() {
     return sortAsc ? comparison : -comparison;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  const paginated = filtered.slice((page - 1) * perPage, page * perPage);
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortAsc(!sortAsc);
     else { setSortField(field); setSortAsc(false); }
@@ -95,7 +94,15 @@ export function AlertsListPage() {
               <td className="px-6 py-4 text-sm">{formatDate(alert.created_at)}</td><td className="px-6 py-4"><Badge className={ALERT_STATUS_COLORS[alert.status]}>{ALERT_STATUS_LABELS[alert.status]}</Badge></td>
             </tr>)}
           </tbody></table></div>}
-        {totalPages > 1 && <div className="flex items-center justify-between px-6 py-4"><span className="text-xs text-surface-400">{filtered.length} alerte(s) · Page {page}/{totalPages}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Précédent</Button><Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Suivant</Button></div></div>}
+        {!loading && !error && filtered.length > 0 && (
+          <ListPagination
+            page={page}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          />
+        )}
       </Card>
     </div>
   );
