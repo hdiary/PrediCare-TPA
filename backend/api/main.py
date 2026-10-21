@@ -1,4 +1,5 @@
 """Point d'entrée FastAPI de PrediCare TPA."""
+import asyncio
 import logging
 import threading
 from contextlib import asynccontextmanager
@@ -7,6 +8,8 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from psycopg import Error as PsycopgError
+from psycopg_pool import PoolTimeout
 
 from api import db
 from api.bootstrap import ensure_demo_users, ensure_seed_users, ensure_user_identifiers
@@ -16,12 +19,48 @@ from api.services.metrics import http_metrics
 from api.logging_config import configure_logging
 from api.middleware import BodySizeLimitMiddleware
 from api.routers import invoices
+from api.services.chat_security import (
+    ChatEncryptionUnavailableError,
+    purge_expired_chat_history,
+    secure_existing_chat_history,
+)
 from api.services.model_registry import ModelUnavailableError, registry
 from api.validation import InvoiceRejected
 from api.v1.router import router as api_v1_router
 
 configure_logging()
 logger = logging.getLogger("predicare")
+
+
+def _secure_chat_history() -> tuple[int, int]:
+    pool = db.get_pool()
+    if pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    with pool.connection(timeout=5) as conn:
+        return secure_existing_chat_history(conn)
+
+
+def _purge_chat_history() -> tuple[int, int]:
+    pool = db.get_pool()
+    if pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    with pool.connection(timeout=5) as conn:
+        return purge_expired_chat_history(conn)
+
+
+async def _chat_retention_worker() -> None:
+    while True:
+        await asyncio.sleep(24 * 60 * 60)
+        try:
+            messages, redacted_titles, conversations = await asyncio.to_thread(
+                _purge_chat_history)
+            logger.info(
+                "chat_history_retention messages_deleted=%s "
+                "titles_redacted=%s "
+                "conversations_deleted=%s",
+                messages, redacted_titles, conversations)
+        except (PsycopgError, PoolTimeout, RuntimeError):
+            logger.exception("chat_history_retention_failed")
 
 
 def _initial_model_load() -> None:
@@ -47,6 +86,18 @@ async def lifespan(_: FastAPI):
     ensure_demo_users()
     ensure_seed_users()
     ensure_user_identifiers()
+    await asyncio.to_thread(_purge_chat_history)
+    try:
+        conversations, messages = await asyncio.to_thread(
+            _secure_chat_history)
+        logger.info(
+            "chat_history_encryption_backfill conversations=%s messages=%s",
+            conversations, messages)
+    except ChatEncryptionUnavailableError:
+        logger.error(
+            "chat_history_disabled: configure CHAT_ENCRYPTION_KEY "
+            "to enable encrypted history")
+    retention_task = asyncio.create_task(_chat_retention_worker())
     app.state.rag_agent = None
     try:
         from rag.factory import create_agent
@@ -57,6 +108,11 @@ async def lifespan(_: FastAPI):
     # En arrière-plan : un MLflow lent ou absent ne doit pas retarder le démarrage de l'API
     threading.Thread(target=_initial_model_load, daemon=True).start()
     yield
+    retention_task.cancel()
+    try:
+        await retention_task
+    except asyncio.CancelledError:
+        pass
     rag_agent = getattr(app.state, "rag_agent", None)
     if rag_agent is not None:
         rag_agent.retriever.engine.dispose()

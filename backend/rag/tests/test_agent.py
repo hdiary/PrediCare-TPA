@@ -94,6 +94,7 @@ class RagAgentToolTests(unittest.TestCase):
 
         with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
             toolkit_class.is_contract_status_question.return_value = True
+            toolkit_class.claim_date_needs_year.return_value = False
             response = agent.answer(
                 "Quel est le statut de mon contrat ?",
                 contract_id="CTR-000003",
@@ -182,6 +183,33 @@ class RagAgentToolTests(unittest.TestCase):
         llm.complete_with_tools.assert_not_called()
         audit.write.assert_called_once()
 
+    def test_claim_date_without_year_requests_clarification_without_llm(self):
+        embeddings = MagicMock()
+        retriever = MagicMock()
+        llm = MagicMock()
+        cache = MagicMock()
+        audit = MagicMock()
+        agent = RagAgent(embeddings, retriever, llm, cache, audit)
+
+        response = agent.answer(
+            "Où en est mon dossier du 12 septembre ?",
+            contract_id="CTR-000615",
+            user_pseudo_id="PROMPT-TEST",
+            role="assure",
+            assure_id="ASS-5E8DACD855",
+        )
+
+        self.assertIn("préciser l'année", response.answer)
+        embeddings.embed.assert_not_called()
+        retriever.search.assert_not_called()
+        llm.complete_with_tools.assert_not_called()
+        cache.get.assert_not_called()
+        cache.put.assert_not_called()
+        self.assertEqual(
+            audit.write.call_args.kwargs["tools_used"],
+            ["claim_date_year_required"],
+        )
+
     def test_claim_status_uses_deterministic_tool_without_llm_or_cache(self):
         embeddings = MagicMock()
         retriever = MagicMock()
@@ -195,6 +223,7 @@ class RagAgentToolTests(unittest.TestCase):
 
         with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
             toolkit_class.is_contract_status_question.return_value = False
+            toolkit_class.claim_date_needs_year.return_value = False
             response = agent.answer(
                 "Liste mes dernières factures avec leur date de réception et leur statut.",
                 contract_id="CTR-000048",
@@ -231,6 +260,7 @@ class RagAgentToolTests(unittest.TestCase):
 
         with patch("rag.agent.AgentToolkit", return_value=toolkit) as toolkit_class:
             toolkit_class.is_contract_status_question.return_value = False
+            toolkit_class.claim_date_needs_year.return_value = False
             toolkit_class.is_claim_question.return_value = True
             toolkit_class.is_reimbursement_total_question.return_value = False
             toolkit_class.is_claim_status_question.return_value = True

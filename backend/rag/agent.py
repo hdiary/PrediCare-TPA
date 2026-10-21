@@ -121,6 +121,17 @@ class RagAgent:
                 started_at=started_at)
             return response
 
+        if claim_question and AgentToolkit.claim_date_needs_year(question):
+            answer = (
+                "Pour rechercher ce dossier, pouvez-vous préciser l'année "
+                "de la date mentionnée ?")
+            self.audit.write(
+                user_pseudo_id=user_pseudo_id, role=role, question=question,
+                tools_used=["claim_date_year_required"], cache_hit=False,
+                blocked=False, block_reason=None, tokens_in=0, tokens_out=0,
+                started_at=started_at)
+            return ChatResponse(answer, [])
+
         if (prestataire_id
                 and AgentToolkit.is_reimbursement_total_question(question)):
             response = ChatResponse(

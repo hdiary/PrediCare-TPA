@@ -10,6 +10,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from api.db import get_db
 from api.deps import get_current_user
+from api.services.chat_security import (
+    ChatEncryptionUnavailableError,
+    decrypt_sources,
+    decrypt_text,
+    encrypt_sources,
+    encrypt_text,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -41,6 +48,17 @@ def _require_chat_role(user: dict) -> None:
         )
 
 
+def _require_chat_encryption() -> None:
+    try:
+        encrypt_text("")
+    except ChatEncryptionUnavailableError as exc:
+        logger.error("chat_encryption_unavailable reason=%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="L'historique sécurisé est temporairement indisponible",
+        ) from exc
+
+
 def _conversation_messages(conn, conversation_ids: list[UUID]) -> dict[str, list[dict]]:
     if not conversation_ids:
         return {}
@@ -58,9 +76,9 @@ def _conversation_messages(conn, conversation_ids: list[UUID]) -> dict[str, list
         messages.append({
             "id": str(row["id"]),
             "role": row["role"],
-            "content": row["content"],
+            "content": decrypt_text(row["content"]),
             "timestamp": row["created_at"].isoformat(),
-            "sources": row["sources"] or [],
+            "sources": decrypt_sources(row["sources"]),
             "feedback": None,
         })
     for messages in result.values():
@@ -74,28 +92,40 @@ def history(
     conn=Depends(get_db),
 ):
     _require_chat_role(user)
-    conversations = conn.execute(
-        "SELECT id, title, updated_at, "
-        "(SELECT content FROM chat_messages m "
-        " WHERE m.conversation_id = c.id "
-        " ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message "
-        "FROM chat_conversations c WHERE user_id = %s "
-        "ORDER BY updated_at DESC LIMIT %s",
-        (user["user_id"], _HISTORY_LIMIT),
-    ).fetchall()
-    conversation_ids = [row["id"] for row in conversations]
-    messages = _conversation_messages(conn, conversation_ids)
-    return {
-        "conversations": [
+    _require_chat_encryption()
+    try:
+        conversations = conn.execute(
+            "SELECT id, title, updated_at, "
+            "(SELECT content FROM chat_messages m "
+            " WHERE m.conversation_id = c.id "
+            " ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message "
+            "FROM chat_conversations c WHERE user_id = %s "
+            "ORDER BY updated_at DESC LIMIT %s",
+            (user["user_id"], _HISTORY_LIMIT),
+        ).fetchall()
+        conversation_ids = [row["id"] for row in conversations]
+        messages = _conversation_messages(conn, conversation_ids)
+        output = [
             {
                 "id": str(row["id"]),
-                "title": row["title"],
-                "last_message": row["last_message"] or "",
+                "title": decrypt_text(row["title"]),
+                "last_message": (
+                    decrypt_text(row["last_message"])
+                    if row["last_message"] else ""
+                ),
                 "updated_at": row["updated_at"].isoformat(),
                 "messages": messages[str(row["id"])],
             }
             for row in conversations
         ]
+    except ChatEncryptionUnavailableError as exc:
+        logger.error("chat_history_decryption_failed reason=%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="L'historique sécurisé est temporairement indisponible",
+        ) from exc
+    return {
+        "conversations": output
     }
 
 
@@ -155,6 +185,7 @@ def send_message(
     conn=Depends(get_db),
 ):
     _require_chat_role(user)
+    _require_chat_encryption()
 
     if body.conversation_id:
         existing = conn.execute(
@@ -220,7 +251,7 @@ def send_message(
     sources = [_source_output(source) for source in result.sources]
     user_message_id = uuid4()
     assistant_message_id = uuid4()
-    title = body.message[:80]
+    title = encrypt_text(body.message[:80])
     with conn.transaction():
         if not body.conversation_id:
             conn.execute(
@@ -231,12 +262,14 @@ def send_message(
         conn.execute(
             "INSERT INTO chat_messages "
             "(id, conversation_id, role, content, sources) "
-            "VALUES (%s, %s, 'user', %s, '[]'::jsonb), "
+            "VALUES (%s, %s, 'user', %s, %s), "
             "(%s, %s, 'assistant', %s, %s)",
             (
-                user_message_id, conversation_id, body.message,
-                assistant_message_id, conversation_id, result.answer,
-                Jsonb(sources),
+                user_message_id, conversation_id, encrypt_text(body.message),
+                Jsonb(encrypt_sources([])),
+                assistant_message_id, conversation_id,
+                encrypt_text(result.answer),
+                Jsonb(encrypt_sources(sources)),
             ),
         )
         conn.execute(

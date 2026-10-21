@@ -138,6 +138,21 @@ et le contrat ne sont jamais acceptés dans le corps de la requête : l'API les
 résout depuis le compte actif en base. L'historique est conservé par compte et
 une conversation ne peut être lue ou prolongée que par son propriétaire.
 
+Les titres, messages et sources de l'historique sont chiffrés côté API avec
+`CHAT_ENCRYPTION_KEY`, une clé Fernet dédiée distincte de la clé des identités.
+Générez-la avec
+`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+et configurez-la dans `.env` avant d'activer le chat réel. La clé doit rester
+identique entre redémarrages et être sauvegardée de façon sécurisée : sans elle,
+l'historique chiffré ne peut pas être déchiffré. Si elle est absente ou invalide,
+les routes de chat renvoient une erreur de service plutôt que de stocker des
+données en clair. Au démarrage, l'API chiffre également les anciennes lignes.
+
+Les messages sont supprimés après 180 jours, les titres sont anonymisés à cette
+échéance et les conversations inactives sont supprimées. Le nettoyage est lancé
+au démarrage de l'API puis quotidiennement. Les sauvegardes de la base doivent
+également rester chiffrées et protégées séparément.
+
 Pour démarrer l'interface intégrée, l'API et la base avec Docker Compose :
 
 ```powershell

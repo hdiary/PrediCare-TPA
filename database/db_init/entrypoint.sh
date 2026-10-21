@@ -37,6 +37,8 @@ echo "[db-init] configuring the RAG agent database role..."
 python configure_agent_role.py
 
 if python load.py --is-initialised; then
+# if python load.py --is-initialised --include-operational-data; then
+
     echo "[db-init] database already loaded, nothing to do."
     exit 0
 fi

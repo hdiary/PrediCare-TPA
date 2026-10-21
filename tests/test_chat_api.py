@@ -3,11 +3,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from api.db import get_db
 from api.deps import get_current_user
 from api.main import app
+from api.services import chat_security
 
 
 class FakeConn:
@@ -67,6 +69,12 @@ class FakeAgent:
 
 @pytest.fixture
 def chat_client(monkeypatch):
+    chat_key = Fernet.generate_key().decode("ascii")
+    monkeypatch.setattr(
+        chat_security,
+        "get_settings",
+        lambda: SimpleNamespace(chat_encryption_key=chat_key),
+    )
     user = {
         "user_id": 42,
         "role": "assure",
@@ -104,7 +112,26 @@ def test_chat_uses_authenticated_assured_and_returns_sources(chat_client):
         "prestataire_id": None,
     }
     assert any("INSERT INTO chat_conversations" in sql for sql, _ in conn.calls)
+    _, conversation_params = next(
+        (sql, params) for sql, params in conn.calls
+        if "INSERT INTO chat_conversations" in sql
+    )
+    assert chat_security.decrypt_text(conversation_params[2]) == (
+        "Quel est mon plafond ?")
     assert any("INSERT INTO chat_messages" in sql for sql, _ in conn.calls)
+    _, message_params = next(
+        (sql, params) for sql, params in conn.calls
+        if "INSERT INTO chat_messages" in sql
+    )
+    assert chat_security.decrypt_text(message_params[2]) == (
+        "Quel est mon plafond ?")
+    assert chat_security.decrypt_sources(message_params[3].obj) == []
+    assert chat_security.decrypt_text(message_params[6]) == "Réponse factuelle."
+    assert chat_security.decrypt_sources(message_params[7].obj) == [{
+        "document": "contrat.pdf",
+        "page": 3,
+        "excerpt": "Article 5",
+    }]
 
 
 def test_chat_rejects_client_supplied_identity_and_role(chat_client):

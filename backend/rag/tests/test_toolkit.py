@@ -270,6 +270,16 @@ def test_question_routing(question, expect_shortcut, expected_type):
         f"{question!r}: shortcut={shortcut}, expected={expect_shortcut}")
 
 
+@pytest.mark.parametrize(("question", "needs_year"), [
+    ("Où en est mon dossier du 12 septembre ?", True),
+    ("Où en est mon dossier du 12 septembre 2026 ?", False),
+    ("Où en est mon dossier du 12/09 ?", True),
+    ("Où en est mon dossier du 12/09/2026 ?", False),
+])
+def test_claim_date_year_detection(question, needs_year):
+    assert AgentToolkit.claim_date_needs_year(question) is needs_year
+
+
 def test_total_question_uses_aggregate_tool_not_recent_claim_shortcut():
     question = "Combien m'a-t-on remboursé ?"
     toolkit, _, _ = make_toolkit()

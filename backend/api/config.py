@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     # Déchiffrement des identités (Fernet) : réservé à l'affichage d'une alerte
     identity_encryption_key: str | None = None
     identity_key_version: int = 1
+    chat_encryption_key: str | None = None
 
     # E-mails transactionnels
     smtp_host: str | None = None

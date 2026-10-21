@@ -29,6 +29,13 @@ _CLAIM_FILTER = re.compile(
     r"|\b[0-9]{1,2}\s+(?:janvier|f[eé]vrier|mars|avril|mai|juin|"
     r"juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\b",
     re.IGNORECASE)
+_CLAIM_DATE_WITHOUT_YEAR = re.compile(
+    r"\b(?:0?[1-9]|[12][0-9]|3[01])\s+"
+    r"(?:janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|"
+    r"septembre|octobre|novembre|d[eé]cembre)\b(?!\s+\d{4}\b)"
+    r"|\b(?:0?[1-9]|[12][0-9]|3[01])[/-](?:0?[1-9]|1[0-2])\b"
+    r"(?![/-]\d{2,4})",
+    re.IGNORECASE)
 _CLAIM_STATUS_QUESTION = re.compile(
     r"\b(?:o[uù] en (?:est|sont)|statut|avancement|suivi)\b",
     re.IGNORECASE)
@@ -296,6 +303,10 @@ class AgentToolkit:
         return bool(
             _CLAIM_SELF_REFERENCE.search(question)
             or _REIMBURSEMENT_TOTAL_QUESTION.search(question))
+
+    @staticmethod
+    def claim_date_needs_year(question: str) -> bool:
+        return bool(_CLAIM_DATE_WITHOUT_YEAR.search(question))
 
     @staticmethod
     def is_reimbursement_total_question(question: str) -> bool:
