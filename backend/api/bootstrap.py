@@ -70,6 +70,27 @@ def _ensure_user(
     return row["utilisateur_id"]
 
 
+def _resolve_demo_provider_id(conn, provider_name: str | None) -> str | None:
+    if not provider_name:
+        row = conn.execute(
+            "SELECT prestataire_id FROM prestataires ORDER BY prestataire_id LIMIT 1"
+        ).fetchone()
+        return row["prestataire_id"] if row else None
+
+    matches = conn.execute(
+        "SELECT prestataire_id FROM prestataires "
+        "WHERE lower(btrim(nom)) = lower(btrim(%s)) AND statut = 'ACTIF' "
+        "ORDER BY prestataire_id LIMIT 2",
+        (provider_name,),
+    ).fetchall()
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Le prestataire de démonstration {provider_name!r} doit correspondre "
+            f"à une seule fiche active (correspondances: {len(matches)})"
+        )
+    return matches[0]["prestataire_id"]
+
+
 def ensure_identity_users() -> None:
     """Crée les comptes manquants sans remplacer les mots de passe déjà modifiés."""
     pool = get_pool()
@@ -167,9 +188,9 @@ def ensure_demo_users() -> None:
             assure_id = conn.execute(
                 "SELECT assure_id FROM assures ORDER BY assure_id LIMIT 1"
             ).fetchone()
-            prestataire_id = conn.execute(
-                "SELECT prestataire_id FROM prestataires ORDER BY prestataire_id LIMIT 1"
-            ).fetchone()
+            demo_provider_id = _resolve_demo_provider_id(
+                conn, settings.demo_provider_name
+            )
             for username, role in DEMO_USERS:
                 _ensure_user(
                     conn,
@@ -178,8 +199,8 @@ def ensure_demo_users() -> None:
                     role,
                     assure_id=assure_id["assure_id"] if role == "assure" and assure_id else None,
                     prestataire_id=(
-                        prestataire_id["prestataire_id"]
-                        if role == "professionnel_sante" and prestataire_id else None
+                        demo_provider_id
+                        if role == "professionnel_sante" else None
                     ),
                 )
         logger.info("demo_users_ready")

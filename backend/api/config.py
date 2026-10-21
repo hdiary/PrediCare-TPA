@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     # Optional demonstration accounts (created when DEMO_PASSWORD is configured).
     demo_password: str | None = None
+    demo_provider_name: str | None = None
     seed_admin_password: str | None = None
     seed_gestion_password: str | None = None
     seed_pds_password: str | None = None

@@ -210,6 +210,7 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:5173}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
+      DEMO_PROVIDER_NAME: ${DEMO_PROVIDER_NAME:-}
       # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD:-}

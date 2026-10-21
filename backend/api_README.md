@@ -185,6 +185,7 @@ ne modifie que les canaux, le seuil d'alerte et l'indicateur de condition étend
 | `MLFLOW_TRACKING_URI`, `MLFLOW_MODEL_NAME`, `MLFLOW_MODEL_ALIAS` | MLflow | voir `config.py` |
 | `ADMIN_EMAIL`, `ADMIN_INITIAL_PASSWORD` | Compte administrateur initial (créé si le mot de passe est renseigné) | `admin@predicare.local` / vide |
 | `DEMO_PASSWORD` | Mot de passe partagé des comptes démo professionnel, assuré et gestionnaire | vide |
+| `DEMO_PROVIDER_NAME` | Nom exact d'une fiche prestataire active à lier au compte PDS démo | vide (premier identifiant) |
 
 Les comptes démo sont `pro@predicare.local`, `assure@predicare.local` et
 `gestionnaire@predicare.local`. Le compte assuré est lié à un assuré principal
