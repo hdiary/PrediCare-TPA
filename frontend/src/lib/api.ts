@@ -870,7 +870,12 @@ export const api = {
         decided_at: new Date().toISOString(),
       };
     }
-    const fraude = decision === "VALIDER" || decision === "CONFIRMER_FRAUDE";
+    const decisionApi: Record<AlertDecisionValue, string> = {
+      VALIDER: "faux_positif",
+      REJETER: "fraude_confirmee",
+      CONFIRMER_FRAUDE: "fraude_confirmee",
+      ESCALADER: "a_investiguer",
+    };
     const r = await request<{
       facture_id: string;
       decision: string;
@@ -878,10 +883,12 @@ export const api = {
     }>(`/alerts/${encodeURIComponent(id)}/decision`, {
       method: "POST",
       body: JSON.stringify({
-        decision: fraude ? "fraude_confirmee" : "faux_positif",
+        decision: decisionApi[decision],
         commentaire: comment || null,
         montant_economise:
-          fraude && amount !== undefined ? Math.round(amount) : null,
+          decision === "CONFIRMER_FRAUDE" && amount !== undefined
+            ? Math.round(amount)
+            : null,
       }),
     });
     return {

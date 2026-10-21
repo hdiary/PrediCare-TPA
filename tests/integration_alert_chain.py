@@ -106,8 +106,8 @@ def main() -> int:
             "SELECT statut FROM factures WHERE facture_id = %s", (facture_id,)
         ).fetchone()
         decision_row = conn.execute(
-            """SELECT decision FROM decisions_gestionnaires
-               WHERE facture_id = %s ORDER BY decided_at DESC LIMIT 1""",
+            """SELECT decision FROM decisions_gestionnaire
+               WHERE facture_id = %s ORDER BY date_decision DESC LIMIT 1""",
             (facture_id,),
         ).fetchone()
         audit_row = conn.execute(
@@ -121,11 +121,11 @@ def main() -> int:
             (facture_id,),
         ).fetchone()[0]
         assert invoice_status and invoice_status[0] == "REJETEE", invoice_status
-        assert decision_row and decision_row[0] == "CONFIRMER_FRAUDE", decision_row
+        assert decision_row and decision_row[0] == "fraude_confirmee", decision_row
         assert audit_row, "Decision missing from journal_audit"
         assert notification_rows >= 1, "Webhook attempt missing from journal_audit"
 
-    print(f"PASS alert-chain facture={facture_id} webhook={row[3]} attempts={row[4]} audit_attempts={notification_rows} decision=CONFIRMER_FRAUDE")
+    print(f"PASS alert-chain facture={facture_id} webhook={row[3]} attempts={row[4]} audit_attempts={notification_rows} decision=fraude_confirmee")
     return 0
 
 

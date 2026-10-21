@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from api.config import get_settings
 from api.db import get_db
+from api.deps import get_current_user
 from api.main import app
 from api.security import create_access_token
 from api.services.model_registry import ModelBundle, get_registry
@@ -341,8 +342,51 @@ def test_phase6_patch_decision_and_duplicate_conflict(setup):
     first = client.patch(path, headers=headers, json=payload)
     second = client.patch(path, headers=headers, json=payload)
     assert first.status_code == 200
-    assert first.json()["decision"] == "CONFIRMER_FRAUDE"
+    assert first.json()["decision"] == "fraude_confirmee"
     assert second.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "requested,stored,status",
+    [
+        ("VALIDER", "faux_positif", "PAYEE"),
+        ("REJETER", "fraude_confirmee", "REJETEE"),
+        ("CONFIRMER_FRAUDE", "fraude_confirmee", "REJETEE"),
+        ("ESCALADER", "a_investiguer", "EN_COURS"),
+        ("valide", "faux_positif", "PAYEE"),
+        ("rejete", "fraude_confirmee", "REJETEE"),
+        ("fraude_confirmee", "fraude_confirmee", "REJETEE"),
+        ("faux_positif", "faux_positif", "PAYEE"),
+        ("a_investiguer", "a_investiguer", "EN_COURS"),
+    ],
+)
+def test_decision_values_match_database_and_invoice_status(
+    requested, stored, status, monkeypatch
+):
+    conn = FakeConn()
+    monkeypatch.setitem(app.dependency_overrides, get_db, lambda: conn)
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: USERS[3])
+    response = TestClient(app).post(
+        "/alerts/FAC-00000001/decision",
+        json={"decision": requested, "commentaire": "Décision test"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["decision"] == stored
+    decision_call = next(
+        call for call in conn.calls if call[0].startswith("INSERT INTO DECISIONS_GESTIONNAIRE")
+    )
+    assert decision_call[1][3] == stored
+    status_call = next(call for call in conn.calls if call[0].startswith("UPDATE FACTURES SET STATUT"))
+    assert status_call[1][0] == status
+    assert any(
+        "SELECT FACTURE_ID FROM FACTURES" in query and "FOR UPDATE" in query
+        for query, _ in conn.calls
+    )
+    assert not any(
+        "FROM PREDICTIONS WHERE FACTURE_ID" in query and "FOR UPDATE" in query
+        for query, _ in conn.calls
+    )
 
 
 def test_decision_bad_facture_id_422(setup):
