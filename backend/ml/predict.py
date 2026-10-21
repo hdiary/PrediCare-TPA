@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 import registry
+from calibration import calibrated_probability
 
 _ART: dict | None = None
 
@@ -65,6 +66,6 @@ def score(X: pd.DataFrame, seuil: float | None = None) -> pd.DataFrame:
     (réglable en direct depuis l'écran d'administration)."""
     art = load()
     X = validate(X, art)
-    p = art["model"].predict_proba(X)[:, 1]
+    p = calibrated_probability(art["model"], art.get("calibrator"), X)
     s = art["seuil"] if seuil is None else seuil
     return pd.DataFrame({"score": p, "alerte": p >= s, "model_version": version()}, index=X.index)

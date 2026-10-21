@@ -99,3 +99,39 @@ def test_build_features_from_tables_returns_only_the_submitted_invoice(monkeypat
     assert result.iloc[0]["feature"] == 2.0
     assert pd.api.types.is_numeric_dtype(captured_tables["factures"]["montant_total"])
     assert pd.api.types.is_numeric_dtype(captured_tables["lignes_facture"]["prix_unitaire"])
+
+
+def test_build_features_for_invoices_returns_every_requested_row(monkeypatch):
+    first_id = "FAC-90000001"
+    second_id = "FAC-90000002"
+    feature_rows = pd.DataFrame(
+        {"feature": [1.0, 2.0, 3.0]},
+        index=["FAC-HISTORIQUE-1", first_id, second_id],
+    )
+    monkeypatch.setattr(
+        preprocess,
+        "build_training_features",
+        lambda _tables: (feature_rows, pd.DataFrame(index=feature_rows.index)),
+    )
+    tables = {name: pd.DataFrame() for name in preprocess.TABLES}
+    tables["factures"] = pd.DataFrame(columns=["facture_id"])
+    tables["lignes_facture"] = pd.DataFrame(columns=["facture_id"])
+    payloads = []
+    for invoice_id in (first_id, second_id):
+        payloads.append({
+            "facture_id": invoice_id,
+            "numero_facture": f"INV-{invoice_id}",
+            "prestataire_id": "PRE-12345",
+            "assure_id": "ASS-1234567890",
+            "contrat_id": "CTR-123456",
+            "type_facture": "CONSULTATION",
+            "date_soin": "2026-10-20",
+            "heure_soin": "08:00",
+            "devise": "MGA",
+            "montant_total": 2500,
+            "lignes": [],
+        })
+
+    result = preprocess.build_features_for_invoices_from_tables(tables, payloads)
+
+    assert set(result.index) == {first_id, second_id}

@@ -13,6 +13,7 @@ from psycopg.types.json import Jsonb
 from api.config import get_settings
 from api.services.hgb_explainer import HGBPermutationExplainer
 from api.services.model_types import ModelBundle, ModelUnavailableError
+from ml.calibration import calibrated_probability
 
 logger = logging.getLogger(__name__)
 _SEED_DIRECTORY = Path(__file__).resolve().parents[2] / "ml" / "models_seed"
@@ -137,10 +138,10 @@ class ModelRegistry:
                     reference[name] = pd.to_numeric(reference[name], errors="raise").astype(float)
             for name, values in categories.items():
                 reference[name] = pd.Categorical(reference[name], categories=values)
-            probabilities = np.asarray(model.predict_proba(reference), dtype=float)
-            if probabilities.ndim != 2 or probabilities.shape[0] != len(reference):
+            calibrator = artifact.get("calibrator") if isinstance(artifact, dict) else None
+            positive_scores = calibrated_probability(model, calibrator, reference)
+            if positive_scores.ndim != 1 or positive_scores.shape[0] != len(reference):
                 raise ValueError("Le modèle a retourné un score de forme invalide")
-            positive_scores = probabilities[:, -1]
             if not np.isfinite(positive_scores).all() or (
                 (positive_scores < 0) | (positive_scores > 1)
             ).any():
@@ -173,6 +174,7 @@ class ModelRegistry:
             sha256=actual_hash,
             metrics=metrics,
             metadata=metadata,
+            calibrator=calibrator,
         )
 
     def load_active(self, conn, force: bool = False) -> ModelBundle | None:

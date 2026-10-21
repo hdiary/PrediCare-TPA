@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from api.services.model_registry import ModelBundle
+from ml.calibration import calibrated_probability
 
 
 def _py(value):
@@ -17,7 +18,9 @@ def _py(value):
 
 
 def predict_with_explanation(bundle: ModelBundle, features: pd.DataFrame, top_k: int) -> dict:
-    score = float(bundle.model.predict_proba(features)[0][1])
+    score = float(
+        calibrated_probability(bundle.model, bundle.calibrator, features)[0]
+    )
 
     shap_values = bundle.explainer.shap_values(features)
     if isinstance(shap_values, list):      # certains modèles retournent une liste par classe
