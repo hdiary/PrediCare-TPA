@@ -30,6 +30,7 @@ pandas
 pandera>=0.18
 python-dotenv
 joblib
+scikit-learn==1.8.0
 lightgbm
 shap
 
