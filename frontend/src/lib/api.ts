@@ -147,7 +147,9 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 function userFieldLabel(field: string): string {
-  const lineMatch = field.match(/^lignes\[(\d+)\](?:\.(code|type_ligne|quantite|prix_unitaire|montant))?$/);
+  const lineMatch = field.match(
+    /^lignes\[(\d+)\](?:\.(code|type_ligne|quantite|prix_unitaire|montant))?$/,
+  );
   if (lineMatch) {
     const line = `Ligne ${lineMatch[1]}`;
     const detail: Record<string, string> = {
@@ -219,22 +221,42 @@ export function userErrorMessage(error: unknown, fallback: string): string {
       return error.errors
         .map((item) => {
           const label = item.field ? userFieldLabel(item.field) : "";
-          const message = userValidationMessage(item.field, item.message, item.code);
+          const message = userValidationMessage(
+            item.field,
+            item.message,
+            item.code,
+          );
           return label ? `${label} : ${message}` : message;
         })
         .join(" ");
     }
-    if (error.status === 401) return "Identifiant ou mot de passe incorrect, ou accès expiré.";
-    if (error.status === 403) return "Vous ne pouvez pas effectuer cette action avec votre accès actuel.";
-    if (error.status === 429) return "Trop de tentatives. Patientez quelques instants avant de réessayer.";
-    if (error.status >= 500) return "Le service est momentanément indisponible. Réessayez dans quelques instants.";
+    if (error.status === 401)
+      return "Identifiant ou mot de passe incorrect, ou accès expiré.";
+    if (error.status === 403)
+      return "Vous ne pouvez pas effectuer cette action avec votre accès actuel.";
+    if (error.status === 429)
+      return "Trop de tentatives. Patientez quelques instants avant de réessayer.";
+    if (error.status >= 500)
+      return "Le service est momentanément indisponible. Réessayez dans quelques instants.";
     if (/^Erreur \d{3}$/.test(error.message)) return fallback;
-    return error.message.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, "cette information") || fallback;
+    return (
+      error.message.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, "cette information") ||
+      fallback
+    );
   }
-  if (error instanceof TypeError || (error instanceof Error && /failed to fetch|networkerror|load failed/i.test(error.message))) {
+  if (
+    error instanceof TypeError ||
+    (error instanceof Error &&
+      /failed to fetch|networkerror|load failed/i.test(error.message))
+  ) {
     return "Impossible de joindre le service. Vérifiez votre connexion puis réessayez.";
   }
-  if (error instanceof Error && /identifiant ou mot de passe incorrect|email ou mot de passe incorrect/i.test(error.message)) {
+  if (
+    error instanceof Error &&
+    /identifiant ou mot de passe incorrect|email ou mot de passe incorrect/i.test(
+      error.message,
+    )
+  ) {
     return "Identifiant ou mot de passe incorrect.";
   }
   return fallback;
@@ -283,9 +305,12 @@ function parseErrorBody(body: unknown, status: number): ApiError {
       errors.push({ field: field ? userFieldLabel(field) : "", message });
     }
   }
-  const message = typeof b.detail === "string"
-    ? b.detail
-    : errors.length ? "Certaines informations doivent être vérifiées." : `Erreur ${status}`;
+  const message =
+    typeof b.detail === "string"
+      ? b.detail
+      : errors.length
+        ? "Certaines informations doivent être vérifiées."
+        : `Erreur ${status}`;
   return new ApiError(message, status, errors);
 }
 
