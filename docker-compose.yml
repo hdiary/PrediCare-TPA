@@ -249,25 +249,64 @@ services:
       retries: 3
       start_period: 40s
 
+  n8n-db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      PGDATABASE: ${POSTGRES_DB:-predicare}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:-}
+    command:
+      - sh
+      - -ec
+      - |
+        if [ -z "$$N8N_DB_PASSWORD" ]; then
+          echo "N8N_DB_PASSWORD must be set in .env" >&2
+          exit 1
+        fi
+        psql --set ON_ERROR_STOP=1 --set n8n_password="$$N8N_DB_PASSWORD" <<'SQL'
+        SELECT format('CREATE ROLE n8n_alert LOGIN PASSWORD %L', :'n8n_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n_alert') \gexec
+        SELECT format('ALTER ROLE n8n_alert LOGIN PASSWORD %L', :'n8n_password')
+        WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n_alert') \gexec
+        SELECT format('GRANT CONNECT ON DATABASE %I TO n8n_alert', current_database()) \gexec
+        GRANT USAGE ON SCHEMA public TO n8n_alert;
+        GRANT SELECT ON TABLE configuration TO n8n_alert;
+        GRANT INSERT ON TABLE journal_audit TO n8n_alert;
+        GRANT USAGE, SELECT ON SEQUENCE journal_audit_audit_id_seq TO n8n_alert;
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    restart: "no"
+
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
     image: n8nio/n8n:latest # à épingler sur une version précise
     restart: unless-stopped
-    command: [ "start" ]
+    entrypoint: [ "node", "/bootstrap.js" ]
+    command: []
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-predicare}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro # workflows .json à importer
+      - ./n8n/bootstrap.js:/bootstrap.js:ro
     ports:
       - "5678:5678"
     depends_on:
-      db:
-        condition: service_healthy
+      n8n-db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1" ]
       interval: 30s
