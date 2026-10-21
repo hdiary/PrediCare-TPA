@@ -7,6 +7,7 @@ const n8nData = '/home/node/.n8n';
 const workflowId = 'lCNZNFqhg8cnaaGa';
 const credentialId = '8dbb9350-7493-4b15-a92c-d9ed69b0c312';
 const workflowMarker = path.join(n8nData, '.predicare-workflow-imported');
+const databasePath = path.join(n8nData, 'database.sqlite');
 
 function runN8n(args) {
   const result = spawnSync('n8n', args, { stdio: 'inherit' });
@@ -28,8 +29,14 @@ if (!sqlitePackage) throw new Error("Could not locate n8n's SQLite driver");
 process.env.NODE_PATH = path.join(pnpmModules, sqlitePackage, 'node_modules');
 require('node:module').Module._initPaths();
 const sqlite3 = require('sqlite3');
+if (!fs.existsSync(databasePath)) {
+  console.log('Initialize the n8n database and owner account, then restart n8n.');
+  runN8n(['start']);
+  process.exit(0);
+}
+
 const database = new sqlite3.Database(
-  `file:${path.join(n8nData, 'database.sqlite')}?mode=ro`,
+  `file:${databasePath}?mode=ro`,
   sqlite3.OPEN_READONLY | sqlite3.OPEN_URI,
 );
 

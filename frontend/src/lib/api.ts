@@ -949,22 +949,31 @@ export const api = {
     if (!isMock("auth")) await request("/auth/logout", { method: "POST" });
   },
 
-  /** États des services : l'API et la base viennent de /health ; n8n et la base vectorielle ne sont pas encore sondés. */
+  /** États des services remontés par le endpoint de santé de l'API. */
   async getServiceStatus(): Promise<ServiceStatus> {
     if (isMock("health")) {
       await delay(300);
       return mockServiceStatus;
     }
     const unknown: ServiceState = "unknown";
+    const toServiceState = (value: string | undefined): ServiceState => {
+      if (!value || value === "not_configured") return unknown;
+      if (value === "ok") return "ok";
+      if (value === "degraded") return "degraded";
+      return "down";
+    };
     try {
       const res = await fetch(`${BASE_URL}/health`);
-      const h = (await res.json()) as { checks?: Record<string, string> };
+      const h = (await res.json()) as {
+        status?: string;
+        checks?: Record<string, string>;
+      };
       const checks = h.checks ?? {};
       return {
-        api: "ok",
-        database: checks.database === "ok" ? "ok" : "down",
-        model: checks.model === "ok" ? "ok" : "down",
-        n8n: unknown,
+        api: h.status === "ok" ? "ok" : h.status === "degraded" || !res.ok ? "degraded" : unknown,
+        database: toServiceState(checks.database),
+        model: toServiceState(checks.model),
+        n8n: toServiceState(checks.n8n),
         vector_db: unknown,
       };
     } catch {

@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     dev_log_reset_link: bool = False
 
     # Alertes n8n (P3-13)
+    n8n_health_url: str | None = None
     n8n_webhook_url: str | None = None      # ex. http://n8n:5678/webhook/predicare-alert
     n8n_webhook_secret: str | None = None   # openssl rand -hex 32
     n8n_timeout_s: float = 3.0              # jamais bloquant pour /predict
