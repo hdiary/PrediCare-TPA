@@ -259,7 +259,7 @@ export function ManagerDashboard() {
               className="flex items-center gap-4 p-3 rounded-[12px] border border-surface-300/80 dark:border-surface-700 bg-white dark:bg-surface-800 hover:bg-surface-100 dark:hover:bg-surface-700 transition-all"
             >
               <div className={`px-2.5 py-1 rounded-md text-xs font-semibold tabular-nums border ${riskColor(alert.score)}`}>
-                {alert.score.toFixed(2)}
+                {alert.score.toFixed(6)}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-surface-700 dark:text-surface-200">{ALERT_TYPE_LABELS[alert.type] || alert.type}</p>

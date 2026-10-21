@@ -3,13 +3,16 @@
     python train.py --dataset ../../dataset --labels ../../labels --algo all
 
 Protocole
-  * découpage TEMPOREL sur date_soin : 64 % train / 16 % validation / 20 % test
-    (on entraîne sur le passé, on valide puis on teste sur le futur) ;
+  * découpage temporel par quantiles date_soin : 60 % train, 8 % sélection,
+    6 % calibration, 6 % choix du seuil, 20 % test ;
+  * calibrateur sigmoid ajusté sur des marges brutes, puis seuil mesuré sur
+    une fenêtre ultérieure distincte ;
+  * LightGBM régularisé, sans pondération positive, avec arrêt anticipé ;
   * candidats comparés : régression logistique (baseline), puis chaque algorithme
     en « poids de classes » et en « SMOTE » (si imbalanced-learn est installé) ;
-  * réglage par recherche aléatoire (--n-iter) sur la PR-AUC de la VALIDATION ;
-  * seuil choisi sur la validation (Recall >= --recall) ; le test n'est lu qu'une fois ;
-  * le meilleur candidat (PR-AUC de validation) est versionné, enregistré dans
+  * réglage par recherche aléatoire (--n-iter) sur la PR-AUC de sélection ;
+  * seuil choisi sur la fenêtre dédiée (Recall >= --recall) ; test final indépendant ;
+  * le meilleur candidat (PR-AUC de sélection) est versionné, enregistré dans
     registry.json et activé ; MLflow est alimenté si la bibliothèque est présente.
 """
 from __future__ import annotations
@@ -25,16 +28,23 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.calibration import calibration_curve
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    precision_recall_curve,
+    roc_auc_score,
+)
 from sklearn.model_selection import ParameterSampler
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 import features as F
 import registry
+from calibration import calibrated_probability, fit_sigmoid_calibrator, model_margin
 from reference import reference_rows
 
 MODELS_DIR = registry.MODELS_DIR
@@ -44,9 +54,9 @@ SEUIL_CDC = 0.8  # seuil de déclenchement n8n cité dans le cahier des charges
 GRILLES = {
     "hgb": {"learning_rate": [0.03, 0.06, 0.1], "max_leaf_nodes": [15, 31, 63],
             "min_samples_leaf": [10, 30, 60], "l2_regularization": [0.0, 1.0, 5.0]},
-    "lightgbm": {"learning_rate": [0.03, 0.05, 0.1], "num_leaves": [15, 31, 63],
-                 "min_child_samples": [10, 30, 60], "subsample": [0.7, 0.85, 1.0],
-                 "colsample_bytree": [0.6, 0.8, 1.0], "reg_lambda": [0.0, 1.0, 5.0]},
+    "lightgbm": {"learning_rate": [0.03, 0.05], "num_leaves": [15, 31],
+                 "min_child_samples": [50, 100], "subsample": [0.7, 0.85, 1.0],
+                 "colsample_bytree": [0.6, 0.8, 1.0], "reg_lambda": [5.0, 10.0, 20.0]},
     "xgboost": {"learning_rate": [0.03, 0.05, 0.1], "max_depth": [4, 6, 8],
                 "min_child_weight": [1, 3, 8], "subsample": [0.7, 0.85, 1.0],
                 "colsample_bytree": [0.6, 0.8, 1.0], "reg_lambda": [0.0, 1.0, 5.0]},
@@ -62,11 +72,19 @@ def read_labels(path: Path) -> pd.DataFrame:
     return df.set_index("facture_id")
 
 
-def temporal_split(dates: pd.Series, fr_train=0.64, fr_valid=0.80):
-    """Indices (train, valid, test) triés par date de soin ; les égalités restent ensemble."""
-    q1, q2 = dates.quantile([fr_train, fr_valid]).values
-    return (np.where(dates < q1)[0], np.where((dates >= q1) & (dates < q2))[0],
-            np.where(dates >= q2)[0])
+def temporal_split(dates: pd.Series, fr_train=0.60, fr_select=0.68,
+                   fr_calibrate=0.74, fr_threshold=0.80):
+    """Return chronological train, selection, calibration, threshold and test indices."""
+    q1, q2, q3, q4 = dates.quantile(
+        [fr_train, fr_select, fr_calibrate, fr_threshold]
+    ).values
+    return (
+        np.where(dates < q1)[0],
+        np.where((dates >= q1) & (dates < q2))[0],
+        np.where((dates >= q2) & (dates < q3))[0],
+        np.where((dates >= q3) & (dates < q4))[0],
+        np.where(dates >= q4)[0],
+    )
 
 
 # ------------------------------------------------------------------ modèles
@@ -86,7 +104,7 @@ def make_model(algo: str, params: dict, pos_weight: float):
             random_state=SEED, **params)
     if algo == "lightgbm":
         from lightgbm import LGBMClassifier
-        return LGBMClassifier(n_estimators=500, subsample_freq=1, scale_pos_weight=pos_weight,
+        return LGBMClassifier(n_estimators=500, subsample_freq=1, scale_pos_weight=1.0,
                               random_state=SEED, verbose=-1, **params)
     if algo == "xgboost":
         from xgboost import XGBClassifier
@@ -132,14 +150,34 @@ def at(y, p, thr) -> dict:
 
 
 def full_report(y, p, thr) -> dict:
+    observed, predicted = calibration_curve(y, p, n_bins=10, strategy="quantile")
+    curve = [{"score_moyen": round(float(x), 6), "frequence_observee": round(float(yhat), 6)}
+             for x, yhat in zip(predicted, observed)]
     return {"pr_auc": round(float(average_precision_score(y, p)), 4),
-            "roc_auc": round(float(roc_auc_score(y, p)), 4), **at(y, p, thr),
+            "roc_auc": round(float(roc_auc_score(y, p)), 4),
+            "brier_score": round(float(brier_score_loss(y, p)), 6),
+            "courbe_calibration": curve, **at(y, p, thr),
             "au_seuil_cdc": at(y, p, SEUIL_CDC)}
 
 
+def _fit_candidate(model, algo, Xfit, yfit, Xselect, yselect):
+    if algo == "lightgbm":
+        from lightgbm import early_stopping
+        model.fit(
+            Xfit,
+            yfit,
+            eval_X=(Xselect,),
+            eval_y=(yselect,),
+            eval_metric="binary_logloss",
+            callbacks=[early_stopping(stopping_rounds=50, verbose=False)],
+        )
+        return model
+    return model.fit(Xfit, yfit)
+
+
 # ------------------------------------------------------------------ candidat
-def run_candidate(name, algo, strat, data, n_iter, recall_target):
-    Xtr, ytr, Xva, yva, Xte, yte = data
+def run_candidate(name, algo, strat, data, n_iter):
+    Xtr, ytr, Xselect, yselect = data[:4]
     pw = float((ytr == 0).sum() / max((ytr == 1).sum(), 1))
     if strat == "smote":
         Xfit, yfit = smote_resample(Xtr, ytr)
@@ -151,18 +189,15 @@ def run_candidate(name, algo, strat, data, n_iter, recall_target):
     best = None
     for params in cand:
         t0 = time.time()
-        m = make_model(algo, params, pw).fit(Xfit, yfit)
-        pv = m.predict_proba(Xva)[:, 1]
-        score = average_precision_score(yva, pv)
-        print(f"    {name:<22} {params} -> PR-AUC valid {score:.4f} ({time.time() - t0:.0f}s)")
+        m = _fit_candidate(make_model(algo, params, pw), algo, Xfit, yfit, Xselect, yselect)
+        pv = model_margin(m, Xselect)
+        score = average_precision_score(yselect, pv)
+        print(f"    {name:<22} {params} -> PR-AUC sélection {score:.4f} ({time.time() - t0:.0f}s)")
         if best is None or score > best[0]:
             best = (score, params, m, pv)
-    score, params, model, pv = best
-    thr = pick_threshold(yva.values, pv, recall_target)
-    pt = model.predict_proba(Xte)[:, 1]
+    score, params, model, _ = best
     return {"name": name, "algo": algo, "strategie": strat, "params": params, "model": model,
-            "valid": full_report(yva.values, pv, thr), "test": full_report(yte.values, pt, thr),
-            "p_test": pt, "seuil": thr}
+            "selection_pr_auc": float(score)}
 
 
 def main():
@@ -178,10 +213,11 @@ def main():
     X, meta = F.build_features(F.load_tables(a.dataset))
     lab = read_labels(a.labels).reindex(X.index)
     y = lab["est_fraude"].astype(int)
-    itr, iva, ite = temporal_split(meta["date_soin"])
-    data = (X.iloc[itr], y.iloc[itr], X.iloc[iva], y.iloc[iva], X.iloc[ite], y.iloc[ite])
+    itr, iselect, ical, ithr, ite = temporal_split(meta["date_soin"])
+    data = (X.iloc[itr], y.iloc[itr], X.iloc[iselect], y.iloc[iselect])
     fen = {k: [str(meta["date_soin"].iloc[i].min().date()), str(meta["date_soin"].iloc[i].max().date())]
-           for k, i in (("train", itr), ("valid", iva), ("test", ite))}
+           for k, i in (("train", itr), ("selection", iselect), ("calibration", ical),
+                        ("threshold", ithr), ("test", ite))}
     print(f"{len(X)} factures, {X.shape[1]} variables, fraude {y.mean():.2%} | fenêtres {fen}")
 
     try:
@@ -194,7 +230,9 @@ def main():
     algos = ["hgb", "lightgbm", "xgboost"] if a.algo == "all" else [a.algo]
     plan = [("baseline_logreg", "logreg", "poids")]
     for g in algos:
-        plan.append((f"{g}_poids", g, "poids"))
+        strategy = "sans_ponderation" if g == "lightgbm" else "poids"
+        suffix = "regularise" if g == "lightgbm" else "poids"
+        plan.append((f"{g}_{suffix}", g, strategy))
         if smote_ok:
             plan.append((f"{g}_smote", g, "smote"))
 
@@ -202,32 +240,41 @@ def main():
     for name, algo, strat in plan:
         print(f"\n== {name}")
         try:
-            res.append(run_candidate(name, algo, strat, data, a.n_iter, a.recall))
+            res.append(run_candidate(name, algo, strat, data, a.n_iter))
         except ImportError as e:
             print(f"   ignoré (bibliothèque absente) : {e}")
 
-    tab = pd.DataFrame([{"candidat": r["name"], "pr_auc_valid": r["valid"]["pr_auc"],
-                         "pr_auc_test": r["test"]["pr_auc"], "recall_test": r["test"]["recall"],
-                         "precision_test": r["test"]["precision"],
-                         "recall_test_seuil_0.8": r["test"]["au_seuil_cdc"]["recall"],
-                         "precision_test_seuil_0.8": r["test"]["au_seuil_cdc"]["precision"]}
+    tab = pd.DataFrame([{"candidat": r["name"], "pr_auc_selection": round(r["selection_pr_auc"], 4)}
                         for r in res])
     print("\n" + tab.to_string(index=False))
     MODELS_DIR.mkdir(exist_ok=True)
     tab.to_csv(MODELS_DIR / "comparison.csv", index=False)
 
-    # meilleur candidat boosté, choisi sur la VALIDATION (jamais sur le test)
+    # Le jeu de test reste indépendant du choix du modèle et du seuil.
     pool = [r for r in res if r["algo"] != "logreg"] or res
-    best = max(pool, key=lambda r: r["valid"]["pr_auc"])
+    best = max(pool, key=lambda r: r["selection_pr_auc"])
+    Xcal, ycal = X.iloc[ical], y.iloc[ical]
+    Xthr, ythr = X.iloc[ithr], y.iloc[ithr]
+    Xtest, ytest = X.iloc[ite], y.iloc[ite]
+    calibrator = fit_sigmoid_calibrator(best["model"], Xcal, ycal)
+    p_threshold = calibrated_probability(best["model"], calibrator, Xthr)
+    threshold = pick_threshold(ythr.values, p_threshold, a.recall)
+    p_test = calibrated_probability(best["model"], calibrator, Xtest)
+    raw_p_test = calibrated_probability(best["model"], None, Xtest)
+    valid_report = full_report(ythr.values, p_threshold, threshold)
+    test_report = full_report(ytest.values, p_test, threshold)
+    raw_test_report = full_report(ytest.values, raw_p_test, 0.5)
     types = lab["type_fraude"].iloc[ite]
     par_type = {t: {"n": int((types == t).sum()),
-                    "recall": round(float((best["p_test"][(types == t).values] >= best["seuil"]).mean()), 3)}
+                    "recall": round(float((p_test[(types == t).values] >= threshold).mean()), 3)}
                 for t in sorted(types.dropna().unique())}
 
     h = hashlib.sha1(json.dumps([best["name"], best["params"], list(X.columns)], default=str).encode()).hexdigest()[:6]
     version = f"{best['algo']}-{datetime.now(timezone.utc):%Y%m%d-%H%M}-{h}"
     fichier = f"model_{version}.joblib"
-    joblib.dump({"model": best["model"], "features": list(X.columns), "seuil": best["seuil"],
+    joblib.dump({"model": best["model"], "calibrator": calibrator,
+                 "calibration": {"method": "sigmoid", "input": "raw_model_margin"},
+                 "features": list(X.columns), "seuil": threshold,
                  "algo": best["algo"], "strategie": best["strategie"], "params": best["params"],
                  "version": version, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                  "fenetres": fen, "seuil_cdc": SEUIL_CDC,
@@ -237,7 +284,9 @@ def main():
                 MODELS_DIR / fichier)
     entry = {"version": version, "file": fichier, "algo": best["algo"], "strategie": best["strategie"],
              "params": best["params"], "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-             "seuil": round(best["seuil"], 4), "valid": best["valid"], "test": best["test"],
+             "seuil": round(threshold, 6), "valid": valid_report, "test": test_report,
+             "selection_pr_auc": round(best["selection_pr_auc"], 4),
+             "test_non_calibre": raw_test_report,
              "recall_par_type": par_type, "fenetres": fen, "status": "active"}
     registry.register(entry, activate=True)
     (MODELS_DIR / "metrics.json").write_text(json.dumps(
@@ -249,13 +298,15 @@ def main():
         mlflow.set_experiment("predicare-fraude")
         with mlflow.start_run(run_name=version):
             mlflow.log_params({"algo": best["algo"], "strategie": best["strategie"], **best["params"]})
-            mlflow.log_metrics({"pr_auc_test": best["test"]["pr_auc"], "recall_test": best["test"]["recall"],
-                                "precision_test": best["test"]["precision"], "seuil": best["seuil"]})
+            mlflow.log_metrics({"pr_auc_test": test_report["pr_auc"], "recall_test": test_report["recall"],
+                                "precision_test": test_report["precision"],
+                                "brier_test": test_report["brier_score"], "seuil": threshold})
             mlflow.log_artifact(str(MODELS_DIR / fichier))
     except ImportError:
         print("[MLflow] non installé -> suivi ignoré (registry.json tient lieu de registre)")
 
-    print(f"\nModèle retenu : {version}\n  test : {best['test']}\n  recall par type : "
+    print(f"\nModèle retenu : {version}\n  test calibré : {test_report}\n"
+          f"  test brut : {raw_test_report}\n  recall par type : "
           f"{ {k: v['recall'] for k, v in par_type.items()} }")
 
 

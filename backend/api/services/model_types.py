@@ -19,6 +19,7 @@ class ModelBundle:
     sha256: str = ""
     metrics: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
+    calibrator: Any = None
 
 
 def decision_threshold(bundle: ModelBundle) -> float | None:

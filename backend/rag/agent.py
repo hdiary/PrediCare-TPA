@@ -41,6 +41,11 @@ class ChatResponse:
     sources: list[ChatSource]
     blocked: bool = False
 
+    def __post_init__(self) -> None:
+        answer = self.answer.strip()
+        if not (answer.startswith("[") and answer.endswith("]")):
+            object.__setattr__(self, "answer", f"[{answer}]")
+
 
 class RagAgent:
     def __init__(self, embeddings: EmbeddingClient,
@@ -285,7 +290,11 @@ class RagAgent:
         system_prompt = SYSTEM_PROMPT
         if prestataire_id:
             system_prompt += (
-                "\n\nContexte prestataire authentifié : les questions de suivi "
+                "\n\nPersonnalisation : tu t'adresses directement au "
+                "professionnel de santé avec « vous » et parles de « votre "
+                "cabinet » ou de « vos factures ». Ne présente pas ses factures "
+                "comme celles d'un assuré.\n"
+                "Contexte prestataire authentifié : les questions de suivi "
                 "concernent uniquement les factures du prestataire connecté. "
                 "Pour une facture rejetée, indique le motif fourni par l'outil "
                 "s'il est disponible ; ne le déduis pas et ne montre pas le "
@@ -293,7 +302,11 @@ class RagAgent:
             )
         if contract_id and not prestataire_id:
             system_prompt += (
-                "\n\nContexte serveur authentifié : le contrat connecté est "
+                "\n\nPersonnalisation : tu t'adresses directement à l'assuré "
+                "avec « vous » et parles de « votre contrat », « vos garanties » "
+                "et « vos remboursements ». Ne demande pas son nom ni son "
+                "identifiant pseudonymisé.\n"
+                "Contexte serveur authentifié : le contrat connecté est "
                 f"{contract_id}. Cet identifiant est la seule référence "
                 "valide pour la réponse."
             )

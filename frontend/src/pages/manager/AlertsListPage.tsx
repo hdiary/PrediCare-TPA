@@ -88,7 +88,7 @@ export function AlertsListPage() {
             <th className="px-6 py-3.5 cursor-pointer" onClick={() => toggleSort('created_at')}>Date</th><th className="px-6 py-3.5">Statut</th>
           </tr></thead><tbody className="divide-y divide-surface-300/60 dark:divide-surface-700/60">
             {paginated.map((alert) => <tr key={alert.id} onClick={() => navigate(`/gestionnaire/alertes/${alert.id}`)} className="hover:bg-surface-50 dark:hover:bg-surface-700/50 cursor-pointer">
-              <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold border ${riskColor(alert.score)}`}>{alert.score.toFixed(2)}</span></td>
+              <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold border ${riskColor(alert.score)}`}>{alert.score.toFixed(6)}</span></td>
               <td className="px-6 py-4 text-sm">{ALERT_TYPE_LABELS[alert.type]}</td><td className="px-6 py-4 text-sm">{formatMGA(alert.amount)}</td>
               <td className="px-6 py-4 text-sm font-mono">{alert.provider_pseudo}</td><td className="px-6 py-4 text-sm font-mono">{alert.insured_pseudo}</td>
               <td className="px-6 py-4 text-sm">{formatDate(alert.created_at)}</td><td className="px-6 py-4"><Badge className={ALERT_STATUS_COLORS[alert.status]}>{ALERT_STATUS_LABELS[alert.status]}</Badge></td>

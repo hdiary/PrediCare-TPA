@@ -1,9 +1,15 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from rag.agent import RagAgent
+from rag.agent import ChatResponse, RagAgent
 
 class RagAgentToolTests(unittest.TestCase):
+    def test_chat_response_is_wrapped_in_square_brackets(self):
+        self.assertEqual(ChatResponse("  Réponse personnalisée.  ", []).answer,
+                         "[Réponse personnalisée.]")
+        self.assertEqual(ChatResponse("[Déjà encadrée]", []).answer,
+                         "[Déjà encadrée]")
+
     def test_prompt_disclosure_requests_are_blocked_before_llm(self):
         embeddings = MagicMock()
         retriever = MagicMock()

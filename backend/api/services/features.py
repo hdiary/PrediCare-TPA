@@ -51,3 +51,31 @@ def build_features(payload: dict, conn, expected: list[str]) -> pd.DataFrame:
                 f"type invalide pour la variable {column}: {features[column].dtype}"
             ) from exc
     return features  # ordre identique à l'entraînement
+
+
+def build_features_for_invoices(
+    payloads: list[dict], conn, expected: list[str]
+) -> pd.DataFrame:
+    try:
+        from ml.preprocess import build_features_for_invoices as _build
+    except ModuleNotFoundError as exc:
+        if exc.name not in ("ml", "ml.preprocess"):
+            raise
+        raise FeaturesUnavailableError("backend/ml/preprocess.py introuvable") from exc
+
+    df = _build(payloads, conn)
+    missing = [column for column in expected if column not in df.columns]
+    if missing:
+        raise FeatureMismatchError(f"colonnes manquantes : {missing}")
+    features = df[expected].copy()
+    for column in expected:
+        try:
+            if column in CATEGORICAL:
+                features[column] = features[column].astype("category")
+            else:
+                features[column] = pd.to_numeric(features[column], errors="raise")
+        except (TypeError, ValueError) as exc:
+            raise FeatureMismatchError(
+                f"type invalide pour la variable {column}: {features[column].dtype}"
+            ) from exc
+    return features
