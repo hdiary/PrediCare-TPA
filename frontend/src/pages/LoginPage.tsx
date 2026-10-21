@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, Activity, AlertCircle, Eye, EyeOff, ShieldCheck, BarChart3, UserCheck } from 'lucide-react';
+import { Mail, Lock, Activity, AlertCircle, Eye, EyeOff, ShieldCheck, BarChart3, UserCheck, Moon, Sun } from 'lucide-react';
 import { useAuth, getRoleHome } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
 import { Logo } from '@/components/Logo';
 import { Button, Input, Spinner } from '@/components/ui';
 import { MOCK_ACCOUNTS } from '@/lib/mockData';
-import { USE_MOCK_AUTH } from '@/lib/api';
+import { USE_MOCK_AUTH, userErrorMessage } from '@/lib/api';
 import { isMock } from '@/lib/api';
 
 // Comptes créés par le backend quand DEMO_PASSWORD est défini (mot de passe : celui du .env)
@@ -19,6 +20,7 @@ const SHOW_DEMO = isMock('auth') || import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState('');
@@ -41,7 +43,7 @@ export function LoginPage() {
       const home = getRoleHome(loggedIn.role);
       navigate(from && from.startsWith(home) ? from : home);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur de connexion');
+      setError(userErrorMessage(err, 'Connexion impossible. Vérifiez vos identifiants puis réessayez.'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,16 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="relative min-h-screen flex bg-surface-50 dark:bg-[#1C2120]">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        aria-label={theme === 'dark' ? 'Passer au thème clair' : 'Passer au thème sombre'}
+        title={theme === 'dark' ? 'Passer au thème clair' : 'Passer au thème sombre'}
+        className="fixed right-4 top-4 z-20 rounded-lg border border-surface-300 bg-white p-2 text-surface-700 shadow-sm transition-colors hover:bg-surface-100 dark:border-surface-600 dark:bg-surface-800 dark:text-surface-100 dark:hover:bg-surface-700"
+      >
+        {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
       {/* Left panel */}
       <div className="hidden lg:block lg:w-1/2 gradient-hero relative overflow-hidden px-20 pt-[140px] pb-[60px]">
         <div className="absolute -top-[120px] -right-20 w-[420px] h-[420px] rounded-full bg-[#7C9A98] opacity-35" />

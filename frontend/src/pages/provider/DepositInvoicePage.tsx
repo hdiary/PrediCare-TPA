@@ -4,7 +4,7 @@ import {
   AlertTriangle, ArrowLeft, File, Calendar, Banknote, ClipboardList, Clock3,
 } from 'lucide-react';
 import { Card, Button, Input, Skeleton } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import { formatMGA } from '@/lib/format';
 import { useToast } from '@/components/ui/Toast';
 import type { InvoiceSubmissionResult, InvoicePrescription } from '@/lib/types';
@@ -168,7 +168,7 @@ export function DepositInvoicePage() {
       if (res.status === 'pending') showToast('Facture reçue, en attente de traitement', 'success');
     } catch (err) {
       // erreur technique (réseau, serveur indisponible...) : on reste sur le formulaire
-      showToast(err instanceof Error ? err.message : 'Erreur lors du dépôt', 'error');
+      showToast(userErrorMessage(err, 'Le dépôt n’a pas pu aboutir. Vérifiez le document puis réessayez.'), 'error');
     } finally {
       setSubmitting(false);
     }
@@ -264,7 +264,7 @@ export function DepositInvoicePage() {
                 {result.errors.map((err, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-danger-600 dark:text-danger-400">
                     <span className="w-1.5 h-1.5 rounded-full bg-danger-500 mt-2 flex-shrink-0" />
-                    <span><span className="font-mono text-xs">{err.field}</span> — {err.message}</span>
+                    <span>{err.field ? `${err.field} : ` : ''}{err.message}</span>
                   </li>
                 ))}
               </ul>

@@ -122,6 +122,124 @@ export class ApiError extends Error {
   }
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  fichier: "Document",
+  facture_id: "Facture",
+  numero_facture: "Numéro de facture",
+  prestataire_id: "Professionnel de santé",
+  assure_id: "Assuré",
+  contrat_id: "Contrat",
+  ordonnance_id: "Ordonnance liée",
+  id_ordonnance: "Ordonnance liée",
+  prescription_id: "Ordonnance liée",
+  type_facture: "Type de facture",
+  date_soin: "Date des soins",
+  date_facture: "Date de facture",
+  date_reception: "Date de réception",
+  heure_soin: "Heure des soins",
+  mode_reglement: "Mode de règlement",
+  canal_reception: "Mode de transmission",
+  devise: "Devise",
+  lignes: "Actes et médicaments",
+  montant_total: "Montant total",
+  attestation_pec_id: "Attestation de prise en charge",
+  entente_prealable_id: "Entente préalable",
+};
+
+function userFieldLabel(field: string): string {
+  const lineMatch = field.match(/^lignes\[(\d+)\](?:\.(code|type_ligne|quantite|prix_unitaire|montant))?$/);
+  if (lineMatch) {
+    const line = `Ligne ${lineMatch[1]}`;
+    const detail: Record<string, string> = {
+      code: "acte ou médicament",
+      type_ligne: "type de prestation",
+      quantite: "quantité",
+      prix_unitaire: "tarif unitaire",
+      montant: "montant",
+    };
+    return detail[lineMatch[2]] ? `${line} : ${detail[lineMatch[2]]}` : line;
+  }
+  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+  return field.replace(/_id\b/g, "").replace(/_/g, " ").trim();
+}
+
+function userValidationMessage(
+  field: string,
+  message: string,
+  code?: string,
+): string {
+  if (field === "mode_reglement" || /mode_reglement/i.test(message)) {
+    return "Choisissez le tiers payant ou le remboursement à l’assuré.";
+  }
+  switch (code) {
+    case "PRESTATAIRE_INCONNU":
+      return "Le professionnel de santé n’est pas reconnu. Vérifiez les informations figurant sur la facture.";
+    case "ASSURE_INCONNU":
+      return "L’assuré indiqué sur la facture n’est pas reconnu. Vérifiez son numéro.";
+    case "CODE_ACTE_INCONNU":
+    case "CODE_ORDONNANCE_INCONNU":
+      return "Un acte ou médicament n’est pas reconnu. Vérifiez les éléments indiqués sur le document.";
+    case "CHAMP_OBLIGATOIRE_MANQUANT":
+      return "Cette information obligatoire est absente. Complétez le document puis réessayez.";
+    case "TOTAL_INCOHERENT":
+      return "Le montant total ne correspond pas à la somme des actes et médicaments.";
+    case "DATE_FUTURE":
+      return "La date des soins ne peut pas être dans le futur.";
+    case "DATE_IMPOSSIBLE":
+      return "Une date ou une heure du document est invalide. Vérifiez les informations saisies.";
+    case "DEVISE_INVALIDE":
+      return "La facture doit être établie en ariary malgache (MGA).";
+    case "FACTURE_SANS_LIGNE":
+      return "La facture ne contient aucun acte ni médicament reconnu.";
+    case "ORDONNANCE_PDF_INVALIDE":
+    case "ORDONNANCE_INCOMPLETE":
+      return "L’ordonnance est illisible ou incomplète. Joignez un scan plus net avec ses informations essentielles.";
+    case "ORDONNANCE_ID_INCOHERENT":
+    case "ORDONNANCE_DATE_INCOHERENTE":
+      return "Les informations de l’ordonnance ne correspondent pas à celles saisies. Vérifiez le numéro et la date.";
+  }
+  if (/format invalide/i.test(message)) {
+    return "Le format de cette information n’est pas valide. Vérifiez le document.";
+  }
+  if (/valeurs admises/i.test(message)) {
+    return "La valeur indiquée n’est pas reconnue. Choisissez une option proposée dans le formulaire.";
+  }
+  if (/champ obligatoire/i.test(message)) {
+    return "Cette information est obligatoire.";
+  }
+  if (/code absent des référentiels/i.test(message)) {
+    return "Un acte ou médicament n’est pas reconnu. Vérifiez les éléments indiqués sur le document.";
+  }
+  return message.replace(/\b[a-z]+(?:_[a-z]+){1,}\b/gi, "cette information");
+}
+
+export function userErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    if (error.errors.length) {
+      return error.errors
+        .map((item) => {
+          const label = item.field ? userFieldLabel(item.field) : "";
+          const message = userValidationMessage(item.field, item.message, item.code);
+          return label ? `${label} : ${message}` : message;
+        })
+        .join(" ");
+    }
+    if (error.status === 401) return "Identifiant ou mot de passe incorrect, ou accès expiré.";
+    if (error.status === 403) return "Vous ne pouvez pas effectuer cette action avec votre accès actuel.";
+    if (error.status === 429) return "Trop de tentatives. Patientez quelques instants avant de réessayer.";
+    if (error.status >= 500) return "Le service est momentanément indisponible. Réessayez dans quelques instants.";
+    if (/^Erreur \d{3}$/.test(error.message)) return fallback;
+    return error.message.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, "cette information") || fallback;
+  }
+  if (error instanceof TypeError || (error instanceof Error && /failed to fetch|networkerror|load failed/i.test(error.message))) {
+    return "Impossible de joindre le service. Vérifiez votre connexion puis réessayez.";
+  }
+  if (error instanceof Error && /identifiant ou mot de passe incorrect|email ou mot de passe incorrect/i.test(error.message)) {
+    return "Identifiant ou mot de passe incorrect.";
+  }
+  return fallback;
+}
+
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem(TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -138,12 +256,36 @@ function parseErrorBody(body: unknown, status: number): ApiError {
   if (Array.isArray(b.erreurs)) {
     // Facture rejetée : codes du contrat de données (section 9.1)
     for (const e of b.erreurs)
-      errors.push({ field: e.champ, message: e.message, code: e.code });
+      errors.push({
+        field: userFieldLabel(e.champ),
+        message: userValidationMessage(e.champ, e.message, e.code),
+        code: e.code,
+      });
   } else if (Array.isArray(b.errors)) {
     for (const e of b.errors)
-      errors.push({ field: e.field, message: e.message });
+      errors.push({
+        field: userFieldLabel(e.field),
+        message: userValidationMessage(e.field, e.message),
+      });
   }
-  const message = typeof b.detail === "string" ? b.detail : `Erreur ${status}`;
+  if (Array.isArray(b.detail)) {
+    for (const item of b.detail) {
+      if (!item || typeof item !== "object") continue;
+      const issue = item as { loc?: unknown[]; msg?: unknown };
+      const pathParts = Array.isArray(issue.loc)
+        ? issue.loc.filter((part) => typeof part === "string")
+        : [];
+      const field = String(pathParts[pathParts.length - 1] ?? "");
+      const rawMessage = typeof issue.msg === "string" ? issue.msg : "";
+      const message = /field required/i.test(rawMessage)
+        ? "Cette information est obligatoire."
+        : userValidationMessage(field, rawMessage);
+      errors.push({ field: field ? userFieldLabel(field) : "", message });
+    }
+  }
+  const message = typeof b.detail === "string"
+    ? b.detail
+    : errors.length ? "Certaines informations doivent être vérifiées." : `Erreur ${status}`;
   return new ApiError(message, status, errors);
 }
 

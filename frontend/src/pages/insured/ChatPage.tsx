@@ -4,7 +4,7 @@ import {
   Sparkles, AlertCircle, Plus, FileText,
 } from 'lucide-react';
 import { Card, Button, Drawer, EmptyState } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatTime } from '@/lib/format';
 import type { ChatMessage, ChatSource, Conversation } from '@/lib/types';
@@ -65,7 +65,7 @@ export function ChatPage() {
       }
       setLoadingHistory(false);
     }).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "Impossible de charger l'historique");
+      setError(userErrorMessage(err, "Impossible de charger l'historique. Réessayez dans quelques instants."));
       setLoadingHistory(false);
     });
   }, [role]);
@@ -128,7 +128,7 @@ export function ChatPage() {
       setActiveConvId(resp.conversation_id);
     } catch (err: unknown) {
       setMessages((current) => current.filter((message) => message.id !== userMsg.id));
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      setError(userErrorMessage(err, 'Le message n’a pas pu être envoyé. Réessayez dans quelques instants.'));
       setTyping(false);
     } finally {
       setSending(false);

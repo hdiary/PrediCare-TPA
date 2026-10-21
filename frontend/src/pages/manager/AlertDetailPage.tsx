@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, Card, ErrorState, Skeleton } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
-import { ApiError, api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import type { AlertApiDetail, AlertDecisionValue } from '@/lib/types';
 import {
   ALERT_STATUS_COLORS,
@@ -204,10 +204,7 @@ export function AlertDetailPage() {
       showToast('Décision enregistrée', 'success');
       load();
     } catch (exception) {
-      showToast(
-        exception instanceof ApiError ? exception.message : 'Erreur lors de la décision',
-        'error',
-      );
+      showToast(userErrorMessage(exception, 'La décision n’a pas pu être enregistrée. Réessayez.'), 'error');
     } finally {
       setSubmitting(false);
     }
