@@ -90,6 +90,7 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
     if summary is None:
         raise HTTPException(status_code=404, detail="Alerte introuvable")
     shap = repo.get_shap(conn, pred["prediction_id"])
+    variables = repo.get_prediction_variables(conn, pred["prediction_id"])
     rules = repo.list_alertes_regles(conn, pred["prediction_id"])
     codes = list(summary.get("codes") or [])
     codes.extend(rule["regle_code"] for rule in rules if rule.get("regle_code"))
@@ -98,6 +99,7 @@ def get_alert(facture_id: str = FactureId, conn=Depends(get_db)):
         "prediction": summary,
         "facture": {**(facture or {}), "lignes": lignes},
         "shap": shap["valeurs"] if shap else None,
+        "variables": variables or {},
         "codes_fraude": sorted(set(codes)),
         "regles": rules,
         "decisions": repo.list_decisions(conn, pred["prediction_id"]),

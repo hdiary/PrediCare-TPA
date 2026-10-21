@@ -211,7 +211,7 @@ def list_alertes(conn, statut: str = "EN_ATTENTE", limit: int = 50, offset: int 
     if order is None:
         raise ValueError("Tri d'alerte invalide")
     return conn.execute(
-        "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "SELECT p.facture_id, p.score, p.seuil_utilise, p.version_modele, p.date, f.montant_total, "
         "f.prestataire_id, f.assure_id, "
         "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
         "CASE WHEN d.decision IS NULL THEN 'EN_ATTENTE' "
@@ -286,6 +286,14 @@ def get_shap(conn, prediction_id: int) -> dict | None:
     ).fetchone()
 
 
+def get_prediction_variables(conn, prediction_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT variables FROM predictions WHERE prediction_id = %s",
+        (prediction_id,),
+    ).fetchone()
+    return row["variables"] if row else None
+
+
 def list_decisions(conn, prediction_id: int) -> list[dict]:
     return conn.execute(
         "SELECT decision_id, facture_id, gestionnaire_id, decision, commentaire, "
@@ -308,7 +316,7 @@ def insert_decision(conn, *, prediction_id, facture_id, gestionnaire_id, decisio
 
 def get_alert_summary(conn, facture_id: str) -> dict | None:
     return conn.execute(
-        "SELECT p.facture_id, p.score, p.version_modele, p.date, f.montant_total, "
+        "SELECT p.facture_id, p.score, p.seuil_utilise, p.version_modele, p.date, f.montant_total, "
         "f.prestataire_id, f.assure_id, "
         "a.type, a.priorite, a.codes, a.etat_notification, a.tentatives_notification, "
         "(SELECT count(*) FROM alertes_prescription ar WHERE ar.prediction_id = p.prediction_id) AS nb_regles, "

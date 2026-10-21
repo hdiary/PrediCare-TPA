@@ -66,11 +66,21 @@ export interface AlertDetail extends Alert {
 
 export type AlertDecisionValue = 'VALIDER' | 'REJETER' | 'CONFIRMER_FRAUDE' | 'ESCALADER';
 export interface AlertApiSummary {
-  facture_id: string; score: number; version_modele: string | null; date: string;
+  facture_id: string; score: number; seuil_utilise?: number | null; version_modele: string | null; date: string;
   montant_total: number | null; nb_regles: number; derniere_decision: AlertDecisionValue | null;
   date_decision: string | null; type: string; priorite: string; statut: string;
   codes: string[]; etat_notification: string | null; tentatives_notification: number;
   prestataire_id?: string | null; assure_id?: string | null;
+}
+export interface ShapContribution {
+  variable: string;
+  valeur?: number | string | null;
+  contribution: number;
+}
+export interface ShapExplanation {
+  valeur_base?: number;
+  top?: ShapContribution[];
+  toutes?: Record<string, number>;
 }
 export interface AlertApiDetail {
   prediction: AlertApiSummary;
@@ -80,7 +90,8 @@ export interface AlertApiDetail {
     montant_total?: number | null;
     lignes: ApiInvoiceLine[];
   };
-  shap: Array<{ variable: string; valeur?: number | string | null; contribution: number }> | { top?: Array<{ variable: string; valeur?: number | string | null; contribution: number }>; [key: string]: unknown } | null;
+  shap: ShapContribution[] | ShapExplanation | null;
+  variables: Record<string, number | string | boolean | null>;
   codes_fraude: string[]; regles: Array<Record<string, unknown>>; decisions: Array<Record<string, unknown>>;
   lignes: ApiInvoiceLine[];
   historique_prestataire: {

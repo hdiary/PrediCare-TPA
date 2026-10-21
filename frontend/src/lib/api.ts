@@ -820,6 +820,7 @@ export const api = {
         prediction: {
           facture_id: id,
           score: a.score,
+          seuil_utilise: 0.8,
           version_modele: null,
           date: a.created_at,
           montant_total: a.amount,
@@ -847,6 +848,7 @@ export const api = {
             contribution: f.impact,
           })),
         },
+        variables: {},
         codes_fraude: a.prescription_flags,
         regles: [],
         decisions: [],

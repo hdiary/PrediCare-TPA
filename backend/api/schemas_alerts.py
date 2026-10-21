@@ -39,6 +39,7 @@ class AlertSummary(BaseModel):
 
     facture_id: str
     score: float
+    seuil_utilise: float | None = None
     version_modele: str
     date: datetime
     montant_total: int | None = None
@@ -65,6 +66,7 @@ class AlertDetailOut(BaseModel):
 
     prediction: AlertSummary
     shap: list[ShapItem] | dict | None = None
+    variables: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
     regles: list[RegleItem] = Field(default_factory=list)
     decisions: list[DecisionOut] = Field(default_factory=list)
     facture: dict = Field(default_factory=dict)

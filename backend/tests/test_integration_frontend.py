@@ -177,6 +177,8 @@ def test_alertes_listes_et_detail(client, h):
         d["lignes"][0]["libelle"] == "Consultation générale" and d["lignes"][0]["montant"] == 50000
     )
     assert d["shap"]["top"][0]["variable"] == "ecart_prix" and d["decisions"] == []
+    assert d["variables"] == {"ecart_prix": 3.2, "nb": 6}
+    assert d["prediction"]["seuil_utilise"] == pytest.approx(0.8)
     assert d["historique_prestataire"] == []  # aucune décision antérieure
 
 
