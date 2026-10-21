@@ -61,7 +61,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Mot de passe oublié"
-      subtitle="Saisissez l'adresse e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe."
+      subtitle="Saisissez l'adresse e-mail de votre compte pour recevoir un lien. Si votre compte n'a pas d'adresse e-mail, contactez un administrateur pour obtenir un nouveau mot de passe provisoire."
       footer={back}
     >
       {error && (

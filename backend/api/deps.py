@@ -1,6 +1,6 @@
 """Dépendances d'authentification et d'autorisation."""
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from uuid import UUID
 
@@ -16,7 +16,11 @@ _UNAUTHORIZED = HTTPException(
 )
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) -> dict:
+def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    conn=Depends(get_db),
+) -> dict:
     """Utilisateur connecté, relu en base à chaque requête.
 
     Conséquence : désactiver un compte ou changer un rôle est effectif
@@ -32,7 +36,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) 
 
     user = conn.execute(
         "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, r.nom_role AS role, "
-        "u.assure_id, u.prestataire_id, u.est_actif AS is_active "
+        "u.assure_id, u.prestataire_id, u.est_actif AS is_active, "
+        "u.mot_de_passe_a_changer AS must_change_password "
         "FROM utilisateurs u "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
@@ -41,6 +46,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), conn=Depends(get_db)) 
     ).fetchone()
     if not user or not user["is_active"]:
         raise _UNAUTHORIZED
+    if user["must_change_password"] and not request.url.path.endswith((
+        "/auth/me", "/auth/first-login-password", "/auth/logout",
+    )):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Choisissez d'abord de changer ou de garder votre mot de passe provisoire.",
+        )
     session_id = payload.get("sid")
     if session_id is not None:
         try:

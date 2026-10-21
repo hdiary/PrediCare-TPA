@@ -18,8 +18,8 @@ from api.config import get_settings
 from api.db import get_db
 from api.deps import get_current_user
 from api.schemas import (
-    ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, LogoutRequest,
-    MessageResponse, RefreshRequest, ResetPasswordRequest,
+    ChangePasswordRequest, FirstLoginPasswordRequest, ForgotPasswordRequest,
+    LoginRequest, LogoutRequest, MessageResponse, RefreshRequest, ResetPasswordRequest,
     TokenResponse, UserOut,
 )
 from api.security import (
@@ -44,6 +44,7 @@ def _authenticate(conn, identifier: str, password: str) -> dict:
         "SELECT u.utilisateur_id AS user_id, u.nom_utilisateur AS email, "
         "u.hash_mot_de_passe AS password_hash, r.nom_role AS role, "
         "u.assure_id, u.prestataire_id, u.est_actif AS is_active, u.tentatives_echouees, "
+        "u.mot_de_passe_a_changer AS must_change_password, "
         "(verrouille_jusqua IS NOT NULL AND verrouille_jusqua > now()) AS verrouille "
         "FROM utilisateurs u "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
@@ -184,7 +185,8 @@ def refresh(body: RefreshRequest, conn=Depends(get_db)):
 
     row = conn.execute(
         "SELECT u.utilisateur_id AS user_id, u.identifiant, "
-        "u.nom_utilisateur AS email, r.nom_role AS role, u.assure_id, u.prestataire_id "
+        "u.nom_utilisateur AS email, r.nom_role AS role, u.assure_id, u.prestataire_id, "
+        "u.mot_de_passe_a_changer AS must_change_password "
         "FROM auth_sessions s JOIN utilisateurs u ON u.utilisateur_id = s.user_id "
         "JOIN utilisateurs_roles ur ON ur.utilisateur_id = u.utilisateur_id "
         "JOIN roles r ON r.role_id = ur.role_id "
@@ -337,3 +339,28 @@ def change_password(body: ChangePasswordRequest, user: dict = Depends(get_curren
     repo.invalider_jetons_reinitialisation(conn, user_id)
     write_audit_compte(conn, event_type="mdp_modifie", actor_id=user_id, entity_id=user_id)
     return MessageResponse(detail="Mot de passe modifié.")
+
+
+@router.post("/first-login-password", response_model=MessageResponse)
+def complete_first_login(
+    body: FirstLoginPasswordRequest,
+    user: dict = Depends(get_current_user),
+    conn=Depends(get_db),
+):
+    """Confirme le mot de passe provisoire ou le remplace à la première connexion."""
+    if not user["must_change_password"]:
+        raise HTTPException(status_code=409, detail="Aucun choix de première connexion n'est attendu.")
+    if body.keep_current_password and body.new_password is not None:
+        raise HTTPException(status_code=422, detail="Choisissez une seule option.")
+    if not body.keep_current_password and body.new_password is None:
+        raise HTTPException(status_code=422, detail="Saisissez un nouveau mot de passe ou choisissez de garder le provisoire.")
+
+    user_id = user["user_id"]
+    if body.new_password is not None:
+        repo.set_mot_de_passe(conn, user_id, hash_password(body.new_password))
+        event_type = "mdp_initial_modifie"
+    else:
+        repo.confirmer_mot_de_passe_initial(conn, user_id)
+        event_type = "mdp_initial_conserve"
+    write_audit_compte(conn, event_type=event_type, actor_id=user_id, entity_id=user_id)
+    return MessageResponse(detail="Votre choix est enregistré. Vous pouvez continuer.")

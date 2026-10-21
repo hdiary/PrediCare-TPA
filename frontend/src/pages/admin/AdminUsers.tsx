@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Plus, Search, Users, UserX } from 'lucide-react';
+import { KeyRound, Pencil, Plus, Search, Users, UserX } from 'lucide-react';
 import { Badge, Button, Card, EmptyState, ErrorState, Input, ListPagination, Modal, Skeleton } from '@/components/ui';
 import { ROLE_LABELS } from '@/lib/format';
 import { api, isMock } from '@/lib/api';
 import type { AdminAccountRole, Role, UserReferences, UserRow } from '@/lib/types';
+import { PasswordField, PasswordRules } from '@/components/PasswordField';
+import { isPasswordValid, passwordChecks } from '@/lib/password';
 
 const ROLE_BADGE_COLORS: Record<Role, string> = {
   insured: 'bg-primary-100 text-primary-700 dark:bg-primary-800 dark:text-primary-200',
@@ -39,6 +41,7 @@ export function AdminUsers() {
   const [editActive, setEditActive] = useState(true);
   const [editAssureId, setEditAssureId] = useState('');
   const [editPrestataireId, setEditPrestataireId] = useState('');
+  const [editPassword, setEditPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
 
@@ -83,6 +86,7 @@ export function AdminUsers() {
     setEditActive(user.status === 'active');
     setEditAssureId(user.assure_id ?? '');
     setEditPrestataireId(user.prestataire_id ?? '');
+    setEditPassword('');
     if (!references) {
       try {
         setReferences(await api.getUserReferences());
@@ -96,6 +100,7 @@ export function AdminUsers() {
     setEditRole(role);
     setEditAssureId('');
     setEditPrestataireId('');
+    if (role === 'admin') setEditPassword('');
   };
 
   const roleChanged = !!editing && editRole !== editing.role;
@@ -105,7 +110,8 @@ export function AdminUsers() {
     ((editRole === 'insured' && editAssureId !== (editing.assure_id ?? '')) ||
       (editRole === 'provider' && editPrestataireId !== (editing.prestataire_id ?? '')));
 
-  const hasChanges = roleChanged || statusChanged || linkChanged;
+  const passwordChanged = editPassword.length > 0;
+  const hasChanges = roleChanged || statusChanged || linkChanged || passwordChanged;
 
   const missingLink =
     editActive &&
@@ -115,6 +121,14 @@ export function AdminUsers() {
   const saveEdit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!editing?.user_id) return;
+    if (passwordChanged && !isPasswordValid(editPassword)) {
+      setActionError('Le mot de passe provisoire doit respecter les règles affichées.');
+      return;
+    }
+    if (passwordChanged && editing.role === 'admin') {
+      setActionError('Le mot de passe d’un compte administrateur ne peut pas être modifié ici.');
+      return;
+    }
     setSaving(true);
     setActionError('');
     try {
@@ -123,6 +137,7 @@ export function AdminUsers() {
         is_active: editActive,
         assure_id: editRole === 'insured' ? editAssureId || null : null,
         prestataire_id: editRole === 'provider' ? editPrestataireId || null : null,
+        ...(passwordChanged ? { new_password: editPassword } : {}),
       });
       setEditing(null);
       load();
@@ -331,6 +346,20 @@ export function AdminUsers() {
                 ))}
               </select>
             </label>
+          )}
+
+          {editing?.role !== 'admin' && editRole !== 'admin' && (
+            <div>
+              <PasswordField
+                id="admin-temporary-password"
+                label="Nouveau mot de passe provisoire (facultatif)"
+                value={editPassword}
+                onChange={setEditPassword}
+                autoComplete="new-password"
+              />
+              <PasswordRules checks={passwordChecks(editPassword)} visible={editPassword.length > 0} />
+              {editPassword && <p className="mt-2 flex items-center gap-1.5 text-xs text-warning-700 dark:text-warning-300"><KeyRound className="h-3.5 w-3.5" />L’utilisateur devra choisir ou confirmer ce mot de passe à sa prochaine connexion.</p>}
+            </div>
           )}
 
           <div className="flex items-center justify-between">

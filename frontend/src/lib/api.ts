@@ -356,6 +356,7 @@ interface ApiUser {
   role: string;
   assure_id?: string | null;
   prestataire_id?: string | null;
+  must_change_password?: boolean;
 }
 
 type AdminRole =
@@ -532,7 +533,10 @@ export const api = {
       };
     }
     try {
-      const data = await request<{ access_token: string; user: ApiUser }>(
+      const data = await request<{
+        access_token: string;
+        user: ApiUser & { must_change_password?: boolean };
+      }>(
         "/auth/login",
         { method: "POST", body: JSON.stringify({ identifier, password }) },
         { auth: false },
@@ -545,6 +549,7 @@ export const api = {
         display_name: u.display_name,
         pseudonym: u.pseudonym,
         email: u.email,
+        must_change_password: data.user.must_change_password,
       };
     } catch (e) {
       if (e instanceof ApiError && e.status === 401)
@@ -558,6 +563,7 @@ export const api = {
     display_name: string;
     pseudonym: string;
     email: string;
+    must_change_password: boolean;
   }> {
     if (isMock("auth")) {
       await delay(200);
@@ -569,16 +575,45 @@ export const api = {
         display_name: account.display_name,
         pseudonym: account.pseudonym,
         email: account.email,
+        must_change_password: false,
       };
     }
-    const raw = await request<ApiUser>("/auth/me");
+    const raw = await request<ApiUser & { must_change_password: boolean }>(
+      "/auth/me",
+    );
     const me = mapUser(raw);
     cachedMe = {
       pseudonym: me.pseudonym,
       role: me.role,
       prestataireId: raw.prestataire_id ?? null,
     };
-    return me;
+    return { ...me, must_change_password: raw.must_change_password };
+  },
+
+  async completeFirstLoginPassword(options: {
+    keepCurrentPassword: boolean;
+    newPassword?: string;
+  }): Promise<void> {
+    await request("/auth/first-login-password", {
+      method: "POST",
+      body: JSON.stringify({
+        keep_current_password: options.keepCurrentPassword,
+        ...(options.newPassword ? { new_password: options.newPassword } : {}),
+      }),
+    });
+  },
+
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
   },
 
   /** Factures dans le périmètre du compte (prestataire : les siennes ; assuré : les siennes ; gestionnaire : toutes). */
@@ -911,7 +946,10 @@ export const api = {
     }
     await request(
       "/auth/reset-password",
-      { method: "POST", body: JSON.stringify({ token, password }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ token, new_password: password }),
+      },
       { auth: false },
     );
   },
@@ -1298,7 +1336,10 @@ export const api = {
     }
     if (filters.search?.trim()) params.set("q", filters.search.trim());
     const page = await request<{
-      items: (ApiUser & { is_active: boolean })[];
+      items: (ApiUser & {
+        is_active: boolean;
+        must_change_password: boolean;
+      })[];
       total: number;
     }>(`/admin/users/page?${params}`);
     return {
@@ -1314,6 +1355,7 @@ export const api = {
           status: r.is_active ? "active" : "inactive",
           assure_id: r.assure_id,
           prestataire_id: r.prestataire_id,
+          must_change_password: r.must_change_password,
         };
       }),
     };
@@ -1369,6 +1411,7 @@ export const api = {
       is_active: boolean;
       assure_id?: string | null;
       prestataire_id?: string | null;
+      new_password?: string;
     },
   ): Promise<void> {
     if (isMock("users"))
@@ -1380,6 +1423,7 @@ export const api = {
         is_active: payload.is_active,
         assure_id: payload.assure_id ?? null,
         prestataire_id: payload.prestataire_id ?? null,
+        ...(payload.new_password ? { new_password: payload.new_password } : {}),
       }),
     });
   },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, Bell, Moon, Sun, X, LogOut } from 'lucide-react';
+import { Menu, Bell, Moon, Sun, X, LogOut, KeyRound } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
@@ -22,13 +22,16 @@ interface WorkspaceNotification {
 const PAGE_TITLES: Record<string, string> = {
   '/assurant': 'Mon assistant',
   '/assurant/remboursements': 'Mes remboursements',
+  '/assurant/mot-de-passe': 'Sécurité du compte',
   '/assurant/aide': 'Aide',
   '/professionnel': 'Déposer une facture',
   '/professionnel/factures': 'Mes factures',
+  '/professionnel/mot-de-passe': 'Sécurité du compte',
   '/professionnel/assistant': 'Assistant RAG',
   '/professionnel/aide': 'Aide',
   '/gestionnaire': 'Tableau de bord',
   '/gestionnaire/alertes': 'Alertes',
+  '/gestionnaire/mot-de-passe': 'Sécurité du compte',
   '/gestionnaire/ordonnances': 'Ordonnances',
   '/gestionnaire/corpus-rag': 'Corpus documentaire RAG',
   '/gestionnaire/aide': 'Aide',
@@ -37,6 +40,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/modeles': 'Modèles',
   '/admin/audit': 'Journal d\'audit',
   '/admin/utilisateurs': 'Utilisateurs',
+  '/admin/mot-de-passe': 'Sécurité du compte',
   '/admin/aide': 'Aide',
 };
 
@@ -44,22 +48,26 @@ const MOBILE_NAV_BY_ROLE: Record<Role, { to: string; label: string; icon: ReactN
   insured: [
     { to: '/assurant', label: 'Assistant', icon: <span>💬</span> },
     { to: '/assurant/remboursements', label: 'Remboursements', icon: <span>🧾</span> },
+    { to: '/assurant/mot-de-passe', label: 'Sécurité', icon: <KeyRound className="h-4 w-4" /> },
   ],
   provider: [
     { to: '/professionnel', label: 'Déposer', icon: <span>📄</span> },
     { to: '/professionnel/factures', label: 'Factures', icon: <span>🧾</span> },
     { to: '/professionnel/assistant', label: 'Assistant', icon: <span>💬</span> },
+    { to: '/professionnel/mot-de-passe', label: 'Sécurité', icon: <KeyRound className="h-4 w-4" /> },
   ],
   manager: [
     { to: '/gestionnaire', label: 'Tableau', icon: <span>📊</span> },
     { to: '/gestionnaire/alertes', label: 'Alertes', icon: <span>⚠️</span> },
     { to: '/gestionnaire/ordonnances', label: 'Ordonnances', icon: <span>📋</span> },
     { to: '/gestionnaire/corpus-rag', label: 'Documents RAG', icon: <span>📚</span> },
+    { to: '/gestionnaire/mot-de-passe', label: 'Sécurité', icon: <KeyRound className="h-4 w-4" /> },
   ],
   admin: [
     { to: '/admin', label: 'Supervision', icon: <span>🖥️</span> },
     { to: '/admin/configuration', label: 'Config', icon: <span>⚙️</span> },
     { to: '/admin/modeles', label: 'Modèles', icon: <span>🔬</span> },
+    { to: '/admin/mot-de-passe', label: 'Sécurité', icon: <KeyRound className="h-4 w-4" /> },
   ],
 };
 
@@ -168,9 +176,11 @@ export function TopBar({ onToggleMobileSidebar }: { onToggleMobileSidebar: () =>
               </div>
             )}
           </div>
-
           <button
+            type="button"
             onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Passer au thème sombre' : 'Passer au thème clair'}
+            title={theme === 'light' ? 'Passer au thème sombre' : 'Passer au thème clair'}
             className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700"
           >
             {theme === 'light' ? <Moon className="w-5 h-5 text-surface-600" /> : <Sun className="w-5 h-5 text-surface-300" />}

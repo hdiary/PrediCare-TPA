@@ -522,7 +522,7 @@ def create_user(
         conn,
         email=body.email or identifier, password_hash=hash_password(password), role=body.role,
         assure_id=body.assure_id, prestataire_id=body.prestataire_id, actif=True,
-        identifiant=identifier,
+        identifiant=identifier, must_change_password=body.role != "administrateur",
     )
     if created is None:
         raise HTTPException(
@@ -574,6 +574,15 @@ def update_user(
         None if role_change else cible["prestataire_id"])
     actif_final = cible["actif"] if body.is_active is None else body.is_active
     identifier_final = cible.get("identifiant")
+    password_changed = "new_password" in sent and body.new_password is not None
+
+    if password_changed and (
+        cible["role"] == "administrateur" or role_final == "administrateur"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="La modification du mot de passe d'un compte administrateur n'est pas permise ici.",
+        )
 
     if actif_final:   # un compte inactif (refusé, désactivé) peut rester non rattaché
         try:
@@ -613,12 +622,26 @@ def update_user(
     voulu = {"identifiant": identifier_final, "role": role_final, "assure_id": assure_final,
              "prestataire_id": presta_final, "actif": actif_final}
     champs = {k: v for k, v in voulu.items() if v != cible[k]}
-    if not champs:
+    if not champs and not password_changed:
         return _user_out(cible)
-    maj = repo.update_utilisateur(conn, user_id, champs)
+    maj = repo.update_utilisateur(conn, user_id, champs) if champs else cible
+    if password_changed:
+        repo.set_mot_de_passe(
+            conn,
+            user_id,
+            hash_password(body.new_password),
+            must_change_password=True,
+        )
+        repo.invalider_sessions_utilisateur(conn, user_id)
+        maj = repo.get_utilisateur(conn, user_id)
     write_audit_compte(
         conn, event_type="compte_modifie", actor_id=admin["user_id"], entity_id=user_id,
-        input_data={"champs": sorted(champs)},
+        input_data={
+            "champs": sorted([
+                *champs,
+                *( ["mot_de_passe"] if password_changed else []),
+            ]),
+        },
         output_data={"role": maj["role"], "is_active": maj["actif"]},
     )
     return _user_out(maj)

@@ -116,11 +116,88 @@ def test_comptes_assures_et_prestataires_provisionnes_au_demarrage(client):
 # ---------- inscription ----------
 
 
-def _create_admin_user(client, email, role="gestionnaire", cin="123456789012", **link):
+def _create_admin_user(
+    client,
+    email,
+    role="gestionnaire",
+    cin="123456789012",
+    *,
+    complete_first_login=True,
+    **link,
+):
     admin = _auth(client, "admin@c.mg")
     payload = _account_payload(email, role, cin, **link)
     response = client.post("/admin/users", headers=admin, json=payload)
+    if response.status_code == 201 and complete_first_login and role != "administrateur":
+        credentials = response.json()
+        login = _login(client, credentials["identifiant"], credentials["mot_de_passe_provisoire"])
+        token = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        completed = client.post("/auth/first-login-password", headers=token,
+                                json={"keep_current_password": True})
+        assert completed.status_code == 200, completed.text
     return response
+
+
+def test_premiere_connexion_impose_choix_et_permet_de_garder_le_mot_de_passe(client):
+    created = _create_admin_user(
+        client,
+        "premiere-connexion@c.mg",
+        role="assure",
+        cin="523456789012",
+        complete_first_login=False,
+        assure_id="ASS-1111111111",
+    )
+    assert created.status_code == 201
+    credentials = created.json()
+    assert credentials["must_change_password"] is True
+    login = _login(client, credentials["identifiant"], credentials["mot_de_passe_provisoire"])
+    assert login.status_code == 200
+    assert login.json()["user"]["must_change_password"] is True
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert client.post("/auth/change-password", headers=headers, json={
+        "current_password": credentials["mot_de_passe_provisoire"],
+        "new_password": NOUVEAU,
+    }).status_code == 403
+    assert client.post("/auth/first-login-password", headers=headers, json={
+        "keep_current_password": True,
+    }).status_code == 200
+    assert client.get("/auth/me", headers=headers).json()["must_change_password"] is False
+    assert client.post("/auth/change-password", headers=headers, json={
+        "current_password": credentials["mot_de_passe_provisoire"],
+        "new_password": NOUVEAU,
+    }).status_code == 200
+
+
+def test_admin_peut_reinitialiser_mot_de_passe_non_admin_et_force_le_premier_acces(client):
+    created = _create_admin_user(
+        client, "reset-admin@c.mg", role="assure", cin="623456789012",
+        assure_id="ASS-1111111111",
+    )
+    assert created.status_code == 201
+    credentials = created.json()
+    headers_user = _auth(client, "reset-admin@c.mg", credentials["mot_de_passe_provisoire"])
+    admin = _auth(client, "admin@c.mg")
+    user_id = credentials["user_id"]
+
+    updated = client.patch(f"/admin/users/{user_id}", headers=admin, json={
+        "new_password": NOUVEAU,
+    })
+    assert updated.status_code == 200
+    assert updated.json()["must_change_password"] is True
+    assert client.get("/auth/me", headers=headers_user).status_code == 401
+
+    login = _login(client, "reset-admin@c.mg", NOUVEAU)
+    assert login.status_code == 200
+    assert login.json()["user"]["must_change_password"] is True
+    headers_new = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert client.post("/auth/first-login-password", headers=headers_new, json={
+        "new_password": MDP,
+    }).status_code == 200
+
+    admin_id = _user_id("admin@c.mg")
+    assert client.patch(f"/admin/users/{admin_id}", headers=admin, json={
+        "new_password": NOUVEAU,
+    }).status_code == 403
 
 
 # ---------- création des comptes ----------

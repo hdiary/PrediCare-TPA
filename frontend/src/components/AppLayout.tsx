@@ -35,6 +35,10 @@ export function AppLayout({ allowedRoles, children }: { allowedRoles: Role[]; ch
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  if (user.must_change_password) {
+    return <Navigate to="/premiere-connexion" replace />;
+  }
+
   if (!allowedRoles.includes(user.role)) {
     return <Navigate to="/acces-refuse" replace />;
   }

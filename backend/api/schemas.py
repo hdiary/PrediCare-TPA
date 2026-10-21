@@ -52,6 +52,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: NouveauMotDePasse
 
 
+class FirstLoginPasswordRequest(BaseModel):
+    keep_current_password: bool = False
+    new_password: NouveauMotDePasse | None = None
+
+
 class MessageResponse(BaseModel):
     detail: str
 
@@ -72,6 +77,7 @@ class UserOut(BaseModel):
     role: Role
     assure_id: str | None = None
     prestataire_id: str | None = None
+    must_change_password: bool = False
 
 
 class TokenResponse(BaseModel):

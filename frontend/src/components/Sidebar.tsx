@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import {
   LayoutDashboard, AlertTriangle, FileText, MessageSquare,
   Settings, Server, GitBranch, ScrollText, Users, LogOut,
-  ChevronLeft, ChevronRight, HelpCircle, Receipt, ClipboardList, BookOpen,
+  ChevronLeft, ChevronRight, HelpCircle, Receipt, ClipboardList, BookOpen, KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Logo } from './Logo';
@@ -20,12 +20,14 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   insured: [
     { to: '/assurant', label: 'Mon assistant', icon: <MessageSquare className="w-5 h-5" /> },
     { to: '/assurant/remboursements', label: 'Mes remboursements', icon: <Receipt className="w-5 h-5" /> },
+    { to: '/assurant/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/assurant/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   provider: [
     { to: '/professionnel', label: 'Déposer une facture', icon: <FileText className="w-5 h-5" /> },
     { to: '/professionnel/factures', label: 'Mes factures', icon: <Receipt className="w-5 h-5" /> },
     { to: '/professionnel/assistant', label: 'Assistant RAG', icon: <MessageSquare className="w-5 h-5" /> },
+    { to: '/professionnel/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/professionnel/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   manager: [
@@ -33,6 +35,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/gestionnaire/alertes', label: 'Alertes', icon: <AlertTriangle className="w-5 h-5" /> },
     { to: '/gestionnaire/ordonnances', label: 'Ordonnances', icon: <ClipboardList className="w-5 h-5" /> },
     { to: '/gestionnaire/corpus-rag', label: 'Documents RAG', icon: <BookOpen className="w-5 h-5" /> },
+    { to: '/gestionnaire/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/gestionnaire/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   admin: [
@@ -41,6 +44,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/modeles', label: 'Modèles', icon: <GitBranch className="w-5 h-5" /> },
     { to: '/admin/audit', label: 'Journal d\'audit', icon: <ScrollText className="w-5 h-5" /> },
     { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: <Users className="w-5 h-5" /> },
+    { to: '/admin/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/admin/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
 };

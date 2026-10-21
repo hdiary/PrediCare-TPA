@@ -110,30 +110,6 @@ export function AdminConfig() {
         </div>
       </Card>
 
-      <Card className="p-8">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-surface-800 dark:text-surface-100">Condition étendue</h3>
-            <p className="text-xs text-surface-500 dark:text-surface-400 mt-1">
-              Prévue pour signaler des règles critiques (doublon, prestataire radié ou acte fictif), même si le score est sous le seuil.
-            </p>
-            <p className="text-xs text-warning-700 dark:text-warning-300 mt-2">
-              Cette option est enregistrée, mais n’est pas encore appliquée au traitement des alertes. Le seuil de score reste le seul déclencheur.
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={false}
-            aria-label="Activer la condition étendue"
-            disabled
-            className="relative w-11 h-6 rounded-full bg-surface-300 dark:bg-surface-600 opacity-60"
-          >
-            <span className="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow" />
-          </button>
-        </div>
-      </Card>
-
       {/* Notification channels */}
       <Card className="p-8">
         <h3 className="font-semibold text-surface-800 dark:text-surface-100 mb-5">Canaux de notification</h3>

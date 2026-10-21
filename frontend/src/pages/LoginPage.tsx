@@ -41,7 +41,9 @@ export function LoginPage() {
       const loggedIn = await login(identifier, password);
       // La page demandée n'est reprise que si elle appartient au rôle connecté.
       const home = getRoleHome(loggedIn.role);
-      navigate(from && from.startsWith(home) ? from : home);
+      navigate(loggedIn.must_change_password
+        ? '/premiere-connexion'
+        : from && from.startsWith(home) ? from : home);
     } catch (err) {
       setError(userErrorMessage(err, 'Connexion impossible. Vérifiez vos identifiants puis réessayez.'));
     } finally {

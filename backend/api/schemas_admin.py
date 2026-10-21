@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from api.schemas import Email
+from api.schemas import Email, NouveauMotDePasse
 
 
 class AuditEntryOut(BaseModel):
@@ -57,6 +57,7 @@ class UserUpdate(BaseModel):
     assure_id: str | None = None
     prestataire_id: str | None = None
     is_active: bool | None = None
+    new_password: NouveauMotDePasse | None = None
 
 
 class UserRowOut(BaseModel):
@@ -68,6 +69,7 @@ class UserRowOut(BaseModel):
     prestataire_id: str | None = None
     is_active: bool
     last_login: str | None = None
+    must_change_password: bool = False
 
 
 class UserPageOut(BaseModel):

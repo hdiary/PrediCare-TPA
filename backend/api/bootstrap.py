@@ -33,9 +33,10 @@ def _ensure_user(
 ) -> int:
     row = conn.execute(
         "INSERT INTO utilisateurs "
-        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id) "
-        "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING utilisateur_id",
-        (username, password_hash, assure_id, prestataire_id),
+        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, "
+        "mot_de_passe_a_changer) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING utilisateur_id",
+        (username, password_hash, assure_id, prestataire_id, role != "administrateur"),
     ).fetchone()
     if row is None:
         row = conn.execute(
@@ -139,8 +140,9 @@ def ensure_identity_users() -> None:
 
         password_hash = hash_password(DEFAULT_IDENTITY_PASSWORD)
         conn.execute(
-            "INSERT INTO utilisateurs (nom_utilisateur, hash_mot_de_passe) "
-            "SELECT DISTINCT nom_utilisateur, %s "
+            "INSERT INTO utilisateurs "
+            "(nom_utilisateur, hash_mot_de_passe, mot_de_passe_a_changer) "
+            "SELECT DISTINCT nom_utilisateur, %s, true "
             "FROM unnest(%s::text[]) AS identities(nom_utilisateur) "
             "ON CONFLICT DO NOTHING",
             (password_hash, usernames),
