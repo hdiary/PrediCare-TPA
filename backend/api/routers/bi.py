@@ -1,4 +1,4 @@
-"""Business-intelligence endpoints backed by the shared five-minute snapshot."""
+"""Business-intelligence endpoints using current operational data."""
 from __future__ import annotations
 
 import logging
@@ -16,6 +16,35 @@ _last_kpis: dict[int, dict[str, Any]] = {}
 bi_reader = Depends(require_role("gestionnaire", "administrateur"))
 logger = logging.getLogger(__name__)
 
+_LIVE_BI_CTE = """
+WITH latest_prediction AS (
+    SELECT DISTINCT ON (facture_id)
+           facture_id, prediction_id, score, est_alerte, latence_ms, seuil_utilise, date
+    FROM predictions
+    ORDER BY facture_id, date DESC, prediction_id DESC
+), latest_decision AS (
+    SELECT DISTINCT ON (prediction_id)
+           prediction_id, decision, date_decision
+    FROM decisions_gestionnaire
+    ORDER BY prediction_id, date_decision DESC, decision_id DESC
+), dashboard AS (
+    SELECT f.facture_id, f.date_facture, f.montant_total,
+           f.montant_pris_en_charge, c.montant_reclame, c.montant_calcule,
+           p.prediction_id, p.score, p.est_alerte AS is_alert, p.latence_ms,
+           p.seuil_utilise AS threshold, d.decision,
+           GREATEST(
+               COALESCE(p.date::date, f.date_facture),
+               COALESCE(d.date_decision::date, f.date_facture)
+           ) AS date_activite,
+           pr.prestataire_id, pr.nom AS prestataire_nom
+    FROM factures f
+    JOIN prestataires pr ON pr.prestataire_id = f.prestataire_id
+    LEFT JOIN latest_prediction p ON p.facture_id = f.facture_id
+    LEFT JOIN latest_decision d ON d.prediction_id = p.prediction_id
+    LEFT JOIN calculs_remboursement c ON c.facture_id = f.facture_id
+)
+"""
+
 
 def _rows(conn, query: str, params: tuple[Any, ...] = ()) -> list[dict]:
     return [dict(row) for row in conn.execute(query, params).fetchall()]
@@ -31,13 +60,9 @@ def _refresh_state(conn) -> dict[str, Any]:
 
 
 def _compute_kpis(conn, jours: int) -> dict[str, Any]:
-    state = _refresh_state(conn)
-    refreshed_at = state["last_success_at"]
-    stale = refreshed_at is None or (
-        (datetime.now(timezone.utc) - refreshed_at).total_seconds() > 600
-    )
+    refreshed_at = datetime.now(timezone.utc)
     row = conn.execute(
-        """
+        _LIVE_BI_CTE + """
         SELECT
           count(*) FILTER (WHERE score IS NOT NULL) AS factures_traitees,
           count(*) FILTER (WHERE is_alert) AS alertes_generees,
@@ -59,8 +84,8 @@ def _compute_kpis(conn, jours: int) -> dict[str, Any]:
             FILTER (WHERE latence_ms IS NOT NULL) AS latence_p50_ms,
           percentile_cont(0.95) WITHIN GROUP (ORDER BY latence_ms)
             FILTER (WHERE latence_ms IS NOT NULL) AS latence_p95_ms
-        FROM mv_bi_factures
-        WHERE date_facture >= current_date - (%s * interval '1 day')
+        FROM dashboard
+        WHERE date_activite >= current_date - (%s * interval '1 day')
         """,
         (jours,),
     ).fetchone()
@@ -73,50 +98,50 @@ def _compute_kpis(conn, jours: int) -> dict[str, Any]:
             if data["alertes_decidees"] else None
         ),
         date_rafraichissement=refreshed_at,
-        stale=stale,
-        erreur_rafraichissement=state["last_error"] if stale else None,
+        stale=False,
+        erreur_rafraichissement=None,
     )
     data["par_jour"] = _rows(
         conn,
-        """
-        SELECT date_facture AS jour,
+        _LIVE_BI_CTE + """
+        SELECT date_activite AS jour,
                count(*) FILTER (WHERE score IS NOT NULL) AS factures,
                count(*) FILTER (WHERE is_alert) AS alertes,
                coalesce(sum(montant_reclame - montant_calcule)
                  FILTER (WHERE decision IN ('REJETER', 'CONFIRMER_FRAUDE',
                                             'rejete', 'fraude_confirmee')), 0)
                  AS montant_economise
-        FROM mv_bi_factures
-        WHERE date_facture >= current_date - (%s * interval '1 day')
-        GROUP BY date_facture ORDER BY date_facture
+        FROM dashboard
+        WHERE date_activite >= current_date - (%s * interval '1 day')
+        GROUP BY date_activite ORDER BY date_activite
         """,
         (jours,),
     )
     data["top_prestataires"] = _rows(
         conn,
-        """
+        _LIVE_BI_CTE + """
         SELECT prestataire_id, prestataire_nom, count(*) AS alertes
-        FROM mv_bi_factures
-        WHERE is_alert AND date_facture >= current_date - (%s * interval '1 day')
+        FROM dashboard
+        WHERE is_alert AND date_activite >= current_date - (%s * interval '1 day')
         GROUP BY prestataire_id, prestataire_nom ORDER BY alertes DESC LIMIT 10
         """,
         (jours,),
     )
     data["distribution_scores"] = _rows(
         conn,
-        """
+        _LIVE_BI_CTE + """
         SELECT width_bucket(score, 0, 1, 10) AS bucket, count(*) AS count
-        FROM mv_bi_factures
+        FROM dashboard
         WHERE score IS NOT NULL
-          AND date_facture >= current_date - (%s * interval '1 day')
+          AND date_activite >= current_date - (%s * interval '1 day')
         GROUP BY bucket ORDER BY bucket
         """,
         (jours,),
     )
     threshold = conn.execute(
-        """
+        _LIVE_BI_CTE + """
         SELECT threshold
-        FROM mv_bi_factures
+        FROM dashboard
         WHERE threshold IS NOT NULL
         ORDER BY prediction_id DESC
         LIMIT 1

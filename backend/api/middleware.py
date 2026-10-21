@@ -9,14 +9,16 @@ class BodySizeLimitMiddleware:
     à compléter par la limite du reverse proxy (client_max_body_size) en production.
     """
 
-    def __init__(self, app, max_bytes: int):
+    def __init__(self, app, max_bytes: int, path_limits: dict[str, int] | None = None):
         self.app = app
         self.max_bytes = max_bytes
+        self.path_limits = path_limits or {}
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
             raw = dict(scope["headers"]).get(b"content-length")
-            if raw and raw.isdigit() and int(raw) > self.max_bytes:
+            max_bytes = self.path_limits.get(scope.get("path"), self.max_bytes)
+            if raw and raw.isdigit() and int(raw) > max_bytes:
                 body = json.dumps({"detail": "Requête trop volumineuse"}).encode()
                 await send({"type": "http.response.start", "status": 413,
                             "headers": [(b"content-type", b"application/json"),

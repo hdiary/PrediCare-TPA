@@ -34,6 +34,7 @@ import type {
   CreatedUserCredentials,
   AlertDecisionValue,
   ApiInvoiceLine,
+  RagCorpusDocument,
 } from "./types";
 
 import {
@@ -151,10 +152,12 @@ async function request<T>(
   options: RequestInit = {},
   opts: { auth?: boolean } = {},
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(opts.auth === false ? {} : authHeaders()),
       ...options.headers,
     },
@@ -695,14 +698,16 @@ export const api = {
     insuredId: string,
     invoiceType: string,
     scan: File,
-    expected: InvoicePrescription,
+    expected?: InvoicePrescription,
   ): Promise<string> {
     const formData = new FormData();
     formData.append("scan", scan);
     formData.append("assure_id", insuredId);
     formData.append("type_facture", invoiceType);
-    formData.append("expected_id", expected.prescription_id);
-    formData.append("expected_date", expected.prescription_date);
+    if (expected?.prescription_id)
+      formData.append("expected_id", expected.prescription_id);
+    if (expected?.prescription_date)
+      formData.append("expected_date", expected.prescription_date);
     const res = await fetch(`${BASE_URL}/ordonnances/pdf`, {
       method: "POST",
       headers: { ...authHeaders() },
@@ -891,6 +896,7 @@ export const api = {
             : null,
       }),
     });
+    window.dispatchEvent(new Event("predicare:data-updated"));
     return {
       id: r.facture_id,
       status: DECISION_TO_STATUS[r.decision] ?? "pending",
@@ -904,6 +910,33 @@ export const api = {
 
   async getBIKPIs(): Promise<BIKpiData> {
     return request("/bi/kpis");
+  },
+
+  async getRagCorpus(): Promise<RagCorpusDocument[]> {
+    const result = await request<{ items: RagCorpusDocument[] }>("/rag-corpus");
+    return result.items;
+  },
+
+  async addRagCorpusDocument(file: File): Promise<{
+    filename: string;
+    scope: RagCorpusDocument["scope"];
+    chunks: number;
+    already_indexed: boolean;
+  }> {
+    const form = new FormData();
+    form.append("file", file);
+    const result = await request<{
+      filename: string;
+      scope: RagCorpusDocument["scope"];
+      chunks: number;
+      already_indexed: boolean;
+    }>("/rag-corpus", {
+      method: "POST",
+      body: form,
+      headers: authHeaders(),
+    });
+    window.dispatchEvent(new Event("predicare:data-updated"));
+    return result;
   },
 
   async getBIModel(): Promise<BIModelData> {

@@ -30,6 +30,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/gestionnaire': 'Tableau de bord',
   '/gestionnaire/alertes': 'Alertes',
   '/gestionnaire/ordonnances': 'Ordonnances',
+  '/gestionnaire/corpus-rag': 'Corpus documentaire RAG',
   '/gestionnaire/aide': 'Aide',
   '/admin': 'Supervision',
   '/admin/configuration': 'Configuration',
@@ -53,6 +54,7 @@ const MOBILE_NAV_BY_ROLE: Record<Role, { to: string; label: string; icon: ReactN
     { to: '/gestionnaire', label: 'Tableau', icon: <span>📊</span> },
     { to: '/gestionnaire/alertes', label: 'Alertes', icon: <span>⚠️</span> },
     { to: '/gestionnaire/ordonnances', label: 'Ordonnances', icon: <span>📋</span> },
+    { to: '/gestionnaire/corpus-rag', label: 'Documents RAG', icon: <span>📚</span> },
   ],
   admin: [
     { to: '/admin', label: 'Supervision', icon: <span>🖥️</span> },

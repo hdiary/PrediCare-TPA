@@ -7,11 +7,15 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import create_engine
 
 from api import db
 from api.bootstrap import ensure_demo_users, ensure_seed_users, ensure_user_identifiers
 from api.config import get_settings
-from api.routers import admin, alerts, auth, bi, chat, factures, health, model, predict, ordonnances
+from api.routers import (
+    admin, alerts, auth, bi, chat, factures, health, model, predict,
+    ordonnances, rag_corpus,
+)
 from api.services.metrics import http_metrics
 from api.logging_config import configure_logging
 from api.middleware import BodySizeLimitMiddleware
@@ -47,6 +51,12 @@ async def lifespan(_: FastAPI):
     ensure_demo_users()
     ensure_seed_users()
     ensure_user_identifiers()
+    database_url = settings.database_url
+    if database_url.startswith(("postgresql://", "postgres://")):
+        database_url = database_url.replace(
+            "postgres://", "postgresql+psycopg://", 1
+        ).replace("postgresql://", "postgresql+psycopg://", 1)
+    app.state.rag_ingestion_engine = create_engine(database_url)
     app.state.rag_agent = None
     try:
         from rag.factory import create_agent
@@ -60,12 +70,20 @@ async def lifespan(_: FastAPI):
     rag_agent = getattr(app.state, "rag_agent", None)
     if rag_agent is not None:
         rag_agent.retriever.engine.dispose()
+    app.state.rag_ingestion_engine.dispose()
     db.close_pool()
 
 
 app = FastAPI(title="PrediCare TPA API", version=health.VERSION, lifespan=lifespan)
 
-app.add_middleware(BodySizeLimitMiddleware, max_bytes=get_settings().max_body_bytes)
+app.add_middleware(
+    BodySizeLimitMiddleware,
+    max_bytes=get_settings().max_body_bytes,
+    path_limits={
+        "/rag-corpus": 21 * 1024 * 1024,
+        "/api/v1/rag-corpus": 21 * 1024 * 1024,
+    },
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
@@ -116,4 +134,5 @@ app.include_router(alerts.router)
 app.include_router(invoices.router)
 app.include_router(admin.router)
 app.include_router(bi.router)
+app.include_router(rag_corpus.router)
 app.include_router(api_v1_router)
