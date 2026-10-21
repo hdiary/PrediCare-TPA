@@ -970,7 +970,12 @@ export const api = {
       };
       const checks = h.checks ?? {};
       return {
-        api: h.status === "ok" ? "ok" : h.status === "degraded" || !res.ok ? "degraded" : unknown,
+        api:
+          h.status === "ok"
+            ? "ok"
+            : h.status === "degraded" || !res.ok
+              ? "degraded"
+              : unknown,
         database: toServiceState(checks.database),
         model: toServiceState(checks.model),
         n8n: toServiceState(checks.n8n),
