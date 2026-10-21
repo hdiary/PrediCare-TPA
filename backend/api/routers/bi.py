@@ -64,6 +64,7 @@ def _compute_kpis(conn, jours: int) -> dict[str, Any]:
     row = conn.execute(
         _LIVE_BI_CTE + """
         SELECT
+          count(*) AS factures_enregistrees,
           count(*) FILTER (WHERE score IS NOT NULL) AS factures_traitees,
           count(*) FILTER (WHERE is_alert) AS alertes_generees,
           count(*) FILTER (WHERE is_alert AND decision IS NULL) AS alertes_en_attente,

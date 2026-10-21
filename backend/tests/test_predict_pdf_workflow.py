@@ -70,6 +70,157 @@ def test_pdf_route_reuses_prediction_pipeline_with_rejection_and_pending_enabled
     assert recorded["payload"]["attestation_pec_id"] == "APC-000001"
 
 
+def test_admin_pdf_prediction_uses_provider_extracted_from_pdf(monkeypatch):
+    extraction = SimpleNamespace(
+        ok=True,
+        doc_type="facture",
+        warnings=[],
+        data={
+            "numero_facture": "INV-2",
+            "assure_id": "ASS-1234567890",
+            "prestataire_id": "PRE-FROM-PDF",
+            "contrat_id": "CTR-000001",
+            "type_facture": "CONSULTATION",
+            "date_soin": "2025-02-01",
+            "date_facture": "2025-02-02",
+            "mode_reglement": "TIERS_PAYANT",
+            "devise": "MGA",
+            "lignes": [{"code": "ACT-1", "quantite": 1, "prix_unitaire": 1000}],
+        },
+    )
+    monkeypatch.setattr(predict, "load_reference_tables", lambda _conn: {})
+    monkeypatch.setattr(predict, "build_reference", lambda _tables: {})
+    monkeypatch.setattr(predict, "extract_document", lambda *_args, **_kwargs: extraction)
+    recorded = {}
+
+    def fake_predict(**kwargs):
+        recorded.update(kwargs)
+        return predict.PredictResponse(
+            facture_id=kwargs["payload"]["facture_id"],
+            prediction_id=None,
+        )
+
+    monkeypatch.setattr(predict, "predict", fake_predict)
+    asyncio.run(
+        predict.predict_pdf(
+            file=_pdf_upload(),
+            prescription=None,
+            prescription_scan=None,
+            prestataire_id=None,
+            user={"user_id": 1, "role": "administrateur", "prestataire_id": None},
+            conn=MagicMock(),
+            registry=MagicMock(),
+        )
+    )
+
+    assert recorded["payload"]["prestataire_id"] == "PRE-FROM-PDF"
+
+
+def test_provider_pdf_prediction_rejects_provider_mismatch(monkeypatch):
+    extraction = SimpleNamespace(
+        ok=True,
+        doc_type="facture",
+        warnings=[],
+        data={
+            "numero_facture": "INV-3",
+            "assure_id": "ASS-1234567890",
+            "prestataire_id": "PRE-FROM-PDF",
+            "contrat_id": "CTR-000001",
+            "type_facture": "CONSULTATION",
+            "date_soin": "2025-02-01",
+            "date_facture": "2025-02-02",
+            "mode_reglement": "TIERS_PAYANT",
+            "devise": "MGA",
+            "lignes": [{"code": "ACT-1", "quantite": 1, "prix_unitaire": 1000}],
+        },
+    )
+    monkeypatch.setattr(predict, "load_reference_tables", lambda _conn: {})
+    monkeypatch.setattr(predict, "build_reference", lambda _tables: {})
+    monkeypatch.setattr(predict, "extract_document", lambda *_args, **_kwargs: extraction)
+    called = {}
+
+    class Rejected(Exception):
+        pass
+
+    def capture_rejection(*args, **kwargs):
+        called["args"] = args
+        called["kwargs"] = kwargs
+        raise Rejected
+
+    monkeypatch.setattr(predict, "_reject", capture_rejection)
+
+    with pytest.raises(Rejected):
+        asyncio.run(
+            predict.predict_pdf(
+                file=_pdf_upload(),
+                prescription=None,
+                prescription_scan=None,
+                prestataire_id=None,
+                user={
+                    "user_id": 1,
+                    "role": "professionnel_sante",
+                    "prestataire_id": "PRE-ACCOUNT",
+                },
+                conn=MagicMock(),
+                registry=MagicMock(),
+            )
+        )
+
+    assert called["args"][3][0]["code"] == "PRESTATAIRE_NON_AUTORISE"
+    assert called["args"][4:6] == (403, "autorisation_pdf")
+    assert called["kwargs"]["record_rejection"] is True
+
+
+def test_provider_pdf_prediction_accepts_matching_provider(monkeypatch):
+    extraction = SimpleNamespace(
+        ok=True,
+        doc_type="facture",
+        warnings=[],
+        data={
+            "numero_facture": "INV-4",
+            "assure_id": "ASS-1234567890",
+            "prestataire_id": "PRE-ACCOUNT",
+            "contrat_id": "CTR-000001",
+            "type_facture": "CONSULTATION",
+            "date_soin": "2025-02-01",
+            "date_facture": "2025-02-02",
+            "mode_reglement": "TIERS_PAYANT",
+            "devise": "MGA",
+            "lignes": [{"code": "ACT-1", "quantite": 1, "prix_unitaire": 1000}],
+        },
+    )
+    monkeypatch.setattr(predict, "load_reference_tables", lambda _conn: {})
+    monkeypatch.setattr(predict, "build_reference", lambda _tables: {})
+    monkeypatch.setattr(predict, "extract_document", lambda *_args, **_kwargs: extraction)
+    recorded = {}
+
+    def fake_predict(**kwargs):
+        recorded.update(kwargs)
+        return predict.PredictResponse(
+            facture_id=kwargs["payload"]["facture_id"],
+            prediction_id=None,
+        )
+
+    monkeypatch.setattr(predict, "predict", fake_predict)
+    asyncio.run(
+        predict.predict_pdf(
+            file=_pdf_upload(),
+            prescription=None,
+            prescription_scan=None,
+            prestataire_id=None,
+            user={
+                "user_id": 1,
+                "role": "professionnel_sante",
+                "prestataire_id": "PRE-ACCOUNT",
+            },
+            conn=MagicMock(),
+            registry=MagicMock(),
+        )
+    )
+
+    assert recorded["payload"]["prestataire_id"] == "PRE-ACCOUNT"
+
+
 def test_pdf_extraction_errors_are_audited_and_recorded(monkeypatch):
     extraction = SimpleNamespace(
         ok=False,

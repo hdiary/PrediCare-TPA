@@ -482,7 +482,7 @@ def list_utilisateurs(conn, *, role: str | None, actif: bool | None, q: str | No
     params.extend((limit, offset))
     return conn.execute(
         f"SELECT {_USER_SELECT} {_USER_FROM} {where}"
-        "ORDER BY u.utilisateur_id LIMIT %s OFFSET %s",
+        "ORDER BY u.utilisateur_id DESC LIMIT %s OFFSET %s",
         params,
     ).fetchall()
 

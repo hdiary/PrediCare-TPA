@@ -35,6 +35,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 import features as F
 import registry
+from reference import reference_rows
 
 MODELS_DIR = registry.MODELS_DIR
 SEED = 42
@@ -230,7 +231,9 @@ def main():
                  "algo": best["algo"], "strategie": best["strategie"], "params": best["params"],
                  "version": version, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                  "fenetres": fen, "seuil_cdc": SEUIL_CDC,
-                 "categories": {c: list(X[c].cat.categories) for c in F.CATEGORICAL}},
+                 "categories": {c: list(X[c].cat.categories) for c in F.CATEGORICAL},
+                 # fond des explications SHAP : factures légitimes de la fenêtre d'entraînement
+                 "reference_rows": reference_rows(data[0], data[1], seed=SEED)},
                 MODELS_DIR / fichier)
     entry = {"version": version, "file": fichier, "algo": best["algo"], "strategie": best["strategie"],
              "params": best["params"], "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

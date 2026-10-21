@@ -69,7 +69,8 @@ export function ManagerDashboard() {
   if (error || !kpis || !model) return <ErrorState message="Impossible de charger le tableau de bord." />;
 
   const kpiCards = [
-    { label: 'Factures traitées', value: kpis.factures_traitees.toLocaleString('fr-FR'), icon: <FileText className="w-5 h-5" />, color: 'primary' },
+    { label: 'Factures enregistrées', value: kpis.factures_enregistrees.toLocaleString('fr-FR'), icon: <FileText className="w-5 h-5" />, color: 'primary' },
+    { label: 'Factures scorées', value: kpis.factures_traitees.toLocaleString('fr-FR'), icon: <Target className="w-5 h-5" />, color: 'primary' },
     { label: 'Montant réclamé', value: formatMGA(kpis.montant_reclame), icon: <Euro className="w-5 h-5" />, color: 'primary' },
     { label: 'Montant remboursé', value: formatMGA(kpis.montant_rembourse), icon: <Banknote className="w-5 h-5" />, color: 'success' },
     { label: 'Montant à risque', value: formatMGA(kpis.montant_a_risque), icon: <Target className="w-5 h-5" />, color: 'warning' },

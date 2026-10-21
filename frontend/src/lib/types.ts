@@ -161,6 +161,7 @@ export interface KPIData {
 }
 
 export interface BIKpiData {
+  factures_enregistrees: number;
   factures_traitees: number;
   alertes_generees: number;
   alertes_en_attente: number;

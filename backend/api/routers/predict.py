@@ -28,6 +28,7 @@ from api.services.calculation_service import calculate_reimbursement
 from api.services.context_service import ContextUnavailableError, build_context
 from api.services.fraud_rules_v2 import evaluate_fraud_rules
 from api.services.model_registry import get_registry
+from api.services.model_types import decision_threshold
 from api.services.notification_service import notify_alert
 from api.services.mailer import send_alert_email
 from api.services.rules import evaluate_rules
@@ -216,7 +217,11 @@ def predict(
         conn.commit()
         raise HTTPException(status_code=500, detail="Erreur de préparation des données") from exc
 
-    seuil = repo.get_seuil_alerte(conn, settings.alert_threshold)
+    # Seuil : valeur réglée par l'administrateur (table configuration) si elle existe ; sinon
+    # seuil de décision enregistré avec le modèle ; sinon valeur du .env.
+    seuil = repo.get_seuil_alerte(
+        conn, decision_threshold(bundle) or settings.alert_threshold
+    )
     alert_rule_codes = {
         "QUANTITE_EXCESSIVE", "INCOHERENCE_PROFIL", "DOUBLON",
         "PRESTATAIRE_RADIE", "ORDONNANCE_EXPIREE",
@@ -493,12 +498,52 @@ async def predict_pdf(
         )
 
     # 3. Reconstruire le payload
+    extracted_prestataire_id = extraction.data.get("prestataire_id")
+    account_prestataire_id = user.get("prestataire_id")
+    if user["role"] == "professionnel_sante":
+        if not account_prestataire_id:
+            _reject(
+                conn, user, extraction.data,
+                [{
+                    "code": "PRESTATAIRE_NON_RATTACHE",
+                    "champ": "prestataire_id",
+                    "message": "Votre compte n'est rattaché à aucun prestataire.",
+                }],
+                403, "autorisation_pdf", record_rejection=True,
+            )
+        if (
+            extracted_prestataire_id
+            and extracted_prestataire_id != account_prestataire_id
+        ) or (
+            prestataire_id and prestataire_id != account_prestataire_id
+        ):
+            _reject(
+                conn, user, {
+                    **extraction.data,
+                    "prestataire_id": extracted_prestataire_id or prestataire_id,
+                },
+                [{
+                    "code": "PRESTATAIRE_NON_AUTORISE",
+                    "champ": "prestataire_id",
+                    "message": (
+                        "Le prestataire indiqué sur la facture ne correspond pas "
+                        "à votre établissement."
+                    ),
+                }],
+                403, "autorisation_pdf", record_rejection=True,
+            )
+
     contrat_id = None
     if extraction.data.get("assure_id") and not extraction.data.get("contrat_id"):
         contrat_id = repo.contrat_de_assure(conn, extraction.data["assure_id"])
     payload = _pdf_to_payload(
         extraction.data,
-        prestataire_id or user.get("prestataire_id") or extraction.data.get("prestataire_id"),
+        (
+            account_prestataire_id
+            if user["role"] == "professionnel_sante"
+            else prestataire_id or extracted_prestataire_id
+            or account_prestataire_id
+        ),
         contrat_id,
     )
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 
 from api.config import get_settings
+from api.services.hgb_explainer import HGBPermutationExplainer
 from api.services.model_types import ModelBundle, ModelUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -30,60 +31,6 @@ def _read_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ModelUnavailableError(f"Impossible de lire {path.name}: {exc}") from exc
-
-
-class _HGBPermutationExplainer:
-    def __init__(self, model, reference, features: list[str], categories: dict):
-        import numpy as np
-        import pandas as pd
-        import shap
-
-        self.features = features
-        self.categories = categories
-        encoded_reference = self._encode(reference, pd)
-        self.expected_value = np.asarray(model.predict_proba(reference)[0])
-        self._explainer = shap.PermutationExplainer(
-            self._predict_proba(model, pd), encoded_reference,
-            feature_names=features,
-        )
-
-    def _encode(self, frame, pandas):
-        encoded = frame.copy()
-        for name, levels in self.categories.items():
-            encoded[name] = pandas.Categorical(
-                frame[name], categories=levels
-            ).codes.astype(float)
-        encoded = encoded.apply(pandas.to_numeric, errors="raise")
-        return encoded.to_numpy(dtype="float64")
-
-    def _predict_proba(self, model, pandas):
-        import numpy as np
-
-        def predict(values):
-            frame = pandas.DataFrame(values, columns=self.features)
-            for name, levels in self.categories.items():
-                codes = np.rint(
-                    pandas.to_numeric(frame[name], errors="coerce")
-                ).astype("Int64")
-                frame[name] = pandas.Categorical(
-                    [
-                        levels[int(code)]
-                        if not pandas.isna(code) and 0 <= int(code) < len(levels)
-                        else None
-                        for code in codes
-                    ],
-                    categories=levels,
-                )
-            return model.predict_proba(frame)
-
-        return predict
-
-    def shap_values(self, frame):
-        import pandas as pd
-
-        encoded = self._encode(frame, pd)
-        min_evals = 2 * self._explainer.masker.shape[1] + 1
-        return self._explainer(encoded, max_evals=min_evals).values
 
 
 class ModelRegistry:
@@ -112,6 +59,15 @@ class ModelRegistry:
             store_dir = store / seed_dir.name
             if not store_dir.exists():
                 shutil.copytree(seed_dir, store_dir)
+            else:
+                # Schéma et échantillon de référence ne sont pas couverts par le SHA-256 du
+                # modèle : on les resynchronise pour qu'un fond SHAP corrigé soit pris en compte.
+                for name in ("feature_schema.json", "reference_sample.json"):
+                    source, target = seed_dir / name, store_dir / name
+                    if source.is_file() and (
+                        not target.is_file() or _sha256(source) != _sha256(target)
+                    ):
+                        shutil.copy2(source, target)
 
         imported = False
         for metadata_path in sorted(store.glob("v*/metadata.json")):
@@ -176,6 +132,9 @@ class ModelRegistry:
             if not features or not rows or any(set(row) != set(features) for row in rows):
                 raise ValueError("Le schéma ou l'échantillon de référence est incomplet")
             reference = pd.DataFrame(rows, columns=features)
+            for name in features:
+                if name not in categories:  # null JSON -> NaN, y compris colonne entièrement vide
+                    reference[name] = pd.to_numeric(reference[name], errors="raise").astype(float)
             for name, values in categories.items():
                 reference[name] = pd.Categorical(reference[name], categories=values)
             probabilities = np.asarray(model.predict_proba(reference), dtype=float)
@@ -187,12 +146,12 @@ class ModelRegistry:
             ).any():
                 raise ValueError("Le modèle a retourné un score hors de [0, 1]")
             if isinstance(artifact, dict) and artifact.get("algo") == "hgb":
-                explainer = _HGBPermutationExplainer(
+                explainer = HGBPermutationExplainer(
                     model, reference, features, categories
                 )
             else:
                 explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(reference)
+            shap_values = explainer.shap_values(reference.head(3))  # le fond peut compter 25 lignes
             if shap_values is None or not np.isfinite(np.asarray(shap_values)).all():
                 raise ValueError("Le test de fumée SHAP a échoué")
         except ModelUnavailableError:

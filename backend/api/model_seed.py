@@ -3,6 +3,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,17 @@ def _load_artifact(path: Path) -> dict:
     return artifact
 
 
+def _valid_reference(rows, features: list[str]) -> bool:
+    return bool(rows) and all(isinstance(r, dict) and set(r) == set(features) for r in rows)
+
+
+def _read_reference(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["rows"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def _write_derived_files(version_dir: Path, artifact: dict) -> list[str]:
     """Derive schema and reference data exclusively from the loaded artifact."""
     features = list(artifact["features"])
@@ -40,13 +52,23 @@ def _write_derived_files(version_dir: Path, artifact: dict) -> list[str]:
             json.dumps({"features": features, "categories": categories}, indent=2),
             encoding="utf-8",
         )
-    row = {
-        name: (categories[name][0] if name in categories and categories[name] else 0.0)
-        for name in features
-    }
-    (version_dir / "reference_sample.json").write_text(
-        json.dumps({"rows": [row]}, indent=2), encoding="utf-8"
-    )
+    reference_path = version_dir / "reference_sample.json"
+    rows = artifact.get("reference_rows")  # écrit par train.py : factures légitimes réelles
+    if not _valid_reference(rows, features):
+        existing = _read_reference(reference_path)
+        if _valid_reference(existing, features):
+            return features  # on ne remplace pas un échantillon valide (ex. make_reference_sample.py)
+        print(
+            f"[model_seed] ATTENTION : {version_dir.name} reçoit une ligne de référence FACTICE ; "
+            "les explications SHAP des modèles HGB seront trompeuses. "
+            "Lancez ml/make_reference_sample.py.",
+            file=sys.stderr,
+        )
+        rows = [{
+            name: (categories[name][0] if name in categories and categories[name] else 0.0)
+            for name in features
+        }]
+    reference_path.write_text(json.dumps({"rows": rows}, indent=2), encoding="utf-8")
     return features
 
 

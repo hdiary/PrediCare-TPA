@@ -5,8 +5,8 @@
 #   2. alembic upgrade head              (idempotent)
 #   3. if every file is already loaded -> stop here (restart = no work)
 #   4. clean.py -> encrypt_identities.py -> load.py
-#      Default load imports references only; invoices and prescriptions are
-#      created from API submissions, never from historical dataset files.
+#      Import the operational archive so BI dashboards can include historical
+#      invoices, prescriptions, and labels from the configured dataset.
 #   5. delete the plaintext personal data
 #
 # Environment (see .env.example):
@@ -36,9 +36,7 @@ alembic upgrade head
 echo "[db-init] configuring the RAG agent database role..."
 python configure_agent_role.py
 
-if python load.py --is-initialised; then
-# if python load.py --is-initialised --include-operational-data; then
-
+if python load.py --is-initialised --include-operational-data; then
     echo "[db-init] database already loaded, nothing to do."
     exit 0
 fi
@@ -65,6 +63,7 @@ python encrypt_identities.py --in "$WORK_DIR/secure/identites_pii.parquet" \
     --out "$WORK_DIR/secure/identites_chiffrees.parquet" --delete-source
 
 echo "[db-init] loading..."
-python load.py --clean-dir "$WORK_DIR/clean" --secure-dir "$WORK_DIR/secure"
+python load.py --clean-dir "$WORK_DIR/clean" --secure-dir "$WORK_DIR/secure" \
+    --include-operational-data
 
 echo "[db-init] done."

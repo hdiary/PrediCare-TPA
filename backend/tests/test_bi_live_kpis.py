@@ -15,6 +15,7 @@ class LiveBiConnection:
         self.queries.append(query)
         if "AS FACTURES_TRAITEES" in query:
             return _Result({
+                "factures_enregistrees": 2,
                 "factures_traitees": 2,
                 "alertes_generees": 1,
                 "alertes_en_attente": 0,
@@ -70,6 +71,7 @@ def test_dashboard_kpis_read_current_tables_instead_of_snapshot():
 
     result = _compute_kpis(conn, 30)
 
+    assert result["factures_enregistrees"] == 2
     assert result["alertes_en_attente"] == 0
     assert result["stale"] is False
     assert result["date_rafraichissement"] is not None
