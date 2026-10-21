@@ -53,10 +53,10 @@ services:
       - -ec
       - |
         until pg_isready --host "$$PGHOST" --port "$$PGPORT" --username "$$PGUSER" --dbname "$$POSTGRES_DB"; do sleep 2; done
-        if [ "$$(psql --dbname "$$POSTGRES_DB" --tuples-only --no-align --command "SELECT 1 FROM pg_database WHERE datname = 'metabase_app'")" != "1" ]; then
-          psql --dbname "$$POSTGRES_DB" --set ON_ERROR_STOP=1 --command "CREATE DATABASE metabase_app"
-        fi
         psql --dbname "$$POSTGRES_DB" --set ON_ERROR_STOP=1 --set metabase_password="$$METABASE_RO_PASSWORD" <<'SQL'
+        SELECT pg_advisory_lock(76215, 1);
+        SELECT format('CREATE DATABASE %I', 'metabase_app')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'metabase_app') \gexec
         SELECT format('CREATE ROLE metabase_ro LOGIN PASSWORD %L', :'metabase_password')
         WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'metabase_ro') \gexec
         SELECT format('ALTER ROLE metabase_ro LOGIN PASSWORD %L', :'metabase_password')
@@ -137,7 +137,7 @@ services:
       context: ./backend
       dockerfile: rag/Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev_postgres_pwd}@db:5432/${POSTGRES_DB:-predicare}
+      DATABASE_URL: postgresql://app_rw:${DB_APP_RW_PASSWORD:-dev_app_rw_pwd}@db:5432/${POSTGRES_DB:-predicare}
       AGENT_DATABASE_URL: postgresql://agent_login:${DB_AGENT_RO_PASSWORD:-dev_agent_ro_pwd}@db:5432/${POSTGRES_DB:-predicare}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -230,6 +230,7 @@ services:
       EMBEDDING_TIMEOUT_SECONDS: ${EMBEDDING_TIMEOUT_SECONDS:-120}
       LLM_API_URL: ${LLM_API_URL:-https://api.openai.com/v1/chat/completions}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-300}
+      RAG_CORPUS_DIR: /manager-rag-corpus
       RAG_TOP_K: ${RAG_TOP_K:-6}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
       CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.93}
@@ -243,6 +244,7 @@ services:
       - "8000:8000"
     volumes:
       - models_data:/models
+      - ./rag_corpus:/manager-rag-corpus
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)" ]
       interval: 30s
@@ -250,25 +252,64 @@ services:
       retries: 3
       start_period: 40s
 
+  n8n-db-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_pwd}
+      PGDATABASE: ${POSTGRES_DB:-predicare}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:-}
+    command:
+      - sh
+      - -ec
+      - |
+        if [ -z "$$N8N_DB_PASSWORD" ]; then
+          echo "N8N_DB_PASSWORD must be set in .env" >&2
+          exit 1
+        fi
+        psql --set ON_ERROR_STOP=1 --set n8n_password="$$N8N_DB_PASSWORD" <<'SQL'
+        SELECT format('CREATE ROLE n8n_alert LOGIN PASSWORD %L', :'n8n_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n_alert') \gexec
+        SELECT format('ALTER ROLE n8n_alert LOGIN PASSWORD %L', :'n8n_password')
+        WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'n8n_alert') \gexec
+        SELECT format('GRANT CONNECT ON DATABASE %I TO n8n_alert', current_database()) \gexec
+        GRANT USAGE ON SCHEMA public TO n8n_alert;
+        GRANT SELECT ON TABLE configuration TO n8n_alert;
+        GRANT INSERT ON TABLE journal_audit TO n8n_alert;
+        GRANT USAGE, SELECT ON SEQUENCE journal_audit_audit_id_seq TO n8n_alert;
+        SQL
+    depends_on:
+      db:
+        condition: service_healthy
+      loader:
+        condition: service_completed_successfully
+    restart: "no"
+
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
     image: n8nio/n8n:latest # à épingler sur une version précise
     restart: unless-stopped
-    command: [ "start" ]
+    entrypoint: [ "node", "/bootstrap.js" ]
+    command: []
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
+      N8N_DB_PASSWORD: ${N8N_DB_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-predicare}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows:ro # workflows .json à importer
+      - ./n8n/bootstrap.js:/bootstrap.js:ro
     ports:
       - "5678:5678"
     depends_on:
-      db:
-        condition: service_healthy
+      n8n-db-init:
+        condition: service_completed_successfully
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1" ]
       interval: 30s

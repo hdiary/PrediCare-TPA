@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## PrediCare : alerte de fraude (P3-13 / P3-14) — v3\n**Appelé par l'API** après un /predict dont le score atteint le seuil.\n\n### Chaîne\n1. Webhook (secret en en-tête `X-Webhook-Secret`)\n2. Lecture du seuil et des canaux dans la table `configuration`\n3. Message construit par **liste blanche** : pseudonymes uniquement (test S11)\n4. Slack puis **Gmail** selon `notif_slack` / `notif_email`\n5. **Journal d'audit** (S8) puis réponse honnête (202/200/422)\n\n### À configurer après import\n- **4 identifiants** : Header Auth (`X-Webhook-Secret`), Postgres, Slack, **Gmail OAuth2**\n- **Secret webhook** : `openssl rand -hex 32` → `.env` API + credential n8n\n- **Gmail** : compte expéditeur = compte authentifié (ou alias vérifié)\n- **Canal Slack** : lu en config (`notif_slack_canal`), repli `#alertes-fraude`\n\n### Rôle SQL conseillé (lecture seule + audit)\n```sql\nCREATE ROLE n8n_alert_reader LOGIN PASSWORD '...';\nGRANT CONNECT ON DATABASE predicare TO n8n_alert_reader;\nGRANT USAGE ON SCHEMA public TO n8n_alert_reader;\nGRANT SELECT ON configuration TO n8n_alert_reader;\nGRANT INSERT ON journal_audit TO n8n_alert_reader;\nGRANT USAGE ON SEQUENCE journal_audit_audit_id_seq TO n8n_alert_reader;\n-- JAMAIS : identites_chiffrees, utilisateurs, assures\n```\n\n### Règles\n- Seuil : `score >= seuil_alerte` (score égal au seuil = alerte)\n- PII : liste blanche + filet regex (email, tél MG, CIN 12 chiffres)\n- Audit : `type_evenement='decision'`, `type_entite='facture'`, `sortie.action='alerte_envoyee'`\n\n### Gmail OAuth2 (self-hosted)\n1. Google Cloud Console → activer **Gmail API**\n2. Créer OAuth Client ID (Web application)\n3. URI de redirection : `the callback URI displayed by your n8n instance`\n4. Credential n8n → **Sign in with Google**\n5. Erreur 401 = API Gmail non activée\n",
+        "content": "## PrediCare : alerte de fraude (P3-13 / P3-14) — v3\n**Appelé par l'API** après un /predict dont le score atteint le seuil.\n\n### Chaîne\n1. Webhook (secret en en-tête `X-Webhook-Secret`)\n2. Lecture du seuil et des canaux dans la table `configuration`\n3. Message construit par **liste blanche** : pseudonymes uniquement (test S11)\n4. Slack puis **Gmail** selon `notif_slack` / `notif_email`\n5. **Journal d'audit** (S8) puis réponse honnête (202/200/422)\n\n### À configurer après import\n- **Postgres** est créé automatiquement par Compose avec les droits minimaux nécessaires\n- **Slack account** et **Gmail OAuth2** doivent être associés aux nœuds correspondants\n- **Secret webhook** : générer `N8N_WEBHOOK_SECRET` dans `.env` (partagé avec l'API)\n- **Gmail** : compte expéditeur = compte authentifié (ou alias vérifié)\n- **Canal Slack** : lu en config (`notif_slack_canal`), repli `#alertes-fraude`\n\n### Rôle SQL n8n\nCompose crée le rôle `n8n_alert` : lecture seule de `configuration`, insertion dans `journal_audit` et usage de sa séquence. Il n'a aucun accès aux données d'identité.\n\n### Règles\n- Seuil : `score >= seuil_alerte` (score égal au seuil = alerte)\n- PII : liste blanche + filet regex (email, tél MG, CIN 12 chiffres)\n- Audit : `type_evenement='decision'`, `type_entite='facture'`, `sortie.action='alerte_envoyee'`\n\n### Gmail OAuth2 (self-hosted)\n1. Google Cloud Console → activer **Gmail API**\n2. Créer OAuth Client ID (Web application)\n3. URI de redirection : `the callback URI displayed by your n8n instance`\n4. Credential n8n → **Sign in with Google**\n5. Erreur 401 = API Gmail non activée\n",
         "height": 1292,
         "width": 540,
         "color": 5
@@ -37,6 +37,19 @@
     },
     {
       "parameters": {
+        "jsCode": "const event = $('Webhook alerte').first().json;\nconst expectedSecret = $env.N8N_WEBHOOK_SECRET;\nconst suppliedSecret = event.headers?.['x-webhook-secret'] ?? event.headers?.['X-Webhook-Secret'];\nif (!expectedSecret || suppliedSecret !== expectedSecret) throw new Error('Webhook authentication failed');\nreturn $input.all();"
+      },
+      "id": "98cfd4df-2567-4436-8ca0-f132f64c859f",
+      "name": "Vérifier le secret du webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        624
+      ]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "SELECT cle, valeur FROM configuration WHERE cle IN ('seuil_alerte', 'notif_slack', 'notif_email', 'notif_email_destinataire', 'notif_slack_canal');",
         "options": {}
@@ -45,6 +58,12 @@
       "name": "Lire la configuration",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "id": "8dbb9350-7493-4b15-a92c-d9ed69b0c312",
+          "name": "PrediCare PostgreSQL alertes"
+        }
+      },
       "position": [
         1024,
         480
@@ -227,6 +246,12 @@
       "name": "Journaliser (audit S8)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "id": "8dbb9350-7493-4b15-a92c-d9ed69b0c312",
+          "name": "PrediCare PostgreSQL alertes"
+        }
+      },
       "position": [
         2560,
         352
@@ -272,6 +297,17 @@
   "pinData": {},
   "connections": {
     "Webhook alerte": {
+      "main": [
+        [
+          {
+            "node": "Vérifier le secret du webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier le secret du webhook": {
       "main": [
         [
           {

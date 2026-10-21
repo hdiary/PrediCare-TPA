@@ -72,21 +72,27 @@ def _synchronize_existing_seed() -> None:
         _write_derived_files(version_dir, _load_artifact(version_dir / metadata["artifact"]))
 
 
+def _candidate_versions(registry: dict) -> list[dict]:
+    versions = registry["versions"]
+    active = next(item for item in versions if item["version"] == registry["active"])
+    hgb = next((item for item in versions if item.get("algo") == "hgb"), None)
+    candidates = [active]
+    if hgb and hgb["version"] != active["version"]:
+        candidates.append(hgb)
+    for item in sorted(
+        versions, key=lambda item: item.get("trained_at", ""), reverse=True
+    ):
+        if len(candidates) == 2:
+            break
+        if item["version"] not in {candidate["version"] for candidate in candidates}:
+            candidates.append(item)
+    return candidates
+
+
 def prepare_seed() -> None:
     SEED.mkdir(parents=True, exist_ok=True)
-    if any(SEED.glob("v*/metadata.json")):
-        _synchronize_existing_seed()
-        return
-
     registry = json.loads((LEGACY / "registry.json").read_text(encoding="utf-8"))
-    versions = registry["versions"]
-    active = registry["active"]
-    candidates = [next(item for item in versions if item["version"] == active)]
-    candidates.extend(
-        item for item in sorted(versions, key=lambda item: item.get("trained_at", ""), reverse=True)
-        if item["version"] != active
-    )
-    candidates = candidates[:2]
+    candidates = _candidate_versions(registry)
     try:
         commit = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
@@ -95,9 +101,16 @@ def prepare_seed() -> None:
         commit = "unknown"
 
     for item in candidates:
+        version_dir = SEED / f"v{item['version']}"
+        metadata_path = version_dir / "metadata.json"
+        if metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            artifact = _load_artifact(version_dir / metadata["artifact"])
+            _write_derived_files(version_dir, artifact)
+            continue
+
         artifact_source = LEGACY / item["file"]
         artifact = _load_artifact(artifact_source)
-        version_dir = SEED / f"v{item['version']}"
         version_dir.mkdir(parents=True, exist_ok=True)
         artifact_name = artifact_source.name
         shutil.copy2(artifact_source, version_dir / artifact_name)
@@ -106,7 +119,7 @@ def prepare_seed() -> None:
             "version": item["version"],
             "artifact": artifact_name,
             "sha256": _sha256(version_dir / artifact_name),
-            "status": "ACTIF" if item["version"] == active else "ARCHIVE",
+            "status": "ACTIF" if item["version"] == registry["active"] else "ARCHIVE",
             "model_name": "predicare-fraud",
             "commit": commit,
             "trained_at": item.get("trained_at") or datetime.now().isoformat(),
@@ -116,9 +129,10 @@ def prepare_seed() -> None:
             "parameters": artifact.get("params", {}),
             "features": features,
         }
-        (version_dir / "metadata.json").write_text(
+        metadata_path.write_text(
             json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+    _synchronize_existing_seed()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
@@ -153,10 +154,28 @@ export function Spinner({ className = '' }: { className?: string }) {
   );
 }
 
+/** Rend les fenêtres à la racine du document : un parent animé (transform) ferait sinon
+ *  de `fixed` une position relative à la page et non à l'écran. Bloque aussi le défilement
+ *  de la page et ferme avec Échap. */
+function Overlay({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  return createPortal(children, document.body);
+}
+
 export function Drawer({ open, onClose, title, children, width = 'md' }: { open: boolean; onClose: () => void; title: string; children: ReactNode; width?: 'sm' | 'md' | 'lg' }) {
   if (!open) return null;
   const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl' };
   return (
+    <Overlay onClose={onClose}>
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
       <div className={`relative w-full ${widths[width]} bg-white dark:bg-surface-800 shadow-lg border-l border-surface-300/80 dark:border-surface-700 overflow-y-auto animate-slide-in-right`}>
@@ -171,26 +190,29 @@ export function Drawer({ open, onClose, title, children, width = 'md' }: { open:
         <div className="p-5 md:p-8">{children}</div>
       </div>
     </div>
+    </Overlay>
   );
 }
 
 export function Modal({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <Overlay onClose={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white dark:bg-surface-800 rounded-2xl border border-surface-300/80 dark:border-surface-700 shadow-lg animate-slide-up">
-        <div className="px-8 py-5 border-b border-surface-300/80 dark:border-surface-700">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col bg-white dark:bg-surface-800 rounded-2xl border border-surface-300/80 dark:border-surface-700 shadow-lg animate-slide-up">
+        <div className="shrink-0 px-8 py-5 border-b border-surface-300/80 dark:border-surface-700">
           <h2 className="text-lg font-medium text-surface-900 dark:text-surface-100">{title}</h2>
         </div>
-        <div className="p-8">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-8">{children}</div>
         {footer && (
-          <div className="px-8 py-5 border-t border-surface-300/80 dark:border-surface-700 flex justify-end gap-3">
+          <div className="shrink-0 px-8 py-5 border-t border-surface-300/80 dark:border-surface-700 flex justify-end gap-3">
             {footer}
           </div>
         )}
       </div>
     </div>
+    </Overlay>
   );
 }
 

@@ -184,6 +184,17 @@ export interface BIKpiData {
   };
 }
 
+export interface RagCorpusDocument {
+  id: number;
+  filename: string;
+  scope: 'global' | 'formula' | 'contract';
+  contrat_id: string | null;
+  formule: string | null;
+  n_pages: number | null;
+  ingested_at: string;
+  chunks: number;
+}
+
 export interface BIModelData {
   version_active: string | null;
   activee_le: string | null;

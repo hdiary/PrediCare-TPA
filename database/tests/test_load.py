@@ -205,6 +205,8 @@ def test_role_privileges(db):
     q = "SELECT has_table_privilege(%s, %s, %s)"
     can = lambda role, table, priv: db.execute(q, (role, table, priv)).fetchone()[0]
     assert can("app_rw", "factures", "INSERT")
+    assert can("app_rw", "rag_documents", "INSERT")
+    assert can("app_rw", "rag_chunks", "INSERT")
     assert not can("app_rw", "identites_chiffrees", "SELECT")
     assert can("identity_reader", "identites_chiffrees", "SELECT")
     assert not can("identity_reader", "factures", "SELECT")

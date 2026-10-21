@@ -83,9 +83,9 @@ export function DepositInvoicePage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const rxWarning =
-    rxDate && rxDate > today
+    !rxScan && rxDate && rxDate > today
       ? "La date de prescription est dans le futur."
-      : rxDate && mode === 'manual' && careDate && rxDate > careDate
+      : !rxScan && rxDate && mode === 'manual' && careDate && rxDate > careDate
         ? "La date de prescription est postérieure à la date des soins."
         : null;
 
@@ -109,11 +109,12 @@ export function DepositInvoicePage() {
       return;
     }
 
-    if (hasPrescription && (!rxId.trim() || !rxDate || !rxPrescriber.trim())) {
+    if (hasPrescription && !rxScan && (!rxId.trim() || !rxDate || !rxPrescriber.trim())) {
       showToast("Renseignez le n° d'ordonnance, sa date et le prescripteur", 'error');
       return;
     }
     const prescription: InvoicePrescription | undefined = hasPrescription
+      && rxId.trim() && rxDate && rxPrescriber.trim()
       ? {
           prescription_id: rxId.trim(),
           prescription_date: rxDate,
@@ -130,17 +131,23 @@ export function DepositInvoicePage() {
         const formData = new FormData();
         formData.append('file', file);
         if (prescription) formData.append('prescription', JSON.stringify(prescription));
-        if (prescription && rxScan) formData.append('prescription_scan', rxScan);
+        if (hasPrescription && rxScan) formData.append('prescription_scan', rxScan);
         res = await api.submitInvoice(formData);
       } else {
-        if (prescription && rxScan) {
-          const ordonnanceId = await api.createPrescriptionFromScan(
+        let createdPrescriptionId: string | undefined;
+        if (hasPrescription && prescription && rxScan) {
+          createdPrescriptionId = await api.createPrescriptionFromScan(
             insuredPseudo.trim(),
             invoiceType,
             rxScan,
             prescription,
           );
-          invoicePrescription = { ...prescription, prescription_id: ordonnanceId };
+        } else if (hasPrescription && rxScan) {
+          createdPrescriptionId = await api.createPrescriptionFromScan(
+            insuredPseudo.trim(),
+            invoiceType,
+            rxScan,
+          );
         }
         res = await api.submitInvoice({
           insured_pseudo: insuredPseudo,
@@ -150,7 +157,9 @@ export function DepositInvoicePage() {
           invoice_number: invoiceNumber,
           invoice_type: invoiceType,
           lines,
-          ...(invoicePrescription ? { prescription: invoicePrescription } : {}),
+          ...(createdPrescriptionId
+            ? { prescription: { prescription_id: createdPrescriptionId } }
+            : invoicePrescription ? { prescription: invoicePrescription } : {}),
         });
       }
       setResult(res); // résultat réel : accepté, ou rejeté avec les motifs renvoyés par l'API
@@ -488,35 +497,41 @@ export function DepositInvoicePage() {
 
         {hasPrescription && (
           <div className="mt-6 space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="N° d'ordonnance"
-                value={rxId}
-                onChange={(e) => setRxId(e.target.value)}
-                placeholder="ORD-0041872"
-                required
-              />
-              <Input
-                label="Date de prescription"
-                type="date"
-                value={rxDate}
-                onChange={(e) => setRxDate(e.target.value)}
-                required
-              />
-              <Input
-                label="Prescripteur (pseudonymisé ou n° ONM)"
-                value={rxPrescriber}
-                onChange={(e) => setRxPrescriber(e.target.value)}
-                placeholder="PRS-0078"
-                required
-              />
-              <Input
-                label="Diagnostic (facultatif)"
-                value={rxDiagnosis}
-                onChange={(e) => setRxDiagnosis(e.target.value)}
-                placeholder="Hypertension artérielle"
-              />
-            </div>
+            {rxScan ? (
+              <p className="text-sm text-surface-600 dark:text-surface-300">
+                Les informations de l'ordonnance seront extraites du scan. Vous pouvez retirer le fichier pour les saisir manuellement.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="N° d'ordonnance"
+                  value={rxId}
+                  onChange={(e) => setRxId(e.target.value)}
+                  placeholder="ORD-0041872"
+                  required
+                />
+                <Input
+                  label="Date de prescription"
+                  type="date"
+                  value={rxDate}
+                  onChange={(e) => setRxDate(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Prescripteur (pseudonymisé ou n° ONM)"
+                  value={rxPrescriber}
+                  onChange={(e) => setRxPrescriber(e.target.value)}
+                  placeholder="PRS-0078"
+                  required
+                />
+                <Input
+                  label="Diagnostic (facultatif)"
+                  value={rxDiagnosis}
+                  onChange={(e) => setRxDiagnosis(e.target.value)}
+                  placeholder="Hypertension artérielle"
+                />
+              </div>
+            )}
 
             {rxWarning && (
               <p className="flex items-center gap-2 text-sm text-warning-700 dark:text-warning-200">
@@ -531,7 +546,7 @@ export function DepositInvoicePage() {
               <input
                 ref={rxScanInputRef}
                 type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,application/pdf"
                 className="hidden"
                 onChange={(e) => e.target.files?.[0] && handleRxScan(e.target.files[0])}
               />
@@ -559,7 +574,7 @@ export function DepositInvoicePage() {
                 >
                   <UploadCloud className="w-8 h-8 text-surface-300 dark:text-surface-600 mx-auto mb-2" />
                   <p className="text-sm text-surface-600 dark:text-surface-300">Ajouter le scan de l'ordonnance</p>
-                  <p className="text-xs text-surface-400">PDF, JPG ou PNG · 10 Mo max · conservé comme justificatif</p>
+                  <p className="text-xs text-surface-400">PDF · 10 Mo max · informations extraites à l'envoi</p>
                 </button>
               )}
             </div>

@@ -29,7 +29,10 @@ export function ManagerDashboard() {
 
   useEffect(() => {
     let active = true;
+    let refreshing = false;
     const refresh = () => {
+      if (refreshing || document.visibilityState === 'hidden') return;
+      refreshing = true;
       Promise.all([api.getBIKPIs(), api.getAlerts({ status: 'pending' }), api.getBIModel()])
         .then(([k, a, m]) => {
           if (!active) return;
@@ -40,11 +43,26 @@ export function ManagerDashboard() {
           setError(false);
         })
         .catch(() => { if (active && !hasLoaded.current) setError(true); })
-        .finally(() => { if (active) setLoading(false); });
+        .finally(() => {
+          refreshing = false;
+          if (active) setLoading(false);
+        });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
     };
     refresh();
-    const timer = window.setInterval(refresh, 5 * 60 * 1000);
-    return () => { active = false; window.clearInterval(timer); };
+    const timer = window.setInterval(refresh, 15 * 1000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('predicare:data-updated', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('predicare:data-updated', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   if (loading) return <DashboardSkeleton />;
@@ -95,6 +113,9 @@ export function ManagerDashboard() {
         <Card className="p-8">
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Factures vs Alertes</h3>
           <p className="text-xs text-surface-400 mb-4">Évolution quotidienne</p>
+          {kpis.par_jour.length === 0 && (
+            <p className="mb-2 text-xs text-surface-400">Aucune facture sur la période affichée.</p>
+          )}
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={kpis.par_jour.map((point) => ({ date: point.jour, invoices: point.factures, alerts: point.alertes }))}>
               <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />
@@ -114,6 +135,9 @@ export function ManagerDashboard() {
         <Card className="p-8">
           <h3 className="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-1">Montant économisé</h3>
           <p className="text-xs text-surface-400 mb-4">Par jour (MGA)</p>
+          {kpis.par_jour.length === 0 && (
+            <p className="mb-2 text-xs text-surface-400">Aucune décision enregistrée sur la période affichée.</p>
+          )}
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={kpis.par_jour.map((point) => ({ date: point.jour, saved: point.montant_economise }))}>
               <CartesianGrid strokeDasharray="0" vertical={false} stroke="#86A8A4" strokeOpacity={0.25} />

@@ -268,10 +268,14 @@ def list_prescription_alerts(
 
 
 def get_prediction(conn, facture_id: str, for_update: bool = False) -> dict | None:
-    lock = " FOR UPDATE" if for_update else ""
+    if for_update:
+        conn.execute(
+            "SELECT facture_id FROM factures WHERE facture_id = %s FOR UPDATE",
+            (facture_id,),
+        )
     return conn.execute(
         "SELECT prediction_id, facture_id, nom_modele, version_modele, score, seuil_utilise, "
-        "est_alerte, date FROM predictions WHERE facture_id = %s" + lock,
+        "est_alerte, date FROM predictions WHERE facture_id = %s",
         (facture_id,),
     ).fetchone()
 

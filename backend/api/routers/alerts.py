@@ -22,6 +22,18 @@ router = APIRouter(tags=["alerts"])
 manager_only = Depends(require_role("administrateur", "gestionnaire"))
 FactureId = Path(pattern=r"^FAC-\d{8}$", description="Identifiant de la facture")
 
+_DECISION_FACTURE = {
+    "VALIDER": ("faux_positif", "PAYEE"),
+    "valide": ("faux_positif", "PAYEE"),
+    "REJETER": ("fraude_confirmee", "REJETEE"),
+    "rejete": ("fraude_confirmee", "REJETEE"),
+    "CONFIRMER_FRAUDE": ("fraude_confirmee", "REJETEE"),
+    "fraude_confirmee": ("fraude_confirmee", "REJETEE"),
+    "faux_positif": ("faux_positif", "PAYEE"),
+    "ESCALADER": ("a_investiguer", "EN_COURS"),
+    "a_investiguer": ("a_investiguer", "EN_COURS"),
+}
+
 
 def _alerte_ou_404(conn, facture_id: str) -> dict:
     pred = repo.get_prediction(conn, facture_id)
@@ -115,22 +127,16 @@ def decide(
         if repo.decision_existe(conn, pred["prediction_id"]):
             raise HTTPException(status_code=409, detail="Cette alerte a déjà une décision")
 
+        decision_enregistree, facture_status = _DECISION_FACTURE[body.decision]
         decision = repo.insert_decision(
             conn,
             prediction_id=pred["prediction_id"],
             facture_id=facture_id,
             gestionnaire_id=user["user_id"],
-            decision=body.decision,
+            decision=decision_enregistree,
             commentaire=body.commentaire,
             montant_economise=body.montant_economise,
         )
-        facture_status = {
-            "VALIDER": "PAYEE", "valide": "PAYEE",
-            "REJETER": "REJETEE", "rejete": "REJETEE",
-            "CONFIRMER_FRAUDE": "REJETEE", "fraude_confirmee": "REJETEE",
-            "faux_positif": "PAYEE", "ESCALADER": "EN_COURS",
-            "a_investiguer": "EN_COURS",
-        }[body.decision]
         repo.update_facture_status(conn, facture_id, facture_status)
         write_audit(
             conn,
@@ -141,7 +147,7 @@ def decide(
             model_name=pred["nom_modele"],
             model_version=pred["version_modele"],
             input_data={
-                "decision": body.decision,
+                "decision": decision_enregistree,
                 "commentaire": body.commentaire,
                 "montant_economise": body.montant_economise,
             },

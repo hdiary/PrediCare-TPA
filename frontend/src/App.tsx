@@ -31,6 +31,7 @@ const ManagerDashboard = lazyPage(() => import('@/pages/manager/ManagerDashboard
 const AlertsListPage = lazyPage(() => import('@/pages/manager/AlertsListPage'), 'AlertsListPage');
 const AlertDetailPage = lazyPage(() => import('@/pages/manager/AlertDetailPage'), 'AlertDetailPage');
 const PrescriptionAlertsPage = lazyPage(() => import('@/pages/manager/PrescriptionAlertsPage'), 'PrescriptionAlertsPage');
+const ManagerRagCorpusPage = lazyPage(() => import('@/pages/manager/ManagerRagCorpusPage'), 'ManagerRagCorpusPage');
 
 // Admin pages
 const AdminSupervision = lazyPage(() => import('@/pages/admin/AdminSupervision'), 'AdminSupervision');
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="/gestionnaire/alertes" element={<AppLayout allowedRoles={['manager']}><AlertsListPage /></AppLayout>} />
                 <Route path="/gestionnaire/alertes/:id" element={<AppLayout allowedRoles={['manager']}><AlertDetailPage /></AppLayout>} />
                 <Route path="/gestionnaire/ordonnances" element={<AppLayout allowedRoles={['manager']}><PrescriptionAlertsPage /></AppLayout>} />
+                <Route path="/gestionnaire/corpus-rag" element={<AppLayout allowedRoles={['manager']}><ManagerRagCorpusPage /></AppLayout>} />
                 <Route path="/gestionnaire/aide" element={<AppLayout allowedRoles={['manager']}><HelpPage /></AppLayout>} />
 
                 {/* Admin routes */}
