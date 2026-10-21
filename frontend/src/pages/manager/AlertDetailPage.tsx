@@ -31,8 +31,147 @@ const OPTIONS: {
   { value: 'CONFIRMER_FRAUDE', label: 'Confirmer la fraude', variant: 'danger' },
 ];
 
-function formatFeatureValue(value: number | string | boolean | null | undefined) {
+const FEATURE_LABELS: Record<string, string> = {
+  type_facture: 'Type de facture',
+  canal_reception: 'Canal de réception',
+  mode_reglement: 'Mode de règlement',
+  nb_lignes: 'Nombre de lignes facturées',
+  montant_total: 'Montant total réclamé',
+  montant_eligible: 'Montant admissible au remboursement',
+  heure: 'Heure des soins',
+  jour_semaine: 'Jour des soins',
+  mois_soin: 'Mois des soins',
+  l_r_max: 'Dépassement maximal du tarif plafond',
+  l_r_ref_max: 'Rapport maximal au tarif de référence',
+  l_r_ref_min: 'Rapport minimal au tarif de référence',
+  l_r_grille_max: 'Dépassement maximal du tarif conventionné',
+  l_n_sur_max: 'Lignes dépassant le tarif plafond',
+  l_qte_max: 'Quantité maximale sur une ligne',
+  l_q_ratio_max: 'Écart maximal avec la quantité prescrite',
+  l_n_hors_ordo: 'Lignes absentes de l’ordonnance',
+  l_part_hors_ordo: 'Part des lignes absentes de l’ordonnance',
+  l_prix_hors_ordo_max: 'Prix maximal d’un acte non prescrit',
+  l_n_viol_age: 'Lignes incompatibles avec l’âge de l’assuré',
+  l_n_viol_sexe: 'Lignes incompatibles avec le sexe requis',
+  l_n_maj: 'Actes majorés ou réalisés en urgence / nuit',
+  l_n_spec_mismatch: 'Lignes hors spécialité du prestataire',
+  l_n_exclu: 'Actes exclus par le contrat',
+  l_ordo_requise: 'Ordonnance requise pour les actes facturés',
+  l_n_non_remboursable: 'Lignes non remboursables',
+  l_n_codes_distincts: 'Nombre d’actes ou produits différents',
+  validite_jours: 'Durée de validité de l’ordonnance',
+  type_ordonnance: 'Type d’ordonnance',
+  a_ordonnance: 'Ordonnance jointe',
+  delai_ordo_soin: 'Délai entre prescription et soins',
+  ordo_exp_jours: 'Dépassement de validité de l’ordonnance',
+  ordo_autre_assure: 'Ordonnance au nom d’un autre assuré',
+  ordo_vs_facture: 'Correspondance ordonnance / facture',
+  ordo_manquante_requise: 'Ordonnance obligatoire manquante',
+  ordo_n_factures: 'Factures associées à cette ordonnance',
+  ordo_n_prestataires: 'Prestataires ayant utilisé cette ordonnance',
+  dup_numero: 'Factures portant le même numéro',
+  dup_cle: 'Factures similaires (assuré, prestataire, date et montant)',
+  meme_jour_n: 'Factures du même assuré chez ce prestataire le même jour',
+  meme_jour_somme: 'Montant cumulé facturé le même jour',
+  dup_cle_rang: 'Rang parmi les factures similaires',
+  dup_numero_rang: 'Rang parmi les factures portant ce numéro',
+  meme_jour_rang: 'Rang parmi les factures du même jour',
+  meme_jour_montant_cumule: 'Montant déjà facturé avant cette facture le même jour',
+  ordo_rang_usage: 'Rang d’utilisation de l’ordonnance',
+  assure_mois_n: 'Factures de l’assuré durant le mois',
+  assure_n_total: 'Nombre total de factures de l’assuré',
+  prest_n_factures: 'Nombre total de factures du prestataire',
+  prest_montant_moy: 'Montant moyen facturé par le prestataire',
+  prest_jour_n: 'Factures du prestataire pour cette journée',
+  type_prestataire: 'Type de prestataire',
+  specialite_prest: 'Spécialité du prestataire',
+  niveau_tarif: 'Niveau tarifaire du prestataire',
+  note_qualite: 'Note de qualité du prestataire',
+  conventionne: 'Prestataire conventionné',
+  heure_ouverture: 'Heure d’ouverture du prestataire',
+  heure_fermeture: 'Heure de fermeture du prestataire',
+  jour_ferme: 'Prestataire fermé le jour des soins',
+  hors_horaires: 'Soins réalisés hors des horaires d’ouverture',
+  jours_apres_fin_convention: 'Jours depuis la fin de convention',
+  jours_depuis_convention: 'Ancienneté de la convention',
+  prest_radie: 'Prestataire radié',
+  rang_beneficiaire: 'Lien entre l’assuré et le titulaire du contrat',
+  formule: 'Formule du contrat',
+  delai_carence_jours: 'Délai de carence prévu au contrat',
+  taux_remboursement: 'Taux de remboursement prévu au contrat',
+  plafond_annuel_categorie: 'Plafond annuel de garantie',
+  franchise_par_facture: 'Franchise par facture',
+  age_assure: 'Âge de l’assuré',
+  jours_depuis_adhesion: 'Jours depuis l’adhésion de l’assuré',
+  jours_avant_radiation: 'Jours avant la radiation de l’assuré',
+  gap_carence: 'Écart par rapport à la fin du délai de carence',
+  jours_depuis_effet: 'Jours depuis le début du contrat',
+  jours_avant_fin_contrat: 'Jours avant la fin du contrat',
+  hors_periode_assure: 'Soins hors période de couverture',
+  en_carence: 'Soins réalisés pendant le délai de carence',
+  prest_hors_convention: 'Prestataire hors période conventionnée',
+  delai_soin_facture: 'Délai entre les soins et la facturation',
+  delai_facture_reception: 'Délai entre la facture et sa réception',
+  ratio_eligible: 'Part du montant admissible au remboursement',
+  montant_par_ligne: 'Montant moyen par ligne',
+  a_attestation: 'Attestation de prise en charge jointe',
+  a_entente: 'Entente préalable fournie',
+  ratio_vs_prest_moy: 'Montant comparé à la moyenne du prestataire',
+};
+
+const BOOLEAN_FEATURES = new Set([
+  'a_ordonnance',
+  'ordo_autre_assure',
+  'ordo_manquante_requise',
+  'conventionne',
+  'jour_ferme',
+  'hors_horaires',
+  'prest_radie',
+  'hors_periode_assure',
+  'en_carence',
+  'prest_hors_convention',
+  'a_attestation',
+  'a_entente',
+]);
+
+function formatFeatureLabel(variable: string) {
+  return FEATURE_LABELS[variable] || variable.replace(/_/g, ' ');
+}
+
+function formatFeatureValue(variable: string, value: number | string | boolean | null | undefined) {
   if (value === null || value === undefined) return '—';
+  if (BOOLEAN_FEATURES.has(variable)) {
+    return value === true || value === 1 || value === '1' ? 'Oui' : 'Non';
+  }
+  if (typeof value === 'string') {
+    return value
+      .replace(/_/g, ' ')
+      .replace('>', ' → ')
+      .toLocaleLowerCase('fr-FR');
+  }
+  if (typeof value !== 'number') return String(value);
+  if (variable === 'jour_semaine' && Number.isInteger(value) && value >= 1 && value <= 7) {
+    return ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'][value - 1];
+  }
+  if (variable === 'heure' || variable === 'heure_ouverture' || variable === 'heure_fermeture') {
+    const hours = Math.floor(value);
+    const minutes = Math.round((value - hours) * 60);
+    return `${hours.toString().padStart(2, '0')} h ${minutes.toString().padStart(2, '0')}`;
+  }
+  if (variable === 'ratio_vs_prest_moy') {
+    return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} × la moyenne`;
+  }
+  if ([
+    'l_r_max',
+    'l_r_ref_max',
+    'l_r_ref_min',
+    'l_r_grille_max',
+    'l_q_ratio_max',
+    'l_part_hors_ordo',
+    'ratio_eligible',
+  ].includes(variable)) {
+    return `${(value * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;
+  }
   return typeof value === 'number'
     ? value.toLocaleString('fr-FR', { maximumSignificantDigits: 7 })
     : String(value);
@@ -105,13 +244,6 @@ export function AlertDetailPage() {
   const lines = detail.facture.lignes;
   const explanation = detail.shap && !Array.isArray(detail.shap) ? detail.shap : null;
   const shap = Array.isArray(detail.shap) ? detail.shap : detail.shap?.top || [];
-  const featureRows = Object.entries(explanation?.toutes || {})
-    .map(([variable, contribution]) => ({
-      variable,
-      contribution,
-      value: detail.variables?.[variable] ?? null,
-    }))
-    .sort((left, right) => Math.abs(right.contribution) - Math.abs(left.contribution));
   const score = prediction.score;
   const threshold = prediction.seuil_utilise;
   const thresholdPercent = threshold === null || threshold === undefined
@@ -242,7 +374,7 @@ export function AlertDetailPage() {
             {shap.length ? (
               <div className="mt-4 overflow-hidden rounded-xl border border-surface-200 dark:border-surface-700">
                 <div className="hidden grid-cols-[minmax(0,1fr)_minmax(8rem,0.8fr)_minmax(7rem,auto)] gap-4 bg-surface-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-surface-500 dark:bg-surface-800 dark:text-surface-300 sm:grid">
-                  <span>Variable</span>
+                  <span>Élément pris en compte</span>
                   <span className="text-right">Valeur observée</span>
                   <span className="text-right">Impact SHAP</span>
                 </div>
@@ -259,11 +391,11 @@ export function AlertDetailPage() {
                         className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.8fr)_minmax(7rem,auto)] sm:items-center sm:gap-4"
                       >
                         <span className="break-all font-mono text-sm font-medium text-surface-800 dark:text-surface-100">
-                          {item.variable}
+                          {formatFeatureLabel(item.variable)}
                         </span>
                         <span className="text-xs text-surface-500 sm:text-right sm:text-sm dark:text-surface-400">
                           <span className="mr-2 font-medium sm:hidden">Valeur</span>
-                          {formatFeatureValue(item.valeur)}
+                          {formatFeatureValue(item.variable, item.valeur)}
                         </span>
                         <div className="flex items-center justify-between gap-3 sm:justify-end">
                           <span className="h-1.5 min-w-10 flex-1 overflow-hidden rounded-full bg-surface-100 dark:bg-surface-700 sm:max-w-24">
@@ -294,40 +426,6 @@ export function AlertDetailPage() {
               </p>
             )}
 
-            {featureRows.length > 0 && (
-              <details className="group mt-4 rounded-xl border border-surface-200 dark:border-surface-700">
-                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-primary-700 marker:hidden hover:bg-surface-50 dark:text-primary-300 dark:hover:bg-surface-800">
-                  <span aria-hidden="true" className="mr-2 inline-block transition-transform group-open:rotate-90">›</span>
-                  Données techniques ({featureRows.length} variables)
-                </summary>
-                <div className="max-h-96 overflow-auto border-t border-surface-200 dark:border-surface-700">
-                  <table className="w-full min-w-[34rem] text-left text-xs">
-                    <thead className="sticky top-0 bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300">
-                      <tr>
-                        <th scope="col" className="px-4 py-3">Variable</th>
-                        <th scope="col" className="px-4 py-3 text-right">Valeur entrée</th>
-                        <th scope="col" className="px-4 py-3 text-right">Impact SHAP</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
-                      {featureRows.map((row) => (
-                        <tr key={row.variable}>
-                          <th scope="row" className="break-all px-4 py-2.5 font-mono font-medium">
-                            {row.variable}
-                          </th>
-                          <td className="px-4 py-2.5 text-right tabular-nums">
-                            {formatFeatureValue(row.value)}
-                          </td>
-                          <td className={`px-4 py-2.5 text-right font-mono tabular-nums ${row.contribution >= 0 ? 'text-danger-700 dark:text-danger-300' : 'text-success-700 dark:text-success-300'}`}>
-                            {row.contribution > 0 ? '+' : ''}{row.contribution.toFixed(6)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
-            )}
           </section>
 
           <section aria-labelledby="invoice-lines-title">
