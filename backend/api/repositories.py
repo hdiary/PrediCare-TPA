@@ -600,14 +600,19 @@ def set_mot_de_passe(
     password_hash: str,
     *,
     must_change_password: bool = False,
-) -> None:
+    enforce_monthly_limit: bool = False,
+) -> bool:
     """Change le mot de passe et lève un éventuel verrouillage de connexion."""
-    conn.execute(
+    row = conn.execute(
         "UPDATE utilisateurs SET hash_mot_de_passe = %s, mot_de_passe_a_changer = %s, "
-        "tentatives_echouees = 0, "
-        "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
-        (password_hash, must_change_password, user_id),
-    )
+        "mot_de_passe_modifie_le = now(), tentatives_echouees = 0, "
+        "verrouille_jusqua = NULL WHERE utilisateur_id = %s "
+        "AND (NOT %s OR mot_de_passe_modifie_le IS NULL "
+        "OR mot_de_passe_modifie_le <= now() - INTERVAL '1 month') "
+        "RETURNING utilisateur_id",
+        (password_hash, must_change_password, user_id, enforce_monthly_limit),
+    ).fetchone()
+    return row is not None
 
 
 def confirmer_mot_de_passe_initial(conn, user_id: int) -> None:

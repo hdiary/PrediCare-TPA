@@ -335,7 +335,17 @@ def change_password(body: ChangePasswordRequest, user: dict = Depends(get_curren
     if verify_password(body.new_password, current_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Le nouveau mot de passe doit être différent de l'ancien")
-    repo.set_mot_de_passe(conn, user_id, hash_password(body.new_password))
+    changed = repo.set_mot_de_passe(
+        conn,
+        user_id,
+        hash_password(body.new_password),
+        enforce_monthly_limit=True,
+    )
+    if not changed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Vous ne pouvez modifier votre mot de passe qu'une fois par mois.",
+        )
     repo.invalider_jetons_reinitialisation(conn, user_id)
     write_audit_compte(conn, event_type="mdp_modifie", actor_id=user_id, entity_id=user_id)
     return MessageResponse(detail="Mot de passe modifié.")

@@ -166,6 +166,23 @@ def test_premiere_connexion_impose_choix_et_permet_de_garder_le_mot_de_passe(cli
         "current_password": credentials["mot_de_passe_provisoire"],
         "new_password": NOUVEAU,
     }).status_code == 200
+    too_soon = client.post("/auth/change-password", headers=headers, json={
+        "current_password": NOUVEAU,
+        "new_password": MDP,
+    })
+    assert too_soon.status_code == 429
+    with _db() as conn:
+        conn.execute(
+            "UPDATE utilisateurs SET mot_de_passe_modifie_le = "
+            "now() - INTERVAL '1 month' - INTERVAL '1 second' "
+            "WHERE utilisateur_id = %s",
+            (credentials["user_id"],),
+        )
+    allowed = client.post("/auth/change-password", headers=headers, json={
+        "current_password": NOUVEAU,
+        "new_password": MDP,
+    })
+    assert allowed.status_code == 200, allowed.text
 
 
 def test_admin_peut_reinitialiser_mot_de_passe_non_admin_et_force_le_premier_acces(client):
