@@ -1,4 +1,4 @@
-# Version corrigée — Analyse FinOps PrediCare TPA (Madagascar)
+# Analyse FinOps PrediCare TPA (Madagascar)
 
 > **Hypothèses de cohérence retenues pour cette version** (à valider) :
 >
@@ -14,18 +14,6 @@
 
 # 1. Contexte & Hypothèses (Adaptation Madagascar)
 
-**[À dire à l'oral]** : *"Pour être réalistes, nous avons basé nos calculs sur les réalités du marché malgache. Nous n'allons pas louer des serveurs AWS à l'heure américaine. Nous allons utiliser une infrastructure locale. L'IA tourne sur nos propres serveurs (Ollama), et l'humain qui valide les alertes est un gestionnaire malgache."*
-
-| Paramètre                               | Valeur choisie                                   | Justification (Contexte Madagascar)                                                                  |
-| :--------------------------------------- | :----------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
-| **Infrastructure IA**              | Serveur local (Ollama)                           | Évite les coûts de bande passante (internet très cher à Mada) et les abonnements API en dollars. |
-| **Coût Serveur (CAPEX)**          | **6,5 à 7,5 millions Ar** (réf. : 7,0 M) | Achat d'un serveur avec GPU RTX 3090 24 GB pour faire tourner Qwen3 4B et bge-m3.                    |
-| **Électricité (OPEX)**           | ~250 000 Ar / mois                               | Serveur allumé 24/7 (environ 500 W). Tarif Jirama (avec groupe électrogène).                      |
-| **Maintenance / Ingénieur MLOps** | ~1 200 000 Ar / mois (temps partiel)             | Salaire d'un Data/MLOps Engineer local (nettement moins cher qu'en Europe).                          |
-| **Gestionnaires (Humain)**         | **1 500 000 Ar / mois** (temps plein)      | Salaire d'un gestionnaire de dossier (Human-in-the-loop) traitant les alertes.                       |
-| **Volume traité**                 | 10 000 factures / mois                           | Hypothèse de départ pour un assureur de taille moyenne.                                            |
-| **Taux de fraude**                 | 10 % (1 000 factures)                            | Hypothèse médiane retenue, **dans la fourchette CDC 8–15 %**.                               |
-| **Montant moyen facture**          | 150 000 Ar                                       | Prix moyen d'une consultation/prestation.                                                            |
 
 ### Détail du CAPEX serveur
 
