@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Server, Database, Brain, Workflow, Boxes, Activity,
+  Server, Database, Brain, Workflow, Activity,
   AlertTriangle, Zap, Timer, TrendingDown,
 } from 'lucide-react';
 import {
@@ -23,7 +23,6 @@ const SERVICE_ICONS: Record<string, React.ReactNode> = {
   database: <Database className="w-5 h-5" />,
   model: <Brain className="w-5 h-5" />,
   n8n: <Workflow className="w-5 h-5" />,
-  vector_db: <Boxes className="w-5 h-5" />,
 };
 
 const STATE_LABELS: Record<string, string> = {
@@ -54,8 +53,8 @@ export function AdminSupervision() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24" />)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}
         </div>
         <Skeleton className="h-72" />
       </div>
@@ -125,8 +124,8 @@ export function AdminSupervision() {
       </div>
 
       {/* Service status cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Object.entries(status).map(([key, state]) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Object.entries(status).filter(([key]) => key !== 'vector_db').map(([key, state]) => (
           <Card key={key} className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="w-8 h-8 rounded-lg bg-surface-100 dark:bg-surface-700 flex items-center justify-center text-surface-500 dark:text-surface-300">

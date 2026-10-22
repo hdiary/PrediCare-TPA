@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import {
   LayoutDashboard, AlertTriangle, FileText, MessageSquare,
   Settings, Server, GitBranch, ScrollText, Users, LogOut,
-  ChevronLeft, ChevronRight, HelpCircle, Receipt, ClipboardList, BookOpen,
+  ChevronLeft, ChevronRight, HelpCircle, Receipt, ClipboardList, BookOpen, KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Logo } from './Logo';
@@ -20,12 +20,14 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   insured: [
     { to: '/assurant', label: 'Mon assistant', icon: <MessageSquare className="w-5 h-5" /> },
     { to: '/assurant/remboursements', label: 'Mes remboursements', icon: <Receipt className="w-5 h-5" /> },
+    { to: '/assurant/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/assurant/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   provider: [
     { to: '/professionnel', label: 'Déposer une facture', icon: <FileText className="w-5 h-5" /> },
     { to: '/professionnel/factures', label: 'Mes factures', icon: <Receipt className="w-5 h-5" /> },
     { to: '/professionnel/assistant', label: 'Assistant RAG', icon: <MessageSquare className="w-5 h-5" /> },
+    { to: '/professionnel/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/professionnel/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   manager: [
@@ -33,6 +35,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/gestionnaire/alertes', label: 'Alertes', icon: <AlertTriangle className="w-5 h-5" /> },
     { to: '/gestionnaire/ordonnances', label: 'Ordonnances', icon: <ClipboardList className="w-5 h-5" /> },
     { to: '/gestionnaire/corpus-rag', label: 'Documents RAG', icon: <BookOpen className="w-5 h-5" /> },
+    { to: '/gestionnaire/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/gestionnaire/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
   admin: [
@@ -41,6 +44,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/modeles', label: 'Modèles', icon: <GitBranch className="w-5 h-5" /> },
     { to: '/admin/audit', label: 'Journal d\'audit', icon: <ScrollText className="w-5 h-5" /> },
     { to: '/admin/utilisateurs', label: 'Utilisateurs', icon: <Users className="w-5 h-5" /> },
+    { to: '/admin/mot-de-passe', label: 'Mot de passe', icon: <KeyRound className="w-5 h-5" /> },
     { to: '/admin/aide', label: 'Aide', icon: <HelpCircle className="w-5 h-5" /> },
   ],
 };
@@ -60,10 +64,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
 
   return (
     <aside className={`${collapsed ? 'w-20' : 'w-64'} flex-shrink-0 h-screen sticky top-0 bg-surface-100 dark:bg-surface-850 border-r border-surface-300/80 dark:border-surface-700 flex flex-col transition-all duration-300 hidden md:flex`}>
-      <div className="flex items-center justify-between px-4 py-4 border-b border-surface-300/60 dark:border-surface-700">
-        {collapsed ? <div className="w-10 h-10 mx-auto"><Logo size="sm" /></div> : <Logo />}
+      <div className={`flex items-center ${collapsed ? 'justify-center gap-1 px-2' : 'justify-between px-4'} py-4 border-b border-surface-300/60 dark:border-surface-700`}>
+        {collapsed ? <Logo size="sm" iconOnly /> : <Logo />}
         <button
           onClick={onToggleCollapse}
+          aria-label={collapsed ? 'Déplier la barre latérale' : 'Replier la barre latérale'}
+          title={collapsed ? 'Déplier' : 'Replier'}
           className="p-1.5 rounded-lg hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-400"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -85,6 +91,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
                   } ${collapsed ? 'justify-center' : ''}`
                 }
                 title={collapsed ? item.label : undefined}
+                aria-label={collapsed ? item.label : undefined}
               >
                 {item.icon}
                 {!collapsed && <span>{item.label}</span>}
@@ -97,6 +104,9 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
       <div className="p-3 relative border-t border-surface-300/60 dark:border-surface-700">
         <button
           onClick={() => setShowUserMenu(!showUserMenu)}
+          aria-label={`${user.pseudonym}, ${ROLE_LABELS[user.role]}`}
+          aria-expanded={showUserMenu}
+          title={collapsed ? `${user.pseudonym} · ${ROLE_LABELS[user.role]}` : undefined}
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-surface-200/60 dark:hover:bg-surface-700 transition-all ${collapsed ? 'justify-center' : ''}`}
         >
           <div className="w-9 h-9 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
@@ -110,8 +120,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: { collapsed: boolean; o
           )}
         </button>
         {showUserMenu && (
-          <div className="absolute bottom-16 left-3 right-3 rounded-xl bg-white dark:bg-surface-700 border border-surface-300/80 dark:border-surface-600 shadow-lg p-1 z-50">
-            <button onClick={handleLogout} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/30 rounded-lg">
+          <div className={`absolute ${collapsed ? 'bottom-3 left-full ml-2 w-44' : 'bottom-16 left-3 right-3'} rounded-xl bg-white dark:bg-surface-700 border border-surface-300/80 dark:border-surface-600 shadow-lg p-1 z-50`}>
+            <button onClick={handleLogout} className="flex items-center gap-2 w-full whitespace-nowrap px-3 py-2 text-sm text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/30 rounded-lg">
               <LogOut className="w-4 h-4" /> Déconnexion
             </button>
           </div>

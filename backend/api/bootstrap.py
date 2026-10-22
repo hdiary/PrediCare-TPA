@@ -33,9 +33,10 @@ def _ensure_user(
 ) -> int:
     row = conn.execute(
         "INSERT INTO utilisateurs "
-        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id) "
-        "VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING utilisateur_id",
-        (username, password_hash, assure_id, prestataire_id),
+        "(nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, "
+        "mot_de_passe_a_changer) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING RETURNING utilisateur_id",
+        (username, password_hash, assure_id, prestataire_id, role != "administrateur"),
     ).fetchone()
     if row is None:
         row = conn.execute(
@@ -68,6 +69,27 @@ def _ensure_user(
             (assure_id, prestataire_id, row["utilisateur_id"]),
         )
     return row["utilisateur_id"]
+
+
+def _resolve_demo_provider_id(conn, provider_name: str | None) -> str | None:
+    if not provider_name:
+        row = conn.execute(
+            "SELECT prestataire_id FROM prestataires ORDER BY prestataire_id LIMIT 1"
+        ).fetchone()
+        return row["prestataire_id"] if row else None
+
+    matches = conn.execute(
+        "SELECT prestataire_id FROM prestataires "
+        "WHERE lower(btrim(nom)) = lower(btrim(%s)) AND statut = 'ACTIF' "
+        "ORDER BY prestataire_id LIMIT 2",
+        (provider_name,),
+    ).fetchall()
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Le prestataire de démonstration {provider_name!r} doit correspondre "
+            f"à une seule fiche active (correspondances: {len(matches)})"
+        )
+    return matches[0]["prestataire_id"]
 
 
 def ensure_identity_users() -> None:
@@ -118,8 +140,9 @@ def ensure_identity_users() -> None:
 
         password_hash = hash_password(DEFAULT_IDENTITY_PASSWORD)
         conn.execute(
-            "INSERT INTO utilisateurs (nom_utilisateur, hash_mot_de_passe) "
-            "SELECT DISTINCT nom_utilisateur, %s "
+            "INSERT INTO utilisateurs "
+            "(nom_utilisateur, hash_mot_de_passe, mot_de_passe_a_changer) "
+            "SELECT DISTINCT nom_utilisateur, %s, true "
             "FROM unnest(%s::text[]) AS identities(nom_utilisateur) "
             "ON CONFLICT DO NOTHING",
             (password_hash, usernames),
@@ -167,9 +190,9 @@ def ensure_demo_users() -> None:
             assure_id = conn.execute(
                 "SELECT assure_id FROM assures ORDER BY assure_id LIMIT 1"
             ).fetchone()
-            prestataire_id = conn.execute(
-                "SELECT prestataire_id FROM prestataires ORDER BY prestataire_id LIMIT 1"
-            ).fetchone()
+            demo_provider_id = _resolve_demo_provider_id(
+                conn, settings.demo_provider_name
+            )
             for username, role in DEMO_USERS:
                 _ensure_user(
                     conn,
@@ -178,8 +201,8 @@ def ensure_demo_users() -> None:
                     role,
                     assure_id=assure_id["assure_id"] if role == "assure" and assure_id else None,
                     prestataire_id=(
-                        prestataire_id["prestataire_id"]
-                        if role == "professionnel_sante" and prestataire_id else None
+                        demo_provider_id
+                        if role == "professionnel_sante" else None
                     ),
                 )
         logger.info("demo_users_ready")

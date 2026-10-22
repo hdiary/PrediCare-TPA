@@ -16,3 +16,4 @@ __pycache__/
 docker-compose.override.yml
 volumes/
 .venv-api311/
+.vscode/

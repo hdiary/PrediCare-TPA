@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle2, Link2Off } from 'lucide-react';
 import { AuthLayout } from '@/components/AuthLayout';
 import { PasswordField, PasswordRules } from '@/components/PasswordField';
 import { Button, Spinner } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import { isPasswordValid, passwordChecks } from '@/lib/password';
 
 export function ResetPasswordPage() {
@@ -65,7 +65,7 @@ export function ResetPasswordPage() {
       await api.resetPassword(token, password);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible de modifier le mot de passe');
+      setError(userErrorMessage(err, 'Impossible de modifier le mot de passe. Vérifiez le lien puis réessayez.'));
     } finally {
       setLoading(false);
     }

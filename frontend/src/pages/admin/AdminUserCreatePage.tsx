@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button, Card, Input, Spinner } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import type { AdminUserCreatePayload, CreatedUserCredentials, UserReferences } from '@/lib/types';
 
 const EMPTY_FORM: AdminUserCreatePayload = {
@@ -31,7 +31,7 @@ export function AdminUserCreatePage() {
     if (form.role !== 'professionnel_sante' || references) return;
     api.getUserReferences()
       .then(setReferences)
-      .catch((cause) => setReferencesError(cause instanceof Error ? cause.message : 'Impossible de charger les prestataires.'));
+      .catch((cause) => setReferencesError(userErrorMessage(cause, 'Impossible de charger les professionnels de santé. Réessayez.')));
   }, [form.role, references]);
 
   const updateForm = <K extends keyof AdminUserCreatePayload>(
@@ -46,7 +46,7 @@ export function AdminUserCreatePage() {
     try {
       setCreated(await api.createUser(form));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Impossible de créer le compte.');
+      setError(userErrorMessage(cause, 'Impossible de créer le compte. Vérifiez les informations puis réessayez.'));
     } finally {
       setSaving(false);
     }

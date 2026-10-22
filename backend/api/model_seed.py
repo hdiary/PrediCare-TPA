@@ -149,6 +149,7 @@ def prepare_seed() -> None:
             "decision_threshold": artifact.get("seuil"),
             "algorithm": artifact.get("algo"),
             "parameters": artifact.get("params", {}),
+            "calibration": artifact.get("calibration"),
             "features": features,
         }
         metadata_path.write_text(

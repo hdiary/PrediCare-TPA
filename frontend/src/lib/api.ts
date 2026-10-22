@@ -122,6 +122,146 @@ export class ApiError extends Error {
   }
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  fichier: "Document",
+  facture_id: "Facture",
+  numero_facture: "Numéro de facture",
+  prestataire_id: "Professionnel de santé",
+  assure_id: "Assuré",
+  contrat_id: "Contrat",
+  ordonnance_id: "Ordonnance liée",
+  id_ordonnance: "Ordonnance liée",
+  prescription_id: "Ordonnance liée",
+  type_facture: "Type de facture",
+  date_soin: "Date des soins",
+  date_facture: "Date de facture",
+  date_reception: "Date de réception",
+  heure_soin: "Heure des soins",
+  mode_reglement: "Mode de règlement",
+  canal_reception: "Mode de transmission",
+  devise: "Devise",
+  lignes: "Actes et médicaments",
+  montant_total: "Montant total",
+  attestation_pec_id: "Attestation de prise en charge",
+  entente_prealable_id: "Entente préalable",
+};
+
+function userFieldLabel(field: string): string {
+  const lineMatch = field.match(
+    /^lignes\[(\d+)\](?:\.(code|type_ligne|quantite|prix_unitaire|montant))?$/,
+  );
+  if (lineMatch) {
+    const line = `Ligne ${lineMatch[1]}`;
+    const detail: Record<string, string> = {
+      code: "acte ou médicament",
+      type_ligne: "type de prestation",
+      quantite: "quantité",
+      prix_unitaire: "tarif unitaire",
+      montant: "montant",
+    };
+    return detail[lineMatch[2]] ? `${line} : ${detail[lineMatch[2]]}` : line;
+  }
+  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+  return field.replace(/_id\b/g, "").replace(/_/g, " ").trim();
+}
+
+function userValidationMessage(
+  field: string,
+  message: string,
+  code?: string,
+): string {
+  if (field === "mode_reglement" || /mode_reglement/i.test(message)) {
+    return "Choisissez le tiers payant ou le remboursement à l’assuré.";
+  }
+  switch (code) {
+    case "PRESTATAIRE_INCONNU":
+      return "Le professionnel de santé n’est pas reconnu. Vérifiez les informations figurant sur la facture.";
+    case "ASSURE_INCONNU":
+      return "L’assuré indiqué sur la facture n’est pas reconnu. Vérifiez son numéro.";
+    case "CODE_ACTE_INCONNU":
+    case "CODE_ORDONNANCE_INCONNU":
+      return "Un acte ou médicament n’est pas reconnu. Vérifiez les éléments indiqués sur le document.";
+    case "CHAMP_OBLIGATOIRE_MANQUANT":
+      return "Cette information obligatoire est absente. Complétez le document puis réessayez.";
+    case "TOTAL_INCOHERENT":
+      return "Le montant total ne correspond pas à la somme des actes et médicaments.";
+    case "DATE_FUTURE":
+      return "La date des soins ne peut pas être dans le futur.";
+    case "DATE_IMPOSSIBLE":
+      return "Une date ou une heure du document est invalide. Vérifiez les informations saisies.";
+    case "DEVISE_INVALIDE":
+      return "La facture doit être établie en ariary malgache (MGA).";
+    case "FACTURE_SANS_LIGNE":
+      return "La facture ne contient aucun acte ni médicament reconnu.";
+    case "ORDONNANCE_PDF_INVALIDE":
+    case "ORDONNANCE_INCOMPLETE":
+      return "L’ordonnance est illisible ou incomplète. Joignez un scan plus net avec ses informations essentielles.";
+    case "ORDONNANCE_ID_INCOHERENT":
+    case "ORDONNANCE_DATE_INCOHERENTE":
+      return "Les informations de l’ordonnance ne correspondent pas à celles saisies. Vérifiez le numéro et la date.";
+  }
+  if (/format invalide/i.test(message)) {
+    return "Le format de cette information n’est pas valide. Vérifiez le document.";
+  }
+  if (/valeurs admises/i.test(message)) {
+    return "La valeur indiquée n’est pas reconnue. Choisissez une option proposée dans le formulaire.";
+  }
+  if (/champ obligatoire/i.test(message)) {
+    return "Cette information est obligatoire.";
+  }
+  if (/code absent des référentiels/i.test(message)) {
+    return "Un acte ou médicament n’est pas reconnu. Vérifiez les éléments indiqués sur le document.";
+  }
+  return message.replace(/\b[a-z]+(?:_[a-z]+){1,}\b/gi, "cette information");
+}
+
+export function userErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    if (error.errors.length) {
+      return error.errors
+        .map((item) => {
+          const label = item.field ? userFieldLabel(item.field) : "";
+          const message = userValidationMessage(
+            item.field,
+            item.message,
+            item.code,
+          );
+          return label ? `${label} : ${message}` : message;
+        })
+        .join(" ");
+    }
+    if (error.status === 401)
+      return "Identifiant ou mot de passe incorrect, ou accès expiré.";
+    if (error.status === 403)
+      return "Vous ne pouvez pas effectuer cette action avec votre accès actuel.";
+    if (error.status === 429)
+      return "Trop de tentatives. Patientez quelques instants avant de réessayer.";
+    if (error.status >= 500)
+      return "Le service est momentanément indisponible. Réessayez dans quelques instants.";
+    if (/^Erreur \d{3}$/.test(error.message)) return fallback;
+    return (
+      error.message.replace(/\b[a-z]+(?:_[a-z]+)+\b/gi, "cette information") ||
+      fallback
+    );
+  }
+  if (
+    error instanceof TypeError ||
+    (error instanceof Error &&
+      /failed to fetch|networkerror|load failed/i.test(error.message))
+  ) {
+    return "Impossible de joindre le service. Vérifiez votre connexion puis réessayez.";
+  }
+  if (
+    error instanceof Error &&
+    /identifiant ou mot de passe incorrect|email ou mot de passe incorrect/i.test(
+      error.message,
+    )
+  ) {
+    return "Identifiant ou mot de passe incorrect.";
+  }
+  return fallback;
+}
+
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem(TOKEN_KEY);
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -138,12 +278,39 @@ function parseErrorBody(body: unknown, status: number): ApiError {
   if (Array.isArray(b.erreurs)) {
     // Facture rejetée : codes du contrat de données (section 9.1)
     for (const e of b.erreurs)
-      errors.push({ field: e.champ, message: e.message, code: e.code });
+      errors.push({
+        field: userFieldLabel(e.champ),
+        message: userValidationMessage(e.champ, e.message, e.code),
+        code: e.code,
+      });
   } else if (Array.isArray(b.errors)) {
     for (const e of b.errors)
-      errors.push({ field: e.field, message: e.message });
+      errors.push({
+        field: userFieldLabel(e.field),
+        message: userValidationMessage(e.field, e.message),
+      });
   }
-  const message = typeof b.detail === "string" ? b.detail : `Erreur ${status}`;
+  if (Array.isArray(b.detail)) {
+    for (const item of b.detail) {
+      if (!item || typeof item !== "object") continue;
+      const issue = item as { loc?: unknown[]; msg?: unknown };
+      const pathParts = Array.isArray(issue.loc)
+        ? issue.loc.filter((part) => typeof part === "string")
+        : [];
+      const field = String(pathParts[pathParts.length - 1] ?? "");
+      const rawMessage = typeof issue.msg === "string" ? issue.msg : "";
+      const message = /field required/i.test(rawMessage)
+        ? "Cette information est obligatoire."
+        : userValidationMessage(field, rawMessage);
+      errors.push({ field: field ? userFieldLabel(field) : "", message });
+    }
+  }
+  const message =
+    typeof b.detail === "string"
+      ? b.detail
+      : errors.length
+        ? "Certaines informations doivent être vérifiées."
+        : `Erreur ${status}`;
   return new ApiError(message, status, errors);
 }
 
@@ -189,6 +356,7 @@ interface ApiUser {
   role: string;
   assure_id?: string | null;
   prestataire_id?: string | null;
+  must_change_password?: boolean;
 }
 
 type AdminRole =
@@ -365,7 +533,10 @@ export const api = {
       };
     }
     try {
-      const data = await request<{ access_token: string; user: ApiUser }>(
+      const data = await request<{
+        access_token: string;
+        user: ApiUser & { must_change_password?: boolean };
+      }>(
         "/auth/login",
         { method: "POST", body: JSON.stringify({ identifier, password }) },
         { auth: false },
@@ -378,6 +549,7 @@ export const api = {
         display_name: u.display_name,
         pseudonym: u.pseudonym,
         email: u.email,
+        must_change_password: data.user.must_change_password,
       };
     } catch (e) {
       if (e instanceof ApiError && e.status === 401)
@@ -391,6 +563,7 @@ export const api = {
     display_name: string;
     pseudonym: string;
     email: string;
+    must_change_password: boolean;
   }> {
     if (isMock("auth")) {
       await delay(200);
@@ -402,16 +575,45 @@ export const api = {
         display_name: account.display_name,
         pseudonym: account.pseudonym,
         email: account.email,
+        must_change_password: false,
       };
     }
-    const raw = await request<ApiUser>("/auth/me");
+    const raw = await request<ApiUser & { must_change_password: boolean }>(
+      "/auth/me",
+    );
     const me = mapUser(raw);
     cachedMe = {
       pseudonym: me.pseudonym,
       role: me.role,
       prestataireId: raw.prestataire_id ?? null,
     };
-    return me;
+    return { ...me, must_change_password: raw.must_change_password };
+  },
+
+  async completeFirstLoginPassword(options: {
+    keepCurrentPassword: boolean;
+    newPassword?: string;
+  }): Promise<void> {
+    await request("/auth/first-login-password", {
+      method: "POST",
+      body: JSON.stringify({
+        keep_current_password: options.keepCurrentPassword,
+        ...(options.newPassword ? { new_password: options.newPassword } : {}),
+      }),
+    });
+  },
+
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    await request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
   },
 
   /** Factures dans le périmètre du compte (prestataire : les siennes ; assuré : les siennes ; gestionnaire : toutes). */
@@ -744,7 +946,10 @@ export const api = {
     }
     await request(
       "/auth/reset-password",
-      { method: "POST", body: JSON.stringify({ token, password }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ token, new_password: password }),
+      },
       { auth: false },
     );
   },
@@ -949,22 +1154,36 @@ export const api = {
     if (!isMock("auth")) await request("/auth/logout", { method: "POST" });
   },
 
-  /** États des services : l'API et la base viennent de /health ; n8n et la base vectorielle ne sont pas encore sondés. */
+  /** États des services remontés par le endpoint de santé de l'API. */
   async getServiceStatus(): Promise<ServiceStatus> {
     if (isMock("health")) {
       await delay(300);
       return mockServiceStatus;
     }
     const unknown: ServiceState = "unknown";
+    const toServiceState = (value: string | undefined): ServiceState => {
+      if (!value || value === "not_configured") return unknown;
+      if (value === "ok") return "ok";
+      if (value === "degraded") return "degraded";
+      return "down";
+    };
     try {
       const res = await fetch(`${BASE_URL}/health`);
-      const h = (await res.json()) as { checks?: Record<string, string> };
+      const h = (await res.json()) as {
+        status?: string;
+        checks?: Record<string, string>;
+      };
       const checks = h.checks ?? {};
       return {
-        api: "ok",
-        database: checks.database === "ok" ? "ok" : "down",
-        model: checks.model === "ok" ? "ok" : "down",
-        n8n: unknown,
+        api:
+          h.status === "ok"
+            ? "ok"
+            : h.status === "degraded" || !res.ok
+              ? "degraded"
+              : unknown,
+        database: toServiceState(checks.database),
+        model: toServiceState(checks.model),
+        n8n: toServiceState(checks.n8n),
         vector_db: unknown,
       };
     } catch {
@@ -1117,7 +1336,10 @@ export const api = {
     }
     if (filters.search?.trim()) params.set("q", filters.search.trim());
     const page = await request<{
-      items: (ApiUser & { is_active: boolean })[];
+      items: (ApiUser & {
+        is_active: boolean;
+        must_change_password: boolean;
+      })[];
       total: number;
     }>(`/admin/users/page?${params}`);
     return {
@@ -1133,6 +1355,7 @@ export const api = {
           status: r.is_active ? "active" : "inactive",
           assure_id: r.assure_id,
           prestataire_id: r.prestataire_id,
+          must_change_password: r.must_change_password,
         };
       }),
     };
@@ -1188,6 +1411,7 @@ export const api = {
       is_active: boolean;
       assure_id?: string | null;
       prestataire_id?: string | null;
+      new_password?: string;
     },
   ): Promise<void> {
     if (isMock("users"))
@@ -1199,6 +1423,7 @@ export const api = {
         is_active: payload.is_active,
         assure_id: payload.assure_id ?? null,
         prestataire_id: payload.prestataire_id ?? null,
+        ...(payload.new_password ? { new_password: payload.new_password } : {}),
       }),
     });
   },

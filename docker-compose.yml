@@ -210,6 +210,7 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:5173}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-} # vide = aucun compte de démo créé
+      DEMO_PROVIDER_NAME: ${DEMO_PROVIDER_NAME:-}
       # Comptes créés au démarrage (dev). Surcharger dans .env ; une valeur vide désactive le compte.
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       SEED_GESTION_PASSWORD: ${SEED_GESTION_PASSWORD:-}
@@ -220,6 +221,7 @@ services:
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       ALERT_THRESHOLD: ${ALERT_THRESHOLD:-0.8}
+      N8N_HEALTH_URL: ${N8N_HEALTH_URL:-http://n8n:5678/healthz}
       N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/predicare-alert}
       N8N_WEBHOOK_SECRET: ${N8N_WEBHOOK_SECRET:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
@@ -253,6 +255,7 @@ services:
       start_period: 40s
 
   n8n-db-init:
+    # profiles: ["full"]
     image: postgres:16-alpine
     environment:
       PGHOST: db
@@ -289,6 +292,7 @@ services:
 
   # ---------- Workflow d'alertes (Slack / Email) ----------
   n8n:
+    # profiles: ["full"]
     image: n8nio/n8n:latest # à épingler sur une version précise
     restart: unless-stopped
     entrypoint: [ "node", "/bootstrap.js" ]

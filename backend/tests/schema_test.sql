@@ -5,7 +5,8 @@ CREATE TABLE utilisateurs (
   nom_utilisateur TEXT UNIQUE NOT NULL,
   hash_mot_de_passe TEXT NOT NULL, est_actif BOOLEAN NOT NULL DEFAULT true,
   assure_id TEXT, prestataire_id TEXT, tentatives_echouees INT NOT NULL DEFAULT 0,
-  verrouille_jusqua TIMESTAMPTZ, derniere_connexion TIMESTAMPTZ);
+  verrouille_jusqua TIMESTAMPTZ, derniere_connexion TIMESTAMPTZ,
+  mot_de_passe_a_changer BOOLEAN NOT NULL DEFAULT false);
 CREATE TABLE utilisateurs_identites (
   utilisateur_id INT PRIMARY KEY REFERENCES utilisateurs(utilisateur_id) ON DELETE CASCADE,
   donnees_chiffrees BYTEA NOT NULL, key_version SMALLINT NOT NULL,

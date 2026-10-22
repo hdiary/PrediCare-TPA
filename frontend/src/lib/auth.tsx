@@ -6,6 +6,7 @@ interface AuthContextValue {
   user: User | null;
   loading: boolean;
   login: (identifier: string, password: string) => Promise<User>;
+  refreshUser: () => Promise<User>;
   logout: () => void;
 }
 
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       display_name: res.display_name,
       pseudonym: res.pseudonym,
       email: res.email,
+      must_change_password: res.must_change_password,
     };
     setUser(loggedIn);
     return loggedIn;
@@ -66,8 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const data = await api.getMe();
+    const refreshed: User = {
+      role: data.role,
+      display_name: data.display_name,
+      pseudonym: data.pseudonym,
+      email: data.email,
+      must_change_password: data.must_change_password,
+    };
+    setUser(refreshed);
+    return refreshed;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

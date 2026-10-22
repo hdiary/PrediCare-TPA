@@ -1,8 +1,10 @@
 """Endpoint de santé, utilisé par le healthcheck Docker et l'écran d'administration."""
 import time
 
+import httpx
 from fastapi import APIRouter, Response
 
+from api.config import get_settings
 from api.db import get_pool
 from api.schemas import HealthResponse
 from api.services.model_registry import registry
@@ -25,12 +27,24 @@ def _check_database() -> str:
         return f"error: {type(exc).__name__}"
 
 
+def _check_n8n() -> str:
+    health_url = get_settings().n8n_health_url
+    if not health_url:
+        return "not_configured"
+    try:
+        response = httpx.get(health_url, timeout=2)
+        return "ok" if response.is_success else "unavailable"
+    except httpx.HTTPError:
+        return "unavailable"
+
+
 @router.get("/health", response_model=HealthResponse)
 def health(response: Response):
     bundle = registry.get()
     checks = {
         "database": _check_database(),
         "model": "ok" if bundle else "not_loaded",
+        "n8n": _check_n8n(),
     }
     # Seule la base est critique (503) : sans modèle l'API reste utilisable (login, alertes...)
     if checks["database"] != "ok":

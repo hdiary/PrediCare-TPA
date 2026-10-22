@@ -32,9 +32,10 @@ première initialisation du workflow. Son mot de passe est défini par
 soient terminées avant de créer le rôle.
 
 Le service officiel `n8nio/n8n` conserve sa base interne dans le volume `n8n_data`.
-Après la création du compte propriétaire n8n, le démarrage importe le credential
-PostgreSQL chiffré dans la base n8n, importe le workflow puis le publie. Pour
-démarrer :
+Au premier démarrage, le bootstrap laisse n8n créer cette base et son compte
+propriétaire. Après la création du propriétaire dans l'interface, redémarrez le
+service : le bootstrap importe le credential PostgreSQL chiffré, importe le
+workflow puis le publie. Pour démarrer :
 
 ```sh
 docker compose up -d n8n

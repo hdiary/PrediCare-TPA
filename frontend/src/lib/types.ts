@@ -1,10 +1,11 @@
-export type Role = 'provider' | 'insured' | 'manager' | 'admin';
+export type Role = "provider" | "insured" | "manager" | "admin";
 
 export interface User {
   role: Role;
   display_name: string;
   pseudonym: string;
   email: string;
+  must_change_password?: boolean;
 }
 
 export interface AuthResponse {
@@ -14,13 +15,20 @@ export interface AuthResponse {
   display_name: string;
   pseudonym: string;
   email: string;
+  must_change_password?: boolean;
 }
 
 export interface Invoice {
   id: string;
   date: string;
   amount: number;
-  status: 'received' | 'reviewing' | 'pending' | 'accepted' | 'rejected' | 'paid';
+  status:
+    | "received"
+    | "reviewing"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "paid";
   reimbursed_amount: number;
   provider_pseudo?: string;
   provider_name?: string;
@@ -37,7 +45,11 @@ export interface InvoiceLine {
   suspicious?: boolean;
 }
 
-export type AlertStatus = 'pending' | 'validated' | 'rejected' | 'investigating';
+export type AlertStatus =
+  | "pending"
+  | "validated"
+  | "rejected"
+  | "investigating";
 
 export interface Alert {
   id: string;
@@ -52,10 +64,10 @@ export interface Alert {
 }
 
 export type AlertType =
-  | 'tarification'
-  | 'doublon_prescription'
-  | 'inadequation_prescription'
-  | 'surconsommation';
+  | "tarification"
+  | "doublon_prescription"
+  | "inadequation_prescription"
+  | "surconsommation";
 
 export interface AlertDetail extends Alert {
   top_factors: SHAPFactor[];
@@ -64,13 +76,29 @@ export interface AlertDetail extends Alert {
   provider_history: DecisionHistoryItem[];
 }
 
-export type AlertDecisionValue = 'VALIDER' | 'REJETER' | 'CONFIRMER_FRAUDE' | 'ESCALADER';
+export type AlertDecisionValue =
+  | "VALIDER"
+  | "REJETER"
+  | "CONFIRMER_FRAUDE"
+  | "ESCALADER";
 export interface AlertApiSummary {
-  facture_id: string; score: number; seuil_utilise?: number | null; version_modele: string | null; date: string;
-  montant_total: number | null; nb_regles: number; derniere_decision: AlertDecisionValue | null;
-  date_decision: string | null; type: string; priorite: string; statut: string;
-  codes: string[]; etat_notification: string | null; tentatives_notification: number;
-  prestataire_id?: string | null; assure_id?: string | null;
+  facture_id: string;
+  score: number;
+  seuil_utilise?: number | null;
+  version_modele: string | null;
+  date: string;
+  montant_total: number | null;
+  nb_regles: number;
+  derniere_decision: AlertDecisionValue | null;
+  date_decision: string | null;
+  type: string;
+  priorite: string;
+  statut: string;
+  codes: string[];
+  etat_notification: string | null;
+  tentatives_notification: number;
+  prestataire_id?: string | null;
+  assure_id?: string | null;
 }
 export interface ShapContribution {
   variable: string;
@@ -92,7 +120,9 @@ export interface AlertApiDetail {
   };
   shap: ShapContribution[] | ShapExplanation | null;
   variables: Record<string, number | string | boolean | null>;
-  codes_fraude: string[]; regles: Array<Record<string, unknown>>; decisions: Array<Record<string, unknown>>;
+  codes_fraude: string[];
+  regles: Array<Record<string, unknown>>;
+  decisions: Array<Record<string, unknown>>;
   lignes: ApiInvoiceLine[];
   historique_prestataire: {
     facture_id: string;
@@ -110,32 +140,36 @@ export interface ApiInvoiceLine {
   montant: number;
 }
 export interface AlertDecisionResult {
-  decision_id: number; facture_id: string; gestionnaire_id: number;
-  decision: AlertDecisionValue; commentaire: string | null;
-  montant_economise: number; date_decision: string;
+  decision_id: number;
+  facture_id: string;
+  gestionnaire_id: number;
+  decision: AlertDecisionValue;
+  commentaire: string | null;
+  montant_economise: number;
+  date_decision: string;
 }
 
 export interface SHAPFactor {
   feature: string;
   label_fr: string;
   impact: number;
-  direction: 'positive' | 'negative';
+  direction: "positive" | "negative";
 }
 
 export interface DecisionHistoryItem {
   ts: string;
-  decision: 'validated' | 'rejected' | 'investigating';
+  decision: "validated" | "rejected" | "investigating";
   actor_pseudo: string;
   score: number;
 }
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   sources?: ChatSource[];
-  feedback?: 'up' | 'down' | null;
+  feedback?: "up" | "down" | null;
 }
 
 export interface ChatSource {
@@ -180,8 +214,17 @@ export interface BIKpiData {
   date_rafraichissement: string | null;
   stale: boolean;
   erreur_rafraichissement: string | null;
-  par_jour: { jour: string; factures: number; alertes: number; montant_economise: number }[];
-  top_prestataires: { prestataire_id: string; prestataire_nom: string; alertes: number }[];
+  par_jour: {
+    jour: string;
+    factures: number;
+    alertes: number;
+    montant_economise: number;
+  }[];
+  top_prestataires: {
+    prestataire_id: string;
+    prestataire_nom: string;
+    alertes: number;
+  }[];
   distribution_scores: { bucket: number; count: number }[];
   seuil_alerte: number | null;
   factures_rejetees: { code: string; count: number }[];
@@ -199,7 +242,7 @@ export interface BIKpiData {
 export interface RagCorpusDocument {
   id: number;
   filename: string;
-  scope: 'global' | 'formula' | 'contract';
+  scope: "global" | "formula" | "contract";
   contrat_id: string | null;
   formule: string | null;
   n_pages: number | null;
@@ -224,7 +267,7 @@ export interface ServiceStatus {
   vector_db: ServiceState;
 }
 
-export type ServiceState = 'ok' | 'degraded' | 'down' | 'unknown';
+export type ServiceState = "ok" | "degraded" | "down" | "unknown";
 
 export interface SystemMetrics {
   latency_p95_ms: number | null;
@@ -239,7 +282,7 @@ export interface ModelVersion {
   created_at: string;
   recall: number;
   precision: number;
-  status: 'active' | 'archived';
+  status: "active" | "archived";
 }
 
 export interface AuditLogEntry {
@@ -261,18 +304,18 @@ export interface AdminSettings {
 
 export interface InvoiceSubmissionResult {
   invoice_id: string;
-  status: 'accepted' | 'pending' | 'rejected';
+  status: "accepted" | "pending" | "rejected";
   errors: { field: string; message: string }[];
   warnings?: string[];
 }
 
 export type PrescriptionRuleCode =
-  | 'ORDONNANCE_ANTIDATEE'
-  | 'PRESCRIPTEUR_RADIE'
-  | 'DOUBLON_PRESCRIPTION'
-  | 'INADEQUATION_DIAGNOSTIC'
-  | 'PRESCRIPTEUR_INCOMPATIBLE'
-  | 'ORDONNANCE_FALSIFIEE';
+  | "ORDONNANCE_ANTIDATEE"
+  | "PRESCRIPTEUR_RADIE"
+  | "DOUBLON_PRESCRIPTION"
+  | "INADEQUATION_DIAGNOSTIC"
+  | "PRESCRIPTEUR_INCOMPATIBLE"
+  | "ORDONNANCE_FALSIFIEE";
 
 /** Alerte produite par backend/ml/prescription_rules.py (une ligne par ordonnance et règle). */
 export interface PrescriptionAlert {
@@ -301,12 +344,17 @@ export interface UserRow {
   display_name: string;
   role: Role;
   email: string | null;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   assure_id?: string | null;
   prestataire_id?: string | null;
+  must_change_password?: boolean;
 }
 
-export type AdminAccountRole = 'assure' | 'professionnel_sante' | 'gestionnaire' | 'administrateur';
+export type AdminAccountRole =
+  | "assure"
+  | "professionnel_sante"
+  | "gestionnaire"
+  | "administrateur";
 
 export interface CreatedUserCredentials {
   user_id: number;
@@ -320,7 +368,7 @@ export interface AdminUserCreatePayload {
   role: AdminAccountRole;
   nom: string;
   prenoms: string;
-  sexe: 'F' | 'M';
+  sexe: "F" | "M";
   date_naissance: string;
   telephone: string;
   email: string;
@@ -332,6 +380,10 @@ export interface AdminUserCreatePayload {
 }
 
 export interface UserReferences {
-  assures: { assure_id: string; contrat_id: string; rang_beneficiaire: string }[];
+  assures: {
+    assure_id: string;
+    contrat_id: string;
+    rang_beneficiaire: string;
+  }[];
   prestataires: { prestataire_id: string; nom: string; ville: string }[];
 }

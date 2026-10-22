@@ -455,7 +455,8 @@ def list_alertes_regles(conn, prediction_id: int) -> list[dict]:
 _USER_SELECT = (
     "u.utilisateur_id, u.identifiant, u.nom_utilisateur AS email, r.nom_role AS role, "
     "u.assure_id, u.prestataire_id, u.est_actif AS actif, "
-    "u.derniere_connexion, u.tentatives_echouees, u.verrouille_jusqua"
+    "u.derniere_connexion, u.tentatives_echouees, u.verrouille_jusqua, "
+    "u.mot_de_passe_a_changer AS must_change_password"
 )
 _USER_FROM = (
     "FROM utilisateurs u "
@@ -531,7 +532,8 @@ def get_mot_de_passe_hash(conn, user_id: int) -> str | None:
 
 def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
                        assure_id: str | None, prestataire_id: str | None,
-                       actif: bool, identifiant: str | None = None) -> dict | None:
+                       actif: bool, identifiant: str | None = None,
+                       must_change_password: bool = False) -> dict | None:
     """Crée un compte ; retourne None si le nom d'utilisateur existe déjà."""
     role_row = conn.execute(
         "SELECT role_id FROM roles WHERE nom_role = %s", (role,)
@@ -540,10 +542,12 @@ def create_utilisateur(conn, *, email: str, password_hash: str, role: str,
         raise ValueError(f"Rôle inconnu : {role}")
     created = conn.execute(
         "INSERT INTO utilisateurs "
-        "(identifiant, nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, est_actif) "
-        "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING "
+        "(identifiant, nom_utilisateur, hash_mot_de_passe, assure_id, prestataire_id, "
+        "est_actif, mot_de_passe_a_changer) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING "
         "RETURNING utilisateur_id",
-        (identifiant, email, password_hash, assure_id, prestataire_id, actif),
+        (identifiant, email, password_hash, assure_id, prestataire_id, actif,
+         must_change_password),
     ).fetchone()
     if created is None:
         return None
@@ -590,12 +594,35 @@ def update_utilisateur(conn, user_id: int, champs: dict) -> dict | None:
     return get_utilisateur(conn, user_id)
 
 
-def set_mot_de_passe(conn, user_id: int, password_hash: str) -> None:
+def set_mot_de_passe(
+    conn,
+    user_id: int,
+    password_hash: str,
+    *,
+    must_change_password: bool = False,
+) -> None:
     """Change le mot de passe et lève un éventuel verrouillage de connexion."""
     conn.execute(
-        "UPDATE utilisateurs SET hash_mot_de_passe = %s, tentatives_echouees = 0, "
+        "UPDATE utilisateurs SET hash_mot_de_passe = %s, mot_de_passe_a_changer = %s, "
+        "tentatives_echouees = 0, "
         "verrouille_jusqua = NULL WHERE utilisateur_id = %s",
-        (password_hash, user_id),
+        (password_hash, must_change_password, user_id),
+    )
+
+
+def confirmer_mot_de_passe_initial(conn, user_id: int) -> None:
+    conn.execute(
+        "UPDATE utilisateurs SET mot_de_passe_a_changer = false "
+        "WHERE utilisateur_id = %s",
+        (user_id,),
+    )
+
+
+def invalider_sessions_utilisateur(conn, user_id: int) -> None:
+    conn.execute(
+        "UPDATE auth_sessions SET revoked_at = now() "
+        "WHERE user_id = %s AND revoked_at IS NULL",
+        (user_id,),
     )
 
 
@@ -633,40 +660,9 @@ def enregistrer_echec_mot_de_passe(conn, user_id: int, max_tentatives: int,
 
 # ---------- jetons de réinitialisation de mot de passe ----------
 # Seul le hachage SHA-256 du jeton est stocké : une fuite de la base ne donne aucun lien valide.
-# La table est créée à la première utilisation si les migrations ne l'ont pas déjà fait
-# (voir aussi api/sql/001_reinitialisations_mdp.sql).
-
-_reset_table_ready = False
-
-
-def ensure_reset_table(conn) -> None:
-    global _reset_table_ready
-    if _reset_table_ready:
-        return
-    try:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS reinitialisations_mdp ("
-            "reset_id BIGSERIAL PRIMARY KEY, "
-            "utilisateur_id BIGINT NOT NULL REFERENCES utilisateurs(utilisateur_id) "
-            "ON DELETE CASCADE, "
-            "token_hash TEXT NOT NULL UNIQUE, "
-            "cree_le TIMESTAMPTZ NOT NULL DEFAULT now(), "
-            "expire_le TIMESTAMPTZ NOT NULL, "
-            "utilise_le TIMESTAMPTZ)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS ix_reinitialisations_mdp_utilisateur "
-            "ON reinitialisations_mdp (utilisateur_id)"
-        )
-        conn.commit()   # le DDL ne doit pas être annulé par un échec ultérieur de la requête
-    except (psycopg.errors.DuplicateTable, psycopg.errors.UniqueViolation,
-            psycopg.errors.DuplicateObject):
-        conn.rollback()   # un autre processus l'a créée en même temps
-    _reset_table_ready = True
-
+# La table et les droits du rôle app_rw sont installés par la migration Alembic dédiée.
 
 def compter_demandes_reinitialisation(conn, user_id: int, minutes: int = 60) -> int:
-    ensure_reset_table(conn)
     return conn.execute(
         "SELECT count(*) AS n FROM reinitialisations_mdp "
         "WHERE utilisateur_id = %s AND cree_le > now() - make_interval(mins => %s)",
@@ -676,7 +672,6 @@ def compter_demandes_reinitialisation(conn, user_id: int, minutes: int = 60) -> 
 
 def creer_jeton_reinitialisation(conn, user_id: int, token_hash: str, ttl_minutes: int) -> None:
     """Enregistre un nouveau jeton et invalide les précédents du même compte."""
-    ensure_reset_table(conn)
     conn.execute(
         "UPDATE reinitialisations_mdp SET utilise_le = now() "
         "WHERE utilisateur_id = %s AND utilise_le IS NULL",
@@ -694,13 +689,22 @@ def creer_jeton_reinitialisation(conn, user_id: int, token_hash: str, ttl_minute
 
 def consommer_jeton_reinitialisation(conn, token_hash: str) -> int | None:
     """Usage unique et atomique : retourne l'utilisateur si le jeton est valide, sinon None."""
-    ensure_reset_table(conn)
     row = conn.execute(
         "UPDATE reinitialisations_mdp SET utilise_le = now() "
         "WHERE token_hash = %s AND utilise_le IS NULL AND expire_le > now() "
         "RETURNING utilisateur_id",
         (token_hash,),
     ).fetchone()
+    return row["utilisateur_id"] if row else None
+
+
+def invalider_jetons_reinitialisation(conn, user_id: int) -> None:
+    """Invalide tous les liens de réinitialisation encore utilisables du compte."""
+    conn.execute(
+        "UPDATE reinitialisations_mdp SET utilise_le = now() "
+        "WHERE utilisateur_id = %s AND utilise_le IS NULL",
+        (user_id,),
+    )
 
 
 def get_config_values(conn, keys: list[str]) -> dict[str, dict]:

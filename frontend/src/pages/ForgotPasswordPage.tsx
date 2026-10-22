@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Mail, AlertCircle, MailCheck, ArrowLeft } from 'lucide-react';
 import { AuthLayout } from '@/components/AuthLayout';
 import { Button, Input, Spinner } from '@/components/ui';
-import { api, isMock } from '@/lib/api';
+import { api, isMock, userErrorMessage } from '@/lib/api';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -19,7 +19,7 @@ export function ForgotPasswordPage() {
       await api.requestPasswordReset(email.trim());
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible d'envoyer la demande");
+      setError(userErrorMessage(err, "Impossible d'envoyer la demande. Vérifiez l'adresse puis réessayez."));
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Mot de passe oublié"
-      subtitle="Saisissez l'adresse e-mail de votre compte. Nous vous enverrons un lien pour choisir un nouveau mot de passe."
+      subtitle="Saisissez l'adresse e-mail de votre compte pour recevoir un lien. Si votre compte n'a pas d'adresse e-mail, contactez un administrateur pour obtenir un nouveau mot de passe provisoire."
       footer={back}
     >
       {error && (

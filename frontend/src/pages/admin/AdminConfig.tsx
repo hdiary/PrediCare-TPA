@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Save, Slack, Mail, AlertTriangle, Info } from 'lucide-react';
 import { Card, Button, Skeleton, ErrorState } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
-import { api } from '@/lib/api';
+import { api, userErrorMessage } from '@/lib/api';
 import type { AdminSettings } from '@/lib/types';
 
 export function AdminConfig() {
@@ -34,8 +34,7 @@ export function AdminConfig() {
       setOriginal(settings);
       showToast('Configuration enregistrée', 'success');
     } catch (err) {
-      // le message de l'API (ex. « Adresses e-mail invalides ») aide plus qu'un texte générique
-      showToast(err instanceof Error && err.message ? err.message : 'Erreur lors de l\'enregistrement', 'error');
+      showToast(userErrorMessage(err, 'La configuration n’a pas pu être enregistrée. Réessayez.'), 'error');
     } finally {
       setSaving(false);
     }
@@ -47,7 +46,7 @@ export function AdminConfig() {
       const result = await api.sendAdminEmailTest();
       showToast(result.detail, 'success');
     } catch (err) {
-      showToast(err instanceof Error && err.message ? err.message : "Échec de l'envoi du test", 'error');
+      showToast(userErrorMessage(err, "Le message de test n’a pas pu être envoyé. Vérifiez l’adresse puis réessayez."), 'error');
     } finally {
       setTestingEmail(false);
     }
@@ -108,30 +107,6 @@ export function AdminConfig() {
             <Info className="w-4 h-4 text-kraft-700 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-kraft-700 dark:text-kraft-300">Les modifications s'appliquent immédiatement.</p>
           </div>
-        </div>
-      </Card>
-
-      <Card className="p-8">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-surface-800 dark:text-surface-100">Condition étendue</h3>
-            <p className="text-xs text-surface-400 mt-1">
-              Paramètre enregistré dans la configuration de la plateforme.
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={settings.extended_rule_enabled}
-            aria-label="Activer la condition étendue"
-            onClick={() => setSettings({
-              ...settings,
-              extended_rule_enabled: !settings.extended_rule_enabled,
-            })}
-            className={`relative w-11 h-6 rounded-full transition-all ${settings.extended_rule_enabled ? 'bg-primary-600' : 'bg-surface-300 dark:bg-surface-600'}`}
-          >
-            <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: settings.extended_rule_enabled ? '22px' : '2px' }} />
-          </button>
         </div>
       </Card>
 

@@ -96,6 +96,8 @@ Réception facture (HTTP POST /api/v1/factures)   [rôle : professionnel_sante]
     │       ├── Condition étendue (optionnelle, désactivable dans la config) :
     │       │     code de règle critique déclenché (ex. DOUBLON, PRESTATAIRE_RADIE, ACTE_FICTIF)
     │       │     → priorité « moyenne », sans envoi Slack immédiat (revue dans la file)
+    │       │     ⚠️ État actuel : le paramètre est stocké dans `configuration`, mais n'est pas
+    │       │     encore lu par le traitement des alertes ; cette condition n'est donc pas active.
     │       ├── Action (si score > seuil) : `notification_service` → webhook n8n
     │       │     → Slack/Email gestionnaire, avec retry (3 essais) et journalisation
     │       ├── Contenu : rapport d'explicabilité (SHAP + codes + montants)

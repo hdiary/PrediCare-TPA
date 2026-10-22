@@ -42,18 +42,21 @@ const AdminUsers = lazyPage(() => import('@/pages/admin/AdminUsers'), 'AdminUser
 const AdminUserCreatePage = lazyPage(() => import('@/pages/admin/AdminUserCreatePage'), 'AdminUserCreatePage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/ForgotPasswordPage'), 'ForgotPasswordPage');
 const ResetPasswordPage = lazyPage(() => import('@/pages/ResetPasswordPage'), 'ResetPasswordPage');
+const FirstLoginPasswordPage = lazyPage(() => import('@/pages/FirstLoginPasswordPage'), 'FirstLoginPasswordPage');
+const ChangePasswordPage = lazyPage(() => import('@/pages/ChangePasswordPage'), 'ChangePasswordPage');
 
 function RootRedirect() {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader fullscreen />;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.must_change_password) return <Navigate to="/premiere-connexion" replace />;
   return <Navigate to={getRoleHome(user.role)} replace />;
 }
 
 function LoginRoute() {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader fullscreen />;
-  if (user) return <Navigate to={getRoleHome(user.role)} replace />;
+  if (user) return <Navigate to={user.must_change_password ? '/premiere-connexion' : getRoleHome(user.role)} replace />;
   return <LoginPage />;
 }
 
@@ -70,20 +73,24 @@ export default function App() {
                 <Route path="/login" element={<LoginRoute />} />
                 <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
                 <Route path="/reinitialiser-mot-de-passe" element={<ResetPasswordPage />} />
+                <Route path="/premiere-connexion" element={<FirstLoginPasswordPage />} />
                 <Route path="/acces-refuse" element={<AccessDeniedPage />} />
 
                 {/* Insured routes */}
+                <Route path="/assurant/mot-de-passe" element={<AppLayout allowedRoles={['insured']}><ChangePasswordPage /></AppLayout>} />
                 <Route path="/assurant" element={<AppLayout allowedRoles={['insured']}><ChatPage /></AppLayout>} />
                 <Route path="/assurant/remboursements" element={<AppLayout allowedRoles={['insured']}><ReimbursementsPage /></AppLayout>} />
                 <Route path="/assurant/aide" element={<AppLayout allowedRoles={['insured']}><HelpPage /></AppLayout>} />
 
                 {/* Provider routes */}
+                <Route path="/professionnel/mot-de-passe" element={<AppLayout allowedRoles={['provider']}><ChangePasswordPage /></AppLayout>} />
                 <Route path="/professionnel" element={<AppLayout allowedRoles={['provider']}><DepositInvoicePage /></AppLayout>} />
                 <Route path="/professionnel/factures" element={<AppLayout allowedRoles={['provider']}><ProviderInvoicesPage /></AppLayout>} />
                 <Route path="/professionnel/assistant" element={<AppLayout allowedRoles={['provider']}><ChatPage /></AppLayout>} />
                 <Route path="/professionnel/aide" element={<AppLayout allowedRoles={['provider']}><HelpPage /></AppLayout>} />
 
                 {/* Manager routes */}
+                <Route path="/gestionnaire/mot-de-passe" element={<AppLayout allowedRoles={['manager']}><ChangePasswordPage /></AppLayout>} />
                 <Route path="/gestionnaire" element={<AppLayout allowedRoles={['manager']}><ManagerDashboard /></AppLayout>} />
                 <Route path="/gestionnaire/alertes" element={<AppLayout allowedRoles={['manager']}><AlertsListPage /></AppLayout>} />
                 <Route path="/gestionnaire/alertes/:id" element={<AppLayout allowedRoles={['manager']}><AlertDetailPage /></AppLayout>} />
@@ -92,6 +99,7 @@ export default function App() {
                 <Route path="/gestionnaire/aide" element={<AppLayout allowedRoles={['manager']}><HelpPage /></AppLayout>} />
 
                 {/* Admin routes */}
+                <Route path="/admin/mot-de-passe" element={<AppLayout allowedRoles={['admin']}><ChangePasswordPage /></AppLayout>} />
                 <Route path="/admin" element={<AppLayout allowedRoles={['admin']}><AdminSupervision /></AppLayout>} />
                 <Route path="/admin/configuration" element={<AppLayout allowedRoles={['admin']}><AdminConfig /></AppLayout>} />
                 <Route path="/admin/modeles" element={<AppLayout allowedRoles={['admin']}><AdminModels /></AppLayout>} />
