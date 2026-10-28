@@ -114,7 +114,7 @@ export function AdminSupervision() {
           { label: 'Factures traitées', value: formatNumber(biKpis.factures_traitees) },
           { label: 'Montant à risque', value: `${formatNumber(biKpis.montant_a_risque)} MGA` },
           { label: 'Montant économisé', value: `${formatNumber(biKpis.montant_economise)} MGA` },
-          { label: 'Précision opérationnelle', value: biKpis.precision_operationnelle === null ? 'N/A' : `${(biKpis.precision_operationnelle * 100).toFixed(1)}%` },
+          // { label: 'Précision opérationnelle', value: biKpis.precision_operationnelle === null ? 'N/A' : `${(biKpis.precision_operationnelle * 100).toFixed(1)}%` },
         ].map((stat) => (
           <Card key={stat.label} className="p-4">
             <p className="text-xs text-surface-400">{stat.label}</p>

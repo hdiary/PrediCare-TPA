@@ -76,7 +76,7 @@ export function ManagerDashboard() {
     { label: 'Montant à risque', value: formatMGA(kpis.montant_a_risque), icon: <Target className="w-5 h-5" />, color: 'warning' },
     { label: 'Montant économisé', value: formatMGA(kpis.montant_economise), icon: <Euro className="w-5 h-5" />, color: 'success' },
     { label: 'Taux d’alerte', value: kpis.taux_alerte === null ? 'N/A' : formatPercent(kpis.taux_alerte), icon: <AlertTriangle className="w-5 h-5" />, color: 'kraft' },
-    { label: 'Précision opérationnelle', value: kpis.precision_operationnelle === null ? 'N/A' : formatPercent(kpis.precision_operationnelle), icon: <Target className="w-5 h-5" />, color: 'success' },
+    // { label: 'Précision opérationnelle', value: kpis.precision_operationnelle === null ? 'N/A' : formatPercent(kpis.precision_operationnelle), icon: <Target className="w-5 h-5" />, color: 'success' },
     { label: 'Alertes en attente', value: kpis.alertes_en_attente.toString(), icon: <AlertTriangle className="w-5 h-5" />, color: 'warning' },
   ];
 

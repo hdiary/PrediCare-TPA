@@ -1,19 +1,6 @@
 # Analyse FinOps PrediCare TPA (Madagascar)
 
-> **Hypothèses de cohérence retenues pour cette version** (à valider) :
->
-> - Gestionnaire : **temps plein, 1 500 000 Ar/mois** (le « 2 j/mois » est abandonné car incompatible avec 1 000 alertes/mois).
-> - Ingénieur MLOps : **temps partiel, 1 200 000 Ar/mois**.
-> - GPU : **RTX 3090 24 GB** (occasion) — cohérent avec Qwen3 4B + bge-m3.
-> - CAPEX serveur : **7 000 000 Ar** (milieu de fourchette 6,5–7,5 M), amorti sur 24 mois = **291 667 Ar/mois**.
-> - Taux de change : **4 548 Ar/USD** (donneesmondiales.com, 20/10/2026).
-> - Provision pour aléas : **10 % des OPEX** (cf. tableau initial).
-> - Frais de change/paiement : **5 %** sur les postes libellés en USD.
-
----
-
-# 1. Contexte & Hypothèses (Adaptation Madagascar)
-
+# 1. Contexte & Hypothèses
 
 ### Détail du CAPEX serveur
 
@@ -56,9 +43,7 @@ Tableau FinOps détaillé (mensuel)
 - **Taux de détection du modèle (rappel)** : **94 %** (cf. slide 8).
 - **Économies brutes** : 150 000 000 × 0,94 = **141 000 000 Ar** (≈ 31 000 $).
 
-> ⚠️ **Limite à mentionner** : le rappel ne dit rien des **faux positifs** (factures saines bloquées). Le coût de traitement des faux positifs est absorbé par le gestionnaire à temps plein ; on peut ajouter une sensibilité (cf. § 6).
-
-### Calcul du ROI
+> Calcul du ROI
 
 \[
 ROI = \frac{\text{Économies générées} - \text{Coût de la plateforme}}{\text{Coût de la plateforme}} \times 100
