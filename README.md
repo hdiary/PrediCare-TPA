@@ -1,18 +1,14 @@
 # PrediCare TPA
 
-<<<<<<< HEAD
-**Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.**
+**Plateforme de détection des fraudes médicales, d'aide au contrôle des
+remboursements santé et d'assistance conversationnelle RAG.**
 
-Projet Capstone - Cohorte IA - Partenariat Orange Digital Center (ODC) & Ingedata.
+Projet Capstone — Cohorte IA — partenariat Orange Digital Center (ODC) et
+Ingedata.
 
-> ⚠️ **Données 100 % synthétiques.** Aucune donnée de santé réelle n'est utilisée dans ce projet.
-=======
-\*\*Système intelligent de détection de fraudes médicales, d'optimisation des remboursements santé et d'assistant conversationnel RAG.\*\*
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
+> **Données 100 % synthétiques.** Aucune donnée de santé réelle n'est utilisée
+> dans ce projet.
 
----
-
-<<<<<<< HEAD
 ## Sommaire
 
 1. [Présentation](#1-présentation)
@@ -23,310 +19,222 @@ Projet Capstone - Cohorte IA - Partenariat Orange Digital Center (ODC) & Ingedat
 6. [Utilisation par rôle](#6-utilisation-par-rôle)
 7. [Structure du dépôt](#7-structure-du-dépôt)
 8. [Exploitation](#8-exploitation)
-9. [Tests et CI](#9-tests-et-ci)
-10. [Sécurité, RGPD et AI Act](#10-sécurité-rgpd-et-ai-act)
+9. [Tests](#9-tests)
+10. [Sécurité et conformité](#10-sécurité-et-conformité)
 11. [Organisation de l'équipe](#11-organisation-de-léquipe)
 12. [Documentation](#12-documentation)
 
----
-=======
-> ⚠️ \*\*Données 100 % synthétiques.\*\* Aucune donnée de santé réelle n'est utilisée dans ce projet.
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
 ## 1. Présentation
 
-<<<<<<< HEAD
-### Le problème
+La gestion du tiers payant et de l'assurance santé implique le contrôle de
+volumes importants de factures, la détection d'anomalies et le traitement de
+demandes de suivi de dossier. PrediCare TPA regroupe ces opérations dans une
+plateforme composée d'une API, d'une interface web, d'outils de notification,
+d'un assistant conversationnel et d'un tableau de bord BI.
 
-Dans la gestion du Tiers-Payant (TPA) et de l'assurance santé :
-
-- la fraude médicale, la surconsommation d'actes et les erreurs de tarification représentent **8 % à 15 %** des remboursements ;
-- le contrôle manuel des factures et ordonnances est lent et faillible ;
-- les centres d'appels sont saturés par des demandes de suivi de dossier et d'interprétation des garanties.
-
-### Notre réponse
-=======
-# \## Sommaire
-
-# 1\. \[Présentation](#1-présentation)
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-PrediCare TPA est une plateforme unique, déployable en une commande, qui :
-
-- **contrôle automatiquement les factures** et détecte les anomalies financières avec une explication (SHAP) pour chaque alerte ;
-- **détecte les anomalies de prescription** (doublons pour un même assuré, inadéquation entre prescription et pathologie) ;
-- **alerte les gestionnaires** en temps réel (Slack / Email) ;
-- offre aux assurés un **assistant IA** (RAG + agent) qui répond sur leurs contrats et leur historique, avec des sources citées ;
-- fournit un **tableau de bord décisionnel** (volumes, montants économisés, taux de détection).
-
-Principe fondamental : **aucune décision n'est automatique**. Le modèle propose, le gestionnaire valide ou rejette, et chaque décision est tracée.
-
----
+La plateforme analyse les factures et signale les anomalies avec des
+explications. Elle assiste les gestionnaires, mais **ne prend aucune décision
+automatique** : le gestionnaire examine chaque alerte, la valide ou la rejette,
+et sa décision est tracée.
 
 ## 2. Fonctionnalités
 
-| Domaine | Fonctionnalité |
+| Domaine | Fonctionnalités |
 |---|---|
-| Données | Ingestion et nettoyage idempotents, quarantaine des lignes invalides, pseudonymisation, identités chiffrées à part |
-| Machine learning | Modèle XGBoost/LightGBM, gestion du déséquilibre de classes, seuil optimisé pour le Recall |
-| Explicabilité | Valeurs SHAP pour chaque alerte, top 5 des facteurs en langage clair |
-| Ordonnances | Détection de doublons et d'incohérences prescription / pathologie |
-| API | FastAPI conteneurisée, validation stricte, rejet propre des factures invalides |
-| Alertes | Workflow n8n : score au-dessus du seuil → notification Slack / Email |
-| Assistant | Agent ReAct sur contrats (pgvector) et historique SQL (lecture seule), protégé contre le prompt injection |
-| Pilotage | Dashboard BI, supervision, suivi de dérive du modèle |
-| Exploitation | Sauvegarde et restauration scriptées, versioning du modèle avec retour arrière |
-
----
+| Données | Ingestion et nettoyage, quarantaine des lignes invalides, pseudonymisation et séparation des identités chiffrées |
+| Machine learning | Scoring des factures et détection d'anomalies |
+| Explicabilité | Facteurs contribuant aux alertes, notamment avec SHAP |
+| Ordonnances | Détection de doublons et d'incohérences prescription/pathologie |
+| API | API FastAPI, authentification, rôles et validation des entrées |
+| Alertes | Workflows n8n et notifications configurables |
+| Assistant | Assistant RAG sur les contrats et l'historique autorisé, avec réponses sourcées |
+| Pilotage | Tableau de bord BI, indicateurs opérationnels et suivi de l'actualisation des données |
+| Exploitation | Sauvegarde et restauration PostgreSQL, supervision et tests |
 
 ## 3. Architecture
 
 ```mermaid
 flowchart LR
-    U[Utilisateurs<br/>4 rôles] --> W[web<br/>Frontend]
-    W --> A[api<br/>FastAPI]
-    A --> D[(db<br/>PostgreSQL + pgvector)]
-    A --> M[mlflow<br/>versions du modèle]
-    A -->|score > seuil| N[n8n<br/>workflow]
+    U[Utilisateurs] --> W[Interface web]
+    W --> A[API FastAPI]
+    A --> D[(PostgreSQL + pgvector)]
+    A --> N[n8n]
     N --> S[Slack / Email]
     A --> L[LLM]
-    B[bi<br/>Dashboard] --> D
+    M[Metabase] --> D
+    F[Service de rafraîchissement BI] --> D
 ```
 
-### Les 3 flux
+Les principaux flux sont :
 
-1. **Pipeline analytique et ML** : réception de la facture → prétraitement → inférence (XGBoost) → valeurs SHAP → stockage → workflow n8n (si score > seuil, alerte au gestionnaire avec explication).
-2. **Assistant conversationnel** : question de l'assuré → agent IA (ReAct) → base vectorielle (contrats PDF) et base SQL (historique du compte, lecture seule) → LLM sécurisé → réponse sourcée.
-3. **Pilotage décisionnel** : tableau de bord BI (volumes traités, montants économisés, taux de détection).
+1. **Analyse des factures** : ingestion, prétraitement, scoring, explications,
+   enregistrement et, si nécessaire, notification au gestionnaire.
+2. **Assistance conversationnelle** : question de l'utilisateur, recherche
+   dans les sources autorisées, puis réponse avec références.
+3. **Pilotage des opérations** : consultation dans Metabase des indicateurs de
+   facturation et des alertes, à partir des données BI actualisées.
 
-<<<<<<< HEAD
-### Conteneurs (Docker Compose)
+Le tableau de bord est **lisible et documenté, et dédié au pilotage des
+opérations**. Sa documentation — accès, données, définitions des indicateurs et
+procédure de mise à jour — se trouve dans
+[bi/README.md](./bi/README.md).
 
-| Service | Rôle | Port |
+### Services et accès locaux
+
+| Service | Rôle | Adresse |
 |---|---|---|
-| `db` | PostgreSQL + pgvector (données, prédictions, SHAP, vecteurs, audit) | interne |
-| `loader` | Chargement initial des données (s'exécute une fois) | - |
-| `api` | API FastAPI (modèle, RAG, rôles, administration) | 8000 |
-| `mlflow` | Registre des versions du modèle | 5000 |
-| `n8n` | Workflow d'alertes | 5678 |
-| `web` | Interface web | 3000 |
-| `bi` | Tableau de bord décisionnel | à compléter |
-
-### Choix techniques
-
-| Brique | Choix | Raison |
-|---|---|---|
-| Base de données | PostgreSQL + pgvector | Une seule instance pour toutes les données |
-| Modèle | XGBoost / LightGBM | Performant sur données tabulaires, compatible SHAP |
-| Versions du modèle | MLflow | Mise à jour et retour arrière sans interruption |
-| Alertes | n8n | Low-code, workflows exportables en `.json` |
-| BI | à compléter (Superset ou Metabase) | - |
-| LLM / embeddings | à compléter | Coût et confidentialité (voir analyse FinOps) |
-
----
+| `web` | Interface utilisateur | <http://localhost:5173> |
+| `api` | API FastAPI | <http://localhost:8000> |
+| Documentation API | Référence interactive | <http://localhost:8000/docs> |
+| Santé API | Vérification de l'API | <http://localhost:8000/health> |
+| `n8n` | Workflows de notification | <http://localhost:5678> |
+| `metabase` | Tableaux de bord BI | <http://localhost:3000> |
+| `mlflow` | Registre ML, profil `train` | <http://localhost:5000> |
 
 ## 4. Démarrage rapide
 
 ### Prérequis
 
-- Docker et Docker Compose v2
-- 8 Go de RAM recommandés
-- Ports libres : 3000, 5000, 5678, 8000
+- Docker et Docker Compose v2 ;
+- 8 Go de RAM recommandés ;
+- ports libres : 3000, 5000, 5173, 5678 et 8000.
 
 ### Installation
 
-```bash
-git clone <URL_DU_DEPOT>
-cd predicare-tpa
-```
-=======
-# \---
-
-# \## 1. Présentation
-
-# \### Le problème
-
-# Dans la gestion du Tiers-Payant (TPA) et de l'assurance santé :
-
-# \- la fraude médicale, la surconsommation d'actes et les erreurs de tarification représentent \*\*8 % à 15 %\*\* des remboursements ;
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-#### 1. Créer la configuration
+Depuis la racine du dépôt :
 
 ```bash
 cp .env.example .env
 ```
 
-<<<<<<< HEAD
-Puis remplacer chaque valeur `change_me` (voir section 5).
-
-#### 2. Démarrer toute la plateforme
+Compléter les secrets requis dans `.env`, notamment `N8N_DB_PASSWORD`, puis
+démarrer les services :
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Au **premier démarrage**, la base est créée par les migrations versionnées et les données sont chargées automatiquement.
+Le service `loader` initialise le schéma et charge les données fournies. Le
+tableau de bord Metabase est initialisé depuis `bi/dashboard.json`.
 
-### Accès
-
-| Service | URL |
-|---|---|
-| Interface web | http://localhost:3000 |
-| Documentation de l'API | http://localhost:8000/docs |
-| Santé de l'API | http://localhost:8000/health |
-| n8n | http://localhost:5678 |
-| MLflow | http://localhost:5000 |
-
-### Arrêt et remise à zéro
+### Arrêt
 
 ```bash
-docker compose down        # arrêt (les données sont conservées)
-docker compose down -v     # arrêt ET suppression des données (remise à zéro)
+docker compose down
 ```
-=======
-# \### Notre réponse
 
-# PrediCare TPA est une plateforme unique, déployable en une commande, qui :
+Cette commande conserve les données. Pour supprimer les volumes et remettre
+l'environnement local à zéro :
 
-# \- \*\*contrôle automatiquement les factures\*\* et détecte les anomalies financières avec une explication (SHAP) pour chaque alerte ;
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
+```bash
+docker compose down -v
+```
 
-> ⚠️ Les migrations SQL ne s'exécutent qu'à la création du volume. Pour rejouer une migration modifiée : `docker compose down -v` puis `docker compose up --build`.
-
----
+> `down -v` supprime les données locales de la base et des autres volumes.
+> À réserver à une remise à zéro volontaire.
 
 ## 5. Configuration
 
-<<<<<<< HEAD
-Toute la configuration passe par le fichier `.env` (jamais versionné) ou par l'écran d'administration. **Aucune valeur n'est écrite dans le code.**
+La configuration se fait dans `.env`, créé à partir de `.env.example`. Ce
+fichier contient les paramètres de la base, des rôles PostgreSQL, de l'API,
+des notifications, du RAG, de Metabase et des sauvegardes.
 
-| Variable | Rôle |
+| Paramètre | Utilité |
 |---|---|
-| `POSTGRES_*` | Accès à la base |
-| `DB_BI_RO_PASSWORD`, `DB_ML_RO_PASSWORD`, `DB_AGENT_RO_PASSWORD` | Comptes à droits limités (BI, ML, agent IA) |
-| `JWT_SECRET` | Signature des jetons de connexion |
-| `PSEUDO_HMAC_KEY` | Clé secrète de la pseudonymisation (ne jamais la perdre) |
-| `IDENTITY_ENCRYPTION_KEY` | Chiffrement de la table d'identités |
-| `ALERT_THRESHOLD` | Seuil d'alerte initial (modifiable en direct par l'administrateur) |
-| `LLM_API_KEY`, `LLM_MODEL` | Modèle de langage de l'assistant |
+| `POSTGRES_*` | Connexion à PostgreSQL |
+| `DB_*_PASSWORD` | Mots de passe des rôles applicatifs à privilèges limités |
+| `PSEUDO_HMAC_KEY`, `IDENTITY_ENCRYPTION_KEY` | Pseudonymisation et protection des identités |
+| `JWT_SECRET` | Signature des jetons d'authentification |
+| `ALERT_THRESHOLD` | Seuil initial de déclenchement des alertes |
+| `LLM_API_KEY`, `LLM_MODEL` | Accès au modèle de langage |
 | `SLACK_WEBHOOK_URL`, `ALERT_EMAIL_TO` | Canaux de notification |
-| `NEXT_PUBLIC_API_URL` | Adresse publique de l'API (**visible dans le navigateur, aucun secret**) |
-=======
-# \- fournit un \*\*tableau de bord décisionnel\*\* (volumes, montants des factures rejetées, rappel de détection).
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
+| `N8N_DB_PASSWORD`, `N8N_ENCRYPTION_KEY` | Connexion et chiffrement n8n |
+| `METABASE_RO_PASSWORD`, `MB_SESSION_SECRET_KEY` | Accès BI en lecture seule et signature des sessions Metabase |
+| `BACKUP_ENCRYPTION_KEY` | Chiffrement des sauvegardes du profil `ops` |
 
-Générer une clé : `openssl rand -hex 32`
-
-<<<<<<< HEAD
-**Seuil d'alerte** : modifiable sans toucher au code depuis l'écran d'administration ; le changement est appliqué immédiatement.
-
----
+Les valeurs fournies dans `.env.example` sont destinées au développement.
+Générer des secrets propres à chaque environnement et ne jamais versionner le
+fichier `.env` ni de secrets de production.
 
 ## 6. Utilisation par rôle
 
-L'interface web unique propose quatre parcours, sans ligne de commande :
+L'interface web propose différents parcours selon les droits attribués :
 
-| Rôle | Ce qu'il peut faire |
+| Rôle | Parcours |
 |---|---|
-| **Professionnel de santé** | Déposer une facture, suivre son statut, corriger en cas de rejet |
-| **Assuré** | Interroger l'assistant IA (réponses sourcées), consulter ses remboursements |
-| **Gestionnaire** | Consulter les alertes, lire l'explication SHAP, valider ou rejeter avec commentaire |
-| **Administrateur** | Régler le seuil et les canaux, superviser, gérer les versions du modèle, consulter le journal d'audit |
+| Professionnel de santé | Déposer une facture et suivre son traitement |
+| Assuré | Interroger l'assistant et consulter les informations autorisées |
+| Gestionnaire | Examiner les alertes et leurs explications, puis consigner une décision |
+| Administrateur | Superviser la plateforme et gérer sa configuration |
 
-### Comptes de démonstration
-=======
-# \---
-
-# \## 2. Fonctionnalités
-
-# | Domaine | Fonctionnalité |
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-| Rôle | Identifiant | Mot de passe |
-|---|---|---|
-| Professionnel de santé | à compléter | à compléter |
-| Assuré | à compléter | à compléter |
-| Gestionnaire | à compléter | à compléter |
-| Administrateur | à compléter | à compléter |
-
-> Ces comptes n'existent que pour la démonstration. Ne jamais les réutiliser en production.
-
----
+Les comptes et mots de passe de démonstration sont configurés pour le
+développement uniquement. Ne pas les utiliser en production.
 
 ## 7. Structure du dépôt
 
 ```text
-predicare-tpa/
-├── docker-compose.yml        # démarrage de toute la plateforme
-├── .env.example              # modèle de configuration
-├── frontend/                 # interface web
+.
 ├── backend/
-│   ├── api/                  # routes FastAPI, authentification, rôles
-│   ├── ml/                   # entraînement, SHAP, règles d'ordonnances
-│   ├── rag/                  # agent, embeddings, protections
-│   ├── ingestion/            # nettoyage, pseudonymisation, chargement
-│   ├── tests/
-│   ├── Dockerfile
-│   └── requirements.txt
+│   ├── api/                  # API, authentification et rôles
+│   ├── ml/                   # Modèles et traitement ML
+│   ├── rag/                  # Assistant, indexation et protections
+│   ├── ingestion/            # Ingestion et nettoyage
+│   └── tests/                # Tests backend
+├── bi/
+│   ├── dashboard.json        # Définition exportable du tableau de bord
+│   └── README.md             # Documentation BI
 ├── database/
-│   ├── migrations/           # migrations Alembic, y compris les migrations P1
-│   ├── ingestion/            # données et pipeline d'ingestion
-│   ├── backup/               # sauvegarde et restauration PostgreSQL
-│   └── metabase/             # initialisation de Metabase
-├── n8n/workflows/            # workflows importables (.json)
-├── bi/                       # export du tableau de bord
-├── scripts/                  # backup.sh, restore.sh
-└── docs/                     # architecture, conformité, sécurité, FinOps, guides
+│   ├── backup/               # Image du service de sauvegarde
+│   ├── ingestion/            # Jeux de données et labels
+│   ├── metabase/             # Initialisation Metabase
+│   └── migrations/           # Migrations de base de données
+├── docs/                     # Guides et documentation de cadrage
+├── frontend/                 # Interface React
+├── n8n/workflows/            # Workflows de notification
+├── scripts/                  # Scripts de sauvegarde et restauration
+├── .env.example              # Modèle de configuration
+└── docker-compose.yml        # Services Docker Compose
 ```
-
----
 
 ## 8. Exploitation
 
-### Les 8 conditions « plateforme exploitable »
-
-| Condition | Comment c'est couvert | Statut |
-|---|---|---|
-| Déployable | `docker compose up` | à compléter |
-| Utilisable | Interface web, connexion, 4 rôles | à compléter |
-| Persistante | Volume PostgreSQL, sauvegarde et restauration | à compléter |
-| Configurable | `.env` et écran d'administration (seuil en direct) | à compléter |
-| Supervisable | `/health`, journaux, métriques, dérive | à compléter |
-| Maintenable | Modèle versionné, retour arrière, tests, CI | à compléter |
-| Robuste | Rejet propre des factures invalides | à compléter |
-| Documentée | Guides d'exploitation et utilisateur | à compléter |
-
 ### Sauvegarde et restauration
 
-<<<<<<< HEAD
+Le service de sauvegarde s'exécute avec le profil `ops`. Définir
+`BACKUP_ENCRYPTION_KEY` dans `.env`, puis lancer :
+
 ```bash
-./scripts/backup.sh                    # sauvegarde chiffrée de la base
-./scripts/restore.sh <fichier>         # restauration
+docker compose --profile ops up -d backup
 ```
 
-Procédure détaillée, planification quotidienne et résolution des incidents : voir `docs/guides/guide_exploitation.md` (à compléter).
+Les scripts `scripts/backup.sh` et `scripts/restore.sh` (ou leurs équivalents
+PowerShell) permettent également de lancer les opérations manuellement. Voir
+le [guide d'exploitation](./docs/guides/guide_exploitation.md) pour les
+procédures et précautions de restauration.
 
-### Mise à jour et retour arrière du modèle
+### Modèles et supervision
 
-Depuis l'écran d'administration, onglet « Modèles » : activer une version enregistrée dans MLflow ; la bascule vers une version précédente se fait sans interruption.
+Le service MLflow est associé au profil `train`. L'API expose un contrôle de
+santé sur `/health`. Les journaux des services sont consultables avec
+`docker compose logs <service>`.
 
-### Supervision
+### Mise à jour du tableau de bord BI
 
-- `GET /health` : état de l'API et de ses dépendances
-- métriques de latence, de volume et d'erreurs, suivi de dérive : écran d'administration
-=======
-# \---
+La définition versionnée du tableau de bord se trouve dans
+`bi/dashboard.json`. Incrémenter sa version puis recréer le service
+d'initialisation pour appliquer la mise à jour :
 
-# \## 3. Architecture
+```bash
+docker compose up -d --force-recreate metabase-init
+```
 
-# ```mermaid
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
+Les indicateurs, les limites d'interprétation et la procédure détaillée sont
+décrits dans [bi/README.md](./bi/README.md).
 
----
+## 9. Tests
 
-<<<<<<< HEAD
-## 9. Tests et CI
+Les tests backend sont définis dans `backend/tests/`. Depuis la racine du
+dépôt, avec les dépendances Python installées :
 
 ```bash
 cd backend
@@ -334,460 +242,47 @@ pip install -r requirements.txt
 pytest
 ```
 
-L'intégration continue (GitHub Actions) exécute le lint et les tests à chaque pull request ; la fusion dans `main` exige une CI verte.
+La vérification SQL des KPI BI est documentée dans
+[bi/README.md](./bi/README.md).
 
-Le **cahier de recette sécurité** (`docs/securite/cahier_recette_securite.xlsx`) liste les 14 tests de sécurité et les 15 attaques de test contre l'assistant.
+## 10. Sécurité et conformité
 
----
-=======
-# &#x20;   U\[Utilisateurs4 rôles] --> W\[webFrontend]
+- L'authentification et les rôles sont contrôlés par l'API.
+- Les accès BI et assistant doivent utiliser des comptes à privilèges limités.
+- Les secrets restent hors du dépôt ; les clés de chiffrement doivent être
+  conservées séparément des sauvegardes.
+- Les réponses de l'assistant s'appuient sur les sources autorisées et sont
+  conçues pour limiter les risques liés aux instructions non fiables.
+- Les alertes ne remplacent pas la décision du gestionnaire.
 
-# &#x20;   W --> A\[apiFastAPI]
-
-# &#x20;   A --> D\[(dbPostgreSQL + pgvector)]
-
-# &#x20;   A --> M\[mlflowversions du modèle]
-
-# &#x20;   A -->|score > seuil| N\[n8nworkflow]
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-## 10. Sécurité, RGPD et AI Act
-
-### Sécurité
-
-<<<<<<< HEAD
-- authentification et contrôle d'accès par rôle **côté serveur** ;
-- assistant IA : compte SQL **en lecture seule**, limité à l'assuré connecté, protégé contre le prompt injection ;
-- secrets uniquement dans `.env` (jamais dans Git) ;
-- sauvegardes chiffrées ;
-- validation stricte des entrées de l'API.
-=======
-# &#x20;   B\[biDashboard] --> D
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-### RGPD
-
-<<<<<<< HEAD
-- **pseudonymisation** : noms et coordonnées dans une table chiffrée à part, le reste de la base n'utilise que des pseudonymes ;
-- minimisation des données, registre des traitements, analyse d'impact (AIPD) ;
-- aucune décision automatisée : le gestionnaire valide chaque alerte.
-
-### AI Act
-
-Le système est cadré comme **système à haut risque** : gestion des risques, qualité des données, journalisation (journal d'audit), transparence (explication SHAP), contrôle humain, exactitude et robustesse, information de l'utilisateur sur l'interaction avec une IA. La grille complète est dans `docs/conformite/`.
-
-### Équité
-=======
-# \### Les 3 flux
-
-# 1\. \*\*Pipeline analytique et ML\*\* : réception de la facture → prétraitement → inférence (XGBoost) → valeurs SHAP → stockage → workflow n8n (si score > seuil, alerte au gestionnaire avec explication).
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
-Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conformite/`.
-
-<<<<<<< HEAD
----
+Les documents de cadrage RGPD, AI Act et équité se trouvent dans
+`docs/cadrage_et_gouvernance/`. Les guides sont disponibles dans `docs/guides/`.
 
 ## 11. Organisation de l'équipe
-=======
-# 3\. \*\*Pilotage décisionnel\*\* : tableau de bord BI (volumes traités, montants facturés rejetés, rappel de détection).
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
 
 | Membre | Rôle | Périmètre |
 |---|---|---|
-| à compléter | Données, BI, RGPD | Base, ingestion, pseudonymisation, dashboard |
-| à compléter | ML, explicabilité, rentabilité | Modèle, SHAP, équité, TCO/ROI |
-| à compléter | Plateforme et MLOps | Docker, API, n8n, supervision, CI |
-| à compléter | RAG et sécurité | Assistant, agent, anti-injection, cahier de recette |
+| À compléter | Données, BI, RGPD | Base, ingestion, pseudonymisation et tableau de bord |
+| À compléter | ML et explicabilité | Modèle, scoring et explications |
+| À compléter | Plateforme et MLOps | Docker, API, notifications et supervision |
+| À compléter | RAG et sécurité | Assistant, protections et validation |
 
-<<<<<<< HEAD
 ### Workflow Git
 
-- `main` protégée : fusion uniquement par pull request, avec une relecture et une CI verte ;
-- branches courtes `feat/...`, `fix/...`, `docs/...` ;
+- branches courtes `feat/...`, `fix/...` et `docs/...` ;
+- changements intégrés par pull request après relecture et vérifications ;
 - commits au format `type(portée): description`.
-=======
-# | Service | Rôle | Port |
->>>>>>> 2870188d3aa0c10507f588730942385599628c92
-
----
 
 ## 12. Documentation
 
-| Document | Emplacement |
+| Sujet | Emplacement |
 |---|---|
-| Dossier de cadrage stratégique et gouvernance | `docs/` |
-| Modèle FinOps (TCO / ROI) | `docs/finops/couts.xlsx` |
-| Registre RGPD, AIPD, grille AI Act, audit d'équité | `docs/conformite/` |
-| Cahier de recette sécurité | `docs/securite/` |
-| Journal de conformité | `docs/journal_conformite.md` |
-| Guide utilisateur et guide d'exploitation | `docs/guides/` |
+| Tableau de bord lisible et documenté, dédié au pilotage des opérations | [bi/README.md](./bi/README.md) |
+| Définition exportable du tableau de bord | [bi/dashboard.json](./bi/dashboard.json) |
+| Documentation RGPD, AI Act et équité | [docs/cadrage_et_gouvernance/](./docs/cadrage_et_gouvernance/) |
+| Guide d'exploitation | [docs/guides/guide_exploitation.md](./docs/guides/guide_exploitation.md) |
+| Guides complémentaires | [docs/guides/](./docs/guides/) |
 
-<<<<<<< HEAD
 ---
 
 *Projet pédagogique réalisé dans le cadre de la Cohorte IA. Données synthétiques uniquement.*
-=======
-# | `api` | API FastAPI (modèle, RAG, rôles, administration) | 8000 |
-
-# | `mlflow` | Registre des versions du modèle | 5000 |
-
-# | `n8n` | Workflow d'alertes | 5678 |
-
-# | `web` | Interface web | 5173 |
-
-# | `metabase` | Tableaux de bord BI (connexion PostgreSQL en lecture seule) | 3000 |
-
-# \### Choix techniques
-
-# | Brique | Choix | Raison |
-
-# |---|---|---|
-
-# | Base de données | PostgreSQL + pgvector | Une seule instance pour toutes les données |
-
-# | Modèle | XGBoost / LightGBM | Performant sur données tabulaires, compatible SHAP |
-
-# | Versions du modèle | MLflow | Mise à jour et retour arrière sans interruption |
-
-# | Alertes | n8n | Low-code, workflows exportables en `.json` |
-
-# | BI | Metabase | Dashboard généré depuis `bi/dashboard.json` |
-
-# | LLM / embeddings | à compléter | Coût et confidentialité (voir analyse FinOps) |
-
-# \---
-
-# \## 4. Démarrage rapide
-
-# \### Prérequis
-
-# \- Docker et Docker Compose v2
-
-# \- 8 Go de RAM recommandés
-
-# \- Ports libres : 3000, 5000, 5678, 8000, 5173
-
-# \### Installation
-
-# ```bash
-
-# git clone <URL\_DU\_DEPOT>
-
-# cd predicare-tpa
-
-#### 1. Créer la configuration
-
-# cp env.example .env
-# \#    puis remplacer chaque valeur "change\_me" (voir section 5)
-# \#    et définir BACKUP_ENCRYPTION_KEY (voir section 5)
-# \# 2. Démarrer la plateforme, l'API et le service de sauvegarde quotidienne
-# docker compose --profile full --profile backup up --build -d
-
-# ```
-
-# Au \*\*premier démarrage\*\*, la base est créée par les migrations versionnées et les données sont chargées automatiquement.
-
-# \### Accès
-
-# | Service | URL |
-
-# |---|---|
-
-# | Interface web | http://localhost:5173 |
-
-# | Documentation de l'API | http://localhost:8000/docs |
-
-# | Santé de l'API | http://localhost:8000/health |
-
-# | n8n | http://localhost:5678 |
-
-# | Metabase | http://localhost:3000 |
-
-# \### Arrêt et remise à zéro
-
-# ```bash
-
-# docker compose --profile full --profile backup down        # arrêt (les données sont conservées)
-# docker compose --profile full --profile backup down -v     # supprime aussi le volume PostgreSQL
-
-# ```
-
-# > Les migrations SQL versionnées s'appliquent aussi aux bases existantes. Ne supprimez le volume (`down -v`) que pour une remise à zéro volontaire.
-
-# \---
-
-# \## 5. Configuration
-
-# Toute la configuration passe par le fichier `.env` (jamais versionné) ou par l'écran d'administration. \*\*Aucune valeur n'est écrite dans le code.\*\*
-
-# | Variable | Rôle |
-
-# |---|---|
-
-# | `POSTGRES\_\*` | Accès à la base |
-
-# | `DB\_BI\_RO\_PASSWORD`, `DB\_ML\_RO\_PASSWORD`, `DB\_AGENT\_RO\_PASSWORD` | Comptes à droits limités (BI, ML, agent IA) |
-
-# | `JWT\_SECRET` | Signature des jetons de connexion |
-
-# | `PSEUDO\_HMAC\_KEY` | Clé secrète de la pseudonymisation (ne jamais la perdre) |
-
-# | `IDENTITY\_ENCRYPTION\_KEY` | Chiffrement de la table d'identités |
-# | `BACKUP\_ENCRYPTION\_KEY` | Clé secrète (32 caractères minimum) des sauvegardes PostgreSQL chiffrées ; obligatoire pour activer le profil `backup` |
-# | `BACKUP\_RETENTION\_DAYS` | Durée de conservation des sauvegardes (défaut : 30 jours) |
-# | `BACKUP\_INTERVAL\_SECONDS` | Intervalle entre sauvegardes automatiques (défaut : 86400 secondes) |
-# | `MB\_SESSION\_SECRET\_KEY` | Clé aléatoire (32 caractères minimum) pour signer les sessions Metabase |
-
-# | `ALERT\_THRESHOLD` | Seuil d'alerte initial (modifiable en direct par l'administrateur) |
-
-# | `LLM\_API\_KEY`, `LLM\_MODEL` | Modèle de langage de l'assistant |
-
-# | `SLACK\_WEBHOOK\_URL`, `ALERT\_EMAIL\_TO` | Canaux de notification |
-
-# | `NEXT\_PUBLIC\_API\_URL` | Adresse publique de l'API (\*\*visible dans le navigateur, aucun secret\*\*) |
-
-# Générer `BACKUP\_ENCRYPTION\_KEY` : `node -p "require('crypto').randomBytes(32).toString('hex')"` ; conserver cette clé hors des sauvegardes, car sa perte empêche la restauration.
-# Générer `MB\_SESSION\_SECRET\_KEY` avec la même commande ; la définir avant le démarrage de Metabase.
-
-# \*\*Seuil d'alerte\*\* : modifiable sans toucher au code depuis l'écran d'administration ; le changement est appliqué immédiatement.
-
-# \---
-
-# \## 6. Utilisation par rôle
-
-# L'interface web unique propose quatre parcours, sans ligne de commande :
-
-# | Rôle | Ce qu'il peut faire |
-
-# |---|---|
-
-# | \*\*Professionnel de santé\*\* | Déposer une facture, suivre son statut, corriger en cas de rejet |
-
-# | \*\*Assuré\*\* | Interroger l'assistant IA (réponses sourcées), consulter ses remboursements |
-
-# | \*\*Gestionnaire\*\* | Consulter les alertes, lire l'explication SHAP, valider ou rejeter avec commentaire |
-
-# | \*\*Administrateur\*\* | Régler le seuil et les canaux, superviser, gérer les versions du modèle, consulter le journal d'audit |
-
-# \### Comptes de démonstration
-
-# | Rôle | Identifiant | Mot de passe |
-
-## |---|---|---|
-
-# | Professionnel de santé | à compléter | à compléter |
-
-# | Assuré | à compléter | à compléter |
-
-# | Gestionnaire | à compléter | à compléter |
-
-# | Administrateur | à compléter | à compléter |
-
-# > Ces comptes n'existent que pour la démonstration. Ne jamais les réutiliser en production.
-
-# \---
-
-# \## 7. Structure du dépôt
-
-# ```
-
-# predicare-tpa/
-
-# ├── docker-compose.yml        # démarrage de toute la plateforme
-
-# ├── env.example               # modèle de configuration
-
-# ├── frontend/                 # interface web
-
-# ├── backend/
-
-# │   ├── api/                  # routes FastAPI, authentification, rôles
-
-# │   ├── ml/                   # entraînement, SHAP, règles d'ordonnances
-
-# │   ├── rag/                  # agent, embeddings, protections
-
-# │   ├── ingestion/            # nettoyage, pseudonymisation, chargement
-
-# │   ├── tests/
-
-# │   ├── Dockerfile
-
-# │   └── requirements.txt
-
-# ├── database/
-
-# │   ├── migrations/           # migrations Alembic versionnées
-
-# │   ├── sql/                  # scripts SQL versionnés
-# │   └── backups/              # sauvegarde SQL de référence
-
-# ├── n8n/workflows/            # workflows importables (.json)
-
-# ├── bi/                       # définition JSON exportable + documentation BI
-# ├── scripts/                  # wrappers backup.sh, restore.sh
-
-# └── docs/                     # architecture, conformité, sécurité, FinOps, guides
-
-# ```
-
-# \---
-
-# \## 8. Exploitation
-
-# \### Les 8 conditions « plateforme exploitable »
-
-# | Condition | Comment c'est couvert | Statut |
-
-# |---|---|---|
-
-# | Déployable | `docker compose up` | à compléter |
-
-# | Utilisable | Interface web, connexion, 4 rôles | à compléter |
-
-# | Persistante | Volume PostgreSQL, sauvegardes chiffrées quotidiennes et restauration vérifiable | implémenté |
-
-# | Configurable | `.env` et écran d'administration (seuil en direct) | à compléter |
-
-# | Supervisable | `/health`, journaux, métriques, dérive | à compléter |
-
-# | Maintenable | Modèle versionné, retour arrière, tests, CI | à compléter |
-
-# | Robuste | Rejet propre des factures invalides | à compléter |
-
-# | Documentée | Guides d'exploitation et utilisateur | à compléter |
-
-# \### Sauvegarde et restauration
-
-# Configurer `BACKUP\_ENCRYPTION\_KEY` dans `.env`, puis activer le service qui
-# effectue une sauvegarde chiffrée au démarrage et toutes les 24 heures :
-
-# ```bash
-
-# docker compose --profile backup up -d db-backup
-# .\scripts\backup.ps1                   # sauvegarde manuelle (PowerShell)
-# .\scripts\restore.ps1 predicare_<date>.dump.gpg -VerifyOnly
-# .\scripts\restore.ps1 predicare_<date>.dump.gpg -TargetDb predicare_restore
-# ```
-
-# Sous Linux/macOS, les wrappers équivalents sont `bash scripts/backup.sh` et
-# `bash scripts/restore.sh`.
-
-# Les sauvegardes sont déposées dans `backups/`, chiffrées avec GnuPG AES-256
-# et conservées 30 jours par défaut. L'option `--verify-only` restaure dans une
-# base temporaire, compare les volumes des tables principales à la source puis
-# supprime cette base. Une restauration normale crée une nouvelle base et ne
-# remplace jamais la base de production. Conserver la clé de chiffrement hors
-# du dépôt et des sauvegardes.
-
-# Voir aussi la documentation des indicateurs et des exports dans `bi/README.md`.
-
-# \### Mise à jour et retour arrière du modèle
-
-# Depuis l'écran d'administration, onglet « Modèles » : activer une version enregistrée dans MLflow ; la bascule vers une version précédente se fait sans interruption.
-
-# \### Supervision
-
-# \- `GET /health` : état de l'API et de ses dépendances
-
-# \- métriques de latence, de volume et d'erreurs, suivi de dérive : écran d'administration
-
-# \---
-
-# \## 9. Tests et CI
-
-# ```bash
-
-# cd backend
-
-# pip install -r requirements.txt
-
-# pytest
-
-# ```
-
-# L'intégration continue (GitHub Actions) exécute le lint et les tests à chaque pull request ; la fusion dans `main` exige une CI verte.
-
-# Le \*\*cahier de recette sécurité\*\* (`docs/securite/cahier\_recette\_securite.xlsx`) liste les 14 tests de sécurité et les 15 attaques de test contre l'assistant.
-
-# \---
-
-# \## 10. Sécurité, RGPD et AI Act
-
-# \### Sécurité
-
-# \- authentification et contrôle d'accès par rôle \*\*côté serveur\*\* ;
-
-# \- assistant IA : compte SQL \*\*en lecture seule\*\*, limité à l'assuré connecté, protégé contre le prompt injection ;
-
-# \- secrets uniquement dans `.env` (jamais dans Git) ;
-
-# \- sauvegardes chiffrées ;
-
-# \- validation stricte des entrées de l'API.
-
-# \### RGPD
-
-# \- \*\*pseudonymisation\*\* : noms et coordonnées dans une table chiffrée à part, le reste de la base n'utilise que des pseudonymes ;
-
-# \- minimisation des données, registre des traitements, analyse d'impact (AIPD) ;
-
-# \- aucune décision automatisée : le gestionnaire valide chaque alerte.
-
-# \### AI Act
-
-# Le système est cadré comme \*\*système à haut risque\*\* : gestion des risques, qualité des données, journalisation (journal d'audit), transparence (explication SHAP), contrôle humain, exactitude et robustesse, information de l'utilisateur sur l'interaction avec une IA. La grille complète est dans `docs/conformite/`.
-
-# \### Équité
-
-# Audit par groupe (sexe, âge, région, type de prestataire) : voir `docs/conformite/`.
-
-# \---
-
-# \## 11. Organisation de l'équipe
-
-# | Membre | Rôle | Périmètre |
-
-# |---|---|---|
-
-# | à compléter | Données, BI, RGPD | Base, ingestion, pseudonymisation, dashboard |
-
-# | à compléter | ML, explicabilité, rentabilité | Modèle, SHAP, équité, TCO/ROI |
-
-# | à compléter | Plateforme et MLOps | Docker, API, n8n, supervision, CI |
-
-# | à compléter | RAG et sécurité | Assistant, agent, anti-injection, cahier de recette |
-
-# \### Workflow Git
-
-# \- `main` protégée : fusion uniquement par pull request, avec une relecture et une CI verte ;
-
-# \- branches courtes `feat/...`, `fix/...`, `docs/...` ;
-
-# \- commits au format `type(portée): description`.
-
-# \---
-
-# \## 12. Documentation
-
-# | Document | Emplacement |
-
-# |---|---|
-
-# | Dossier de cadrage stratégique et gouvernance | `docs/` |
-
-# | Modèle FinOps (TCO / ROI) | `docs/finops/couts.xlsx` |
-
-# | Registre RGPD, AIPD, grille AI Act, audit d'équité | `docs/conformite/` |
-
-# | Cahier de recette sécurité | `docs/securite/` |
-
-# | Journal de conformité | `docs/journal\_conformite.md` |
-
-# | Guide utilisateur et guide d'exploitation | `docs/guides/` |
-
-# \---
-
-# \*Projet pédagogique réalisé dans le cadre de la Cohorte IA. Données synthétiques uniquement.\*
->>>>>>> 2870188d3aa0c10507f588730942385599628c92

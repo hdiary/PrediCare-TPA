@@ -2,8 +2,6 @@
 
 **Projet :** PrediCare TPA
 
-**Date de l’examen :** 29 octobre 2026
-
 **Périmètre :** revue statique du code, des migrations, des tests et de la configuration Docker Compose.
 
 > Ce document décrit les mécanismes visibles dans le dépôt. Il ne constitue ni un test d’intrusion, ni une certification de conformité, ni une validation de la configuration réellement déployée.
@@ -45,7 +43,6 @@ Les contrôles suivants sont couverts par des tests ou scripts du dépôt :
 - `backend/rag/tests/test_guardrails.py` : filtrage de prompt injection, demandes hors périmètre et données sensibles.
 - `tests/s1_s12_check.sh` : contrôles d’intégration de rôles, durée de session et verrouillage sur la plateforme démarrée. **Attention : ce script verrouille volontairement le compte de démonstration `pro@predicare.local` pour la durée configurée.**
 - `tests/s8_audit_check.sh` : contrôle d’intégration de la création d’événements d’audit après prédiction et décision ; nécessite une facture de test et un compte gestionnaire.
-
 
 ## 4. Conclusion
 
