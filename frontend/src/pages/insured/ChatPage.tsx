@@ -32,12 +32,61 @@ const CHAT_BY_ROLE = {
   },
 } as const;
 
-function renderMarkdown(text: string) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .split('\n')
-    .map((line, i) => `<p key="${i}">${line || '&nbsp;'}</p>`)
-    .join('');
+function cleanAssistantAnswer(text: string, hasSources: boolean): string {
+  let answer = text.trim();
+  answer = answer
+    .replace(/^\[?\s*unité de réponse\s*\]?\s*/i, '')
+    .replace(/^\s*`+|`+\s*$/g, '');
+  if (hasSources) {
+    answer = answer
+      .split('\n')
+      .filter((line) => !/^\s*(?:Sources?\s*:\s*)?`?\[?[^[]*\.pdf[^\]]*\]?`?\s*\.?\s*$/i.test(line))
+      .filter((line) => !/^\s*Sources?\s*:\s*/i.test(line))
+      .join('\n');
+  }
+  answer = answer.trim();
+  if (answer.startsWith('[') && answer.endsWith(']')) {
+    answer = answer.slice(1, -1).trim();
+  }
+  return answer.trim();
+}
+
+function renderInlineMarkdown(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={index} className="font-semibold">{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
+function renderAnswer(text: string, hasSources: boolean) {
+  const answer = cleanAssistantAnswer(text, hasSources);
+  return answer.split(/\n{2,}/).filter(Boolean).map((paragraph, index) => {
+    const lines = paragraph.split('\n').map((line) => line.trim()).filter(Boolean);
+    const isList = lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line));
+    if (isList) {
+      return (
+        <ul key={index} className="list-disc space-y-1 pl-5">
+          {lines.map((line, lineIndex) => (
+            <li key={lineIndex}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={index} className="whitespace-pre-line">
+        {renderInlineMarkdown(lines.join('\n'))}
+      </p>
+    );
+  });
+}
+
+function sourceLabel(document: string): string {
+  return document
+    .replace(/\.pdf$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function ChatPage() {
@@ -276,24 +325,31 @@ export function ChatPage() {
                       <div className={`rounded-2xl px-5 py-3 ${
                         msg.role === 'user'
                           ? 'bg-surface-200 dark:bg-surface-700 text-surface-900 dark:text-surface-50 rounded-br-md'
-                          : 'bg-transparent text-surface-800 dark:text-surface-100 px-0'
+                          : 'bg-white dark:bg-surface-800 text-surface-800 dark:text-surface-100 border border-surface-200 dark:border-surface-700 shadow-soft rounded-bl-md'
                       }`}>
-                        <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                        <div className="space-y-3 text-sm leading-7">
+                          {msg.role === 'assistant'
+                            ? renderAnswer(msg.content, Boolean(msg.sources?.length))
+                            : msg.content}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="text-xs text-surface-400">{formatTime(msg.timestamp)}</span>
                         {msg.role === 'assistant' && (
                           <>
                             {msg.sources && msg.sources.length > 0 && (
-                              <div className="flex gap-1.5">
+                              <div className="flex flex-wrap gap-1.5">
                                 {msg.sources.map((src, i) => (
                                   <button
                                     key={i}
                                     onClick={() => setDrawerSource(src)}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-white dark:bg-surface-600 text-primary-600 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-800/40 transition-all"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-primary-50 dark:bg-primary-900/30 border border-primary-100 dark:border-primary-800 text-primary-700 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-800/50 transition-colors"
                                   >
                                     <FileText className="w-3 h-3" />
-                                    {src.document} - p. {src.page}
+                                    <span>{sourceLabel(src.document)}</span>
+                                    {src.page != null && src.page > 0 && (
+                                      <span className="text-primary-500 dark:text-primary-400">· p. {src.page}</span>
+                                    )}
                                   </button>
                                 ))}
                               </div>
