@@ -50,7 +50,7 @@ ROI = \frac{\text{Économies générées} - \text{Coût de la plateforme}}{\text
 ROI = \frac{141\,000\,000 - 4\,180\,167}{4\,180\,167} \times 100 \approx \mathbf{3\,273\ \%}
 \]
 
-> **Interprétation corrigée** : *"Pour 1 Ariary investi dans PrediCare TPA, l'assureur en économise environ **33** (ratio = 1 + ROI/100 ≈ 33,7). Le retour sur investissement est immédiat. Même en divisant nos estimations par deux, la plateforme reste extrêmement rentable."*
+> **Interprétation ** : *"Pour 1 Ariary investi dans PrediCare TPA, l'assureur en économise environ **33** (ratio = 1 + ROI/100 ≈ 33,7). Le retour sur investissement est immédiat. Même en divisant nos estimations par deux, la plateforme reste extrêmement rentable."*
 
 # 4. Le « Semantic Caching » (Le secret de la performance)
 
